@@ -32,6 +32,7 @@ import { runConversationTurn } from "./conversation-run";
 import { confirmedJevSelection, displayJevUserMessage, latestJevPanelId } from "./jev-actions";
 import { JevInteractionContext, JevToolCard } from "./jev-tool-card";
 import { MailToolCard } from "./mail-tool-card";
+import { PendingApprovals } from "./opencode-permissions";
 import { FileThreadCard, TaskThreadCard } from "./thread-artifacts";
 import { type Selection, useMuseThread } from "./threads";
 import { Button, Card, CheckRow, colors, ErrorNotice, s } from "./ui";
@@ -425,6 +426,7 @@ export function ChatScreen({
           </>
         )}
         {richThreads && <ChannelThreadBanner threadId={threadId} mainId={mainId} />}
+        {richThreads && <PendingApprovals threadId={threadId} />}
         {!visible.length ? (
           <View
             style={{

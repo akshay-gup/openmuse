@@ -18,6 +18,7 @@ import {
   ORCHESTRATOR_CHANNEL_ID,
   type TaskStatus,
 } from "../../../packages/domain/src/agent";
+import { ChannelPermissionRules } from "./opencode-permissions";
 import { useMuseThread } from "./threads";
 import { Button, colors, ErrorNotice, Field, s } from "./ui";
 import { useWorkspace } from "./workspace";
@@ -389,6 +390,7 @@ export function ChannelsSection({ onClose }: { onClose: () => void }) {
               {isOpen && (
                 <View style={{ gap: 10 }}>
                   <ChannelThreads channel={channel} onClose={onClose} />
+                  <ChannelPermissionRules channelId={channel.id} />
                   <View style={{ gap: 2 }}>
                     <Text style={s.small}>Tasks</Text>
                     <ChannelTasks channel={channel} onOpenTask={onClose} />

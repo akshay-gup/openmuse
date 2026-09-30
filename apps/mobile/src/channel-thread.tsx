@@ -1,5 +1,5 @@
 import { useAgentContext } from "@copilotkit/react-native/headless";
-import { Hash } from "lucide-react-native";
+import { ChevronDown, Hash, ShieldCheck } from "lucide-react-native";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import {
@@ -9,6 +9,7 @@ import {
   ORCHESTRATOR_CHANNEL_ID,
   type TaskStatus,
 } from "../../../packages/domain/src/agent";
+import { ThreadPermissionRules } from "./opencode-permissions";
 import { colors, s } from "./ui";
 import { useWorkspace } from "./workspace";
 
@@ -65,6 +66,7 @@ export function ChannelThreadBanner({
   const [binding, setBinding] = useState<ChannelThread | null | undefined>(undefined);
   const [channelName, setChannelName] = useState<string | null>(null);
   const [tasks, setTasks] = useState<AgentTask[] | null>(null);
+  const [showPermissions, setShowPermissions] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -129,7 +131,23 @@ export function ChannelThreadBanner({
         <Text style={s.small} numberOfLines={1}>
           {channelName ?? binding.channelId} · {binding.name}
         </Text>
+        <View style={{ flex: 1 }} />
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Thread permission rules"
+          onPress={() => setShowPermissions((show) => !show)}
+          style={[s.row, { gap: 4, alignItems: "center" }]}
+        >
+          <ShieldCheck size={14} color={colors.muted} />
+          <Text style={s.small}>Permissions</Text>
+          <ChevronDown
+            size={14}
+            color={colors.muted}
+            style={showPermissions ? { transform: [{ rotate: "180deg" }] } : undefined}
+          />
+        </Pressable>
       </View>
+      {showPermissions && <ThreadPermissionRules threadId={threadId} />}
       {!!tasks?.length && (
         <View
           style={{
