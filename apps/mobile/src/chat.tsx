@@ -25,6 +25,7 @@ import { useAgentWorkspace } from "./agent-workspace";
 import { AssistantResponse } from "./assistant-response";
 import { BackgroundUpdates } from "./background-updates";
 import { BrowserRunContext, BrowserToolCard } from "./browser-tool-card";
+import { ChannelThreadBanner } from "./channel-thread";
 import { BrowserThreadCard } from "./computer";
 import { ConversationQueue, type QueuedMessage } from "./conversation-queue";
 import { runConversationTurn } from "./conversation-run";
@@ -423,6 +424,7 @@ export function ChatScreen({
             </Button>
           </>
         )}
+        {richThreads && <ChannelThreadBanner threadId={threadId} mainId={mainId} />}
         {!visible.length ? (
           <View
             style={{
