@@ -30,6 +30,12 @@ export interface AgentTask {
   kind: "agent" | "document" | "monitor" | "finance" | "plan";
   status: TaskStatus;
   goalId?: string;
+  /** Owning channel. Tasks are claimed by the worker assigned to this channel. */
+  channelId: string;
+  /** Channel where the work was requested. Differs from channelId after delegation. */
+  originChannelId: string;
+  /** Where a delegated task currently sits: null, "orchestrator", or a channel id. */
+  delegatedTo?: string | null;
   plan: TaskStep[];
   evidence: Evidence[];
   input: Record<string, unknown>;
@@ -136,9 +142,35 @@ export const createTaskSchema = z.object({
   prompt: z.string().trim().min(1).max(12000),
   kind: z.enum(["agent", "document", "monitor", "finance", "plan"]).default("agent"),
   goalId: z.string().optional(),
+  channelId: z.string().trim().min(1).max(80).optional(),
   input: z.record(z.string(), z.unknown()).default({}),
 });
 export type CreateTaskInput = z.infer<typeof createTaskSchema>;
+/** Fixed id of the orchestrator channel: the control-plane surface. */
+export const ORCHESTRATOR_CHANNEL_ID = "orchestrator";
+export type ChannelStatus = "active" | "idle" | "archived";
+export interface Channel {
+  id: string;
+  name: string;
+  status: ChannelStatus;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+  /** PID of the spawned channel worker, when running. */
+  workerPid?: number | null;
+  lastActiveAt?: string | null;
+}
+export const createChannelSchema = z.object({
+  name: z.string().trim().min(1).max(80),
+  id: z
+    .string()
+    .trim()
+    .min(1)
+    .max(80)
+    .regex(/^[a-z0-9-]+$/, "lowercase letters, numbers, and hyphens only")
+    .optional(),
+});
+export type CreateChannelInput = z.infer<typeof createChannelSchema>;
 export const monitorInputSchema = z
   .object({
     title: z.string().min(1).max(160),
