@@ -180,3 +180,34 @@ test("renaming rejects blank names and unknown threads", async () => {
   await read(`/threads/${thread.threadId}`, { name: "x".repeat(81) }, 422, "PATCH");
   await read(`/threads/does-not-exist`, { name: "Nope" }, 404, "PATCH");
 });
+
+test("LocalDiskThreadStore round-trips bindings on the local filesystem", async () => {
+  const { LocalDiskThreadStore } = await import("../apps/server/src/engine/threads.ts");
+  const base = await mkdtemp(join(tmpdir(), "openmuse-local-threads-"));
+  try {
+    const store = new LocalDiskThreadStore(base);
+    const binding: ChannelThread = {
+      threadId: "thread-1",
+      channelId: "chan-1",
+      name: "Thread 1",
+      createdAt: new Date().toISOString(),
+    };
+    await store.write("owner", binding);
+    const listed = await store.list("owner", "chan-1");
+    assert.equal(listed.length, 1);
+    assert.deepEqual(listed[0], binding);
+    // Reverse lookup across channels.
+    const scanned = await store.scan("owner");
+    assert.equal(scanned.length, 1);
+    assert.equal(scanned[0].channelId, "chan-1");
+    // Rename rewrites the same file.
+    await store.write("owner", { ...binding, name: "Renamed" });
+    const relisted = await store.list("owner", "chan-1");
+    assert.equal(relisted.length, 1);
+    assert.equal(relisted[0].name, "Renamed");
+    // Unknown channels read as empty.
+    assert.deepEqual(await store.list("owner", "nope"), []);
+  } finally {
+    await rm(base, { recursive: true, force: true });
+  }
+});
