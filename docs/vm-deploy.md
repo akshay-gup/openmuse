@@ -74,6 +74,32 @@ Updating later: pull/rebuild in `/opt/hive`, then
 `sudo systemctl restart hive-api` (leave `hive-opencode` running —
 sessions survive API restarts).
 
+## Quick launch without public DNS (Tailscale)
+
+For throwaway boxes or many of them, skip DNS and Caddy: put the VM on your
+tailnet and reach the API over the private mesh.
+
+```sh
+# On the VM (after the install steps above, skipping the Caddy step)
+curl -fsSL https://tailscale.com/install.sh | sh
+sudo tailscale up
+```
+
+In `/etc/hive/hive.env` set:
+
+```
+HOST=0.0.0.0
+PUBLIC_API_URL=http://<tailscale-hostname>:8787
+```
+
+Then open `http://<tailscale-hostname>:8787` from any device on the tailnet
+(Tailscale app on iOS). Notes:
+
+- The `HIVE_ACCESS_KEY` sign-in is still required; Tailscale only replaces
+  DNS/TLS here, and its WireGuard mesh is encrypted.
+- Google OAuth callbacks need a public https URL — connect Google later via
+  the Caddy path above.
+
 ## Run (local dev)
 
 ```sh
