@@ -23,4 +23,4 @@ An airy canvas, distinct gray and sky-blue message bubbles, large touch targets,
 
 ## Boundaries
 
-The computer provides persistent Chromium, documents, and an optional Linux container with a terminal and filesystem. The terminal has no network access, while the browser handles public web access. It is not a full operating-system VM or a graphical desktop. Live Rich Threads, model reasoning and Google accounts require credentials. See [computer setup](COMPUTER.md).
+The browser worker provides persistent Chromium and documents for public web access. There is no Linux terminal or container: the agent works through chat, delegated tasks, and integrations. Live Rich Threads, model reasoning and Google accounts require credentials.

@@ -1,9 +1,21 @@
+import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { join } from "node:path";
 import type { ChannelThread } from "../../../../packages/domain/src/agent.ts";
-import { type ComputerService, channelWorkspaceDir } from "../computer.ts";
 
-const threadsDir = (channelId: string) => `${channelWorkspaceDir(channelId)}/threads`;
-const bindingPath = (channelId: string, threadId: string) =>
-  `${threadsDir(channelId)}/${threadId}.json`;
+/**
+ * A channel's working directory on the API server's local disk, under DATA_DIR.
+ * All channel workers share the box; each channel treats its own directory as
+ * home. These directories are the future OpenCode session working directories.
+ */
+export function channelWorkspaceDir(baseDir: string, channelId: string): string {
+  const safe = channelId.replace(/[^a-z0-9-]/g, "-").slice(0, 80) || "channel";
+  return join(baseDir, "channels", safe);
+}
+
+const threadsDir = (baseDir: string, channelId: string) =>
+  join(channelWorkspaceDir(baseDir, channelId), "threads");
+const bindingPath = (baseDir: string, channelId: string, threadId: string) =>
+  join(threadsDir(baseDir, channelId), `${threadId}.json`);
 
 /**
  * Thread ↔ channel bindings, stored as one JSON file per thread inside the
@@ -17,30 +29,25 @@ export interface ThreadBindingStore {
   scan(owner: string): Promise<ChannelThread[]>;
 }
 
-/** Production implementation: bindings live in the shared computer. */
-export class ComputerThreadStore implements ThreadBindingStore {
-  constructor(private readonly computer: ComputerService) {}
+/** Production implementation: bindings live on the API server's local disk. */
+export class LocalDiskThreadStore implements ThreadBindingStore {
+  constructor(private readonly baseDir: string) {}
 
-  async write(owner: string, binding: ChannelThread): Promise<void> {
-    try {
-      await this.computer.mkdir(owner, threadsDir(binding.channelId));
-    } catch {
-      /* already exists */
-    }
-    await this.computer.write(
-      owner,
-      bindingPath(binding.channelId, binding.threadId),
+  async write(_owner: string, binding: ChannelThread): Promise<void> {
+    const dir = threadsDir(this.baseDir, binding.channelId);
+    await mkdir(dir, { recursive: true });
+    await writeFile(
+      bindingPath(this.baseDir, binding.channelId, binding.threadId),
       JSON.stringify(binding),
     );
   }
 
-  async list(owner: string, channelId: string): Promise<ChannelThread[]> {
-    const dir = threadsDir(channelId);
+  async list(_owner: string, channelId: string): Promise<ChannelThread[]> {
+    const dir = threadsDir(this.baseDir, channelId);
     let names: string[];
     try {
-      const listing = await this.computer.list(owner, dir);
-      names = listing.entries
-        .filter((e) => e.type === "file" && e.name.endsWith(".json"))
+      names = (await readdir(dir, { withFileTypes: true }))
+        .filter((e) => e.isFile() && e.name.endsWith(".json"))
         .map((e) => e.name);
     } catch {
       return [];
@@ -48,8 +55,7 @@ export class ComputerThreadStore implements ThreadBindingStore {
     const out: ChannelThread[] = [];
     for (const name of names) {
       try {
-        const { text } = await this.computer.read(owner, `${dir}/${name}`);
-        const binding = JSON.parse(text) as ChannelThread;
+        const binding = JSON.parse(await readFile(join(dir, name), "utf8")) as ChannelThread;
         if (binding.threadId && binding.channelId === channelId) out.push(binding);
       } catch {
         /* skip unreadable bindings */
@@ -58,29 +64,30 @@ export class ComputerThreadStore implements ThreadBindingStore {
     return out.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   }
 
-  async scan(owner: string): Promise<ChannelThread[]> {
+  async scan(_owner: string): Promise<ChannelThread[]> {
+    const channelsRoot = join(this.baseDir, "channels");
     let channelDirs: string[];
     try {
-      const listing = await this.computer.list(owner, "/workspace/channels");
-      channelDirs = listing.entries.filter((e) => e.type === "directory").map((e) => e.name);
+      channelDirs = (await readdir(channelsRoot, { withFileTypes: true }))
+        .filter((e) => e.isDirectory())
+        .map((e) => e.name);
     } catch {
       return [];
     }
     const out: ChannelThread[] = [];
-    for (const name of channelDirs) {
+    for (const dirName of channelDirs) {
       // The directory name is the sanitized channel id; bindings carry the true id.
-      for (const binding of await this.listByDir(owner, name)) out.push(binding);
+      for (const binding of await this.listByDir(dirName)) out.push(binding);
     }
     return out;
   }
 
-  private async listByDir(owner: string, dirName: string): Promise<ChannelThread[]> {
-    const dir = `/workspace/channels/${dirName}/threads`;
+  private async listByDir(dirName: string): Promise<ChannelThread[]> {
+    const dir = join(this.baseDir, "channels", dirName, "threads");
     let names: string[];
     try {
-      const listing = await this.computer.list(owner, dir);
-      names = listing.entries
-        .filter((e) => e.type === "file" && e.name.endsWith(".json"))
+      names = (await readdir(dir, { withFileTypes: true }))
+        .filter((e) => e.isFile() && e.name.endsWith(".json"))
         .map((e) => e.name);
     } catch {
       return [];
@@ -88,8 +95,7 @@ export class ComputerThreadStore implements ThreadBindingStore {
     const out: ChannelThread[] = [];
     for (const name of names) {
       try {
-        const { text } = await this.computer.read(owner, `${dir}/${name}`);
-        const binding = JSON.parse(text) as ChannelThread;
+        const binding = JSON.parse(await readFile(join(dir, name), "utf8")) as ChannelThread;
         if (binding.threadId && binding.channelId) out.push(binding);
       } catch {
         /* skip unreadable bindings */

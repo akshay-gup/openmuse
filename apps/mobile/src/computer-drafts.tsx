@@ -9,11 +9,7 @@ import {
 } from "react";
 
 interface ComputerDrafts {
-  tab: "Browser" | "Terminal" | "Files";
-  command: string;
-  cwd: string;
-  path: string;
-  editor: { path: string; text: string; saved: string; savedPath: string } | undefined;
+  tab: "Browser" | "Files";
 }
 const DraftContext = createContext<{
   drafts: ComputerDrafts;
@@ -22,13 +18,7 @@ const DraftContext = createContext<{
 
 /** Keep unsent work when another sheet replaces the computer; never persist it to disk. */
 export function ComputerDraftProvider({ children }: { children: ReactNode }) {
-  const [drafts, setDrafts] = useState<ComputerDrafts>({
-    tab: "Browser",
-    command: "",
-    cwd: "/workspace",
-    path: "/workspace",
-    editor: undefined,
-  });
+  const [drafts, setDrafts] = useState<ComputerDrafts>({ tab: "Browser" });
   return <DraftContext.Provider value={{ drafts, setDrafts }}>{children}</DraftContext.Provider>;
 }
 export function useComputerDraft<K extends keyof ComputerDrafts>(key: K) {

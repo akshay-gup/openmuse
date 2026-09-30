@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import { mkdir } from "node:fs/promises";
 import { z } from "zod";
 import {
   type AgentArtifact,
@@ -29,7 +30,6 @@ import type {
 } from "../../../../packages/domain/src/index.ts";
 import type { ActionService } from "../actions.ts";
 import type { BrowserService } from "../browser.ts";
-import { ComputerService, channelWorkspaceDir } from "../computer.ts";
 import type { Config } from "../config.ts";
 import type { Store } from "../db.ts";
 import { AppError } from "../errors.ts";
@@ -39,7 +39,7 @@ import type { WorkspaceService } from "../workspace.ts";
 import { ChannelManager } from "./channels.ts";
 import { analyzeSpending } from "./finance.ts";
 import { executeModelTask } from "./model.ts";
-import { ComputerThreadStore, type ThreadBindingStore } from "./threads.ts";
+import { LocalDiskThreadStore, channelWorkspaceDir, type ThreadBindingStore } from "./threads.ts";
 import { LostLeaseError, type TaskContext, TaskWorker } from "./worker.ts";
 
 const hash = (text: string) => createHash("sha256").update(text).digest("hex");
@@ -59,8 +59,7 @@ export class AgentService {
     readonly files: Files,
     readonly actions: ActionService,
     readonly browser: BrowserService,
-    readonly computer: ComputerService = new ComputerService(db, config),
-    readonly threads: ThreadBindingStore = new ComputerThreadStore(computer),
+    readonly threads: ThreadBindingStore = new LocalDiskThreadStore(config.dataDir),
   ) {
     this.worker = new TaskWorker(db, (owner, task, context) => this.execute(owner, task, context), {
       settled: (owner, task) => this.publishOutcome(owner, task),
@@ -189,12 +188,12 @@ export class AgentService {
       lastActiveAt: now,
     };
     await this.db.put(owner, "channels", channel);
-    // Best-effort: give the channel its own directory in the shared computer.
-    // The computer may be disabled or stopped; that must not fail creation.
+    // Best-effort: give the channel its own directory on local disk.
+    // This must not fail channel creation.
     try {
-      await this.computer.mkdir(owner, channelWorkspaceDir(channel.id));
+      await mkdir(channelWorkspaceDir(this.config.dataDir, channel.id), { recursive: true });
     } catch {
-      /* computer unavailable */
+      /* storage unavailable */
     }
     return channel;
   }

@@ -42,16 +42,15 @@ The [Jev aquarium-trip demo](docs/demos/jev-generative-ui.md) walks through a fi
 
 ## What it is
 
-OpenMuse is a personal-agent application with an agent computer, visible work, and rich results. It runs its own server, task worker, and browser worker. You can inspect and change the source under the MIT license.
+OpenMuse is a personal-agent application with visible work and rich results. It runs its own server, task worker, and browser worker. You can inspect and change the source under the MIT license.
 
-The computer combines **persistent Chromium and an optional Linux workspace**. The agent can browse public pages, run commands in its own container, work with files, and move PDFs between the computer and the app. You can open its browser or terminal and continue the work. Graphical desktops and autonomous checkout remain future work.
+The agent can browse public pages through the browser worker, work with files and PDFs, and run durable delegated tasks. Graphical desktops and autonomous checkout remain future work.
 
 ## Features
 
 | Surface | What runs in this alpha |
 | --- | --- |
 | **Chat** | CopilotKit headless chat with streamed AG-UI events, mailbox search and reading, send/stop in one input pill, a visible follow-up queue, retained drafts, delegated tasks, and inline email, browser, PDF, plan, and finance cards. |
-| **Agent computer** | Persistent browser profiles and takeover console; optional isolated Linux terminal, saved command receipts, editable workspace files, and PDF transfer. |
 | **Activity** | Durable task plans, progress, input requests, pause/resume/cancel/retry, approvals, and saved receipts. SQL leases recover interrupted work. |
 | **Ideas** | Suggestions with source evidence; edit, accept, or dismiss. Sent replies and completed matching work are excluded. |
 | **Goals & Tracking** | Goals and milestones; recurring public-page checks for changes, text availability, or USD price thresholds, with deduplicated alerts and failure backoff. |
@@ -135,7 +134,7 @@ Health check: `https://<openmuse-api>/api/health`.
 
 **Browsing is included, and you can take it out.** `openmuse-browser` is a private service, so it has no public URL. The API reaches it at `http://openmuse-browser:8790` with a token Render generates. If the private hostname is not `openmuse-browser`, set `BROWSER_WORKER_URL` to `http://<that-host>:8790`. To deploy without it, delete the `openmuse-browser` service and the `BROWSER_WORKER_URL` and `WORKER_TOKEN` entries on `openmuse-api`. Chat, drafts, and tasks still run. Page reads, screenshots, and **Take control** do not.
 
-The Docker computer and Google mail or calendar need the setup in the sections below. This Blueprint does not start them.
+Google mail or calendar needs the setup in the section below. This Blueprint does not start it.
 
 ## Configure the agent and Google
 
@@ -162,16 +161,7 @@ Or use `docker compose --env-file .env -f infra/compose.yaml up --build -d`. The
 
 ## Persistence and operation
 
-### Linux terminal and workspace
-
-Build the computer image, enable it on the API, then open **Computer → Terminal → Start computer**:
-
-```sh
-docker build -t openmuse-computer:local apps/computer
-COMPUTER_ENABLED=true pnpm dev
-```
-
-The API needs access to the Docker CLI and engine. Commands run in a nonroot container with no host-directory mounts or credentials. A named `/workspace` volume retains files when stopped. Terminal networking is disabled; public web access uses the browser worker. Commands have a 30-second limit and saved output/exit receipts. **Files** supports folders, text editing, and PDF transfer to/from Documents. This is a Linux container, not a full operating-system VM. [Setup, Colima option, and boundaries](docs/COMPUTER.md).
+Channel workspace directories and thread bindings live on the API server's local disk under `DATA_DIR` (`channels/<channelId>/threads/<threadId>.json`), alongside the database.
 
 ### Application storage
 
@@ -200,9 +190,6 @@ flowchart TD
   Review --> Google[Gmail / Calendar adapters]
   Tasks --> Browser[Chromium worker + persistent profiles]
   API --> Browser
-  API --> Computer[Optional Docker Linux computer]
-  Tasks --> Computer
-  Computer --> Volume[(Persistent workspace volume)]
   Tasks --> Files[PDF files + structured artifacts]
   API -. future adapter .-> OpenBot[OpenBot]
 ```
@@ -212,7 +199,6 @@ flowchart TD
 | `apps/mobile` | Shared iOS, Android, and web UI with CopilotKit headless hooks. |
 | `apps/server` | API, CopilotKit runtime, identity boundary, task engine, reviews, files, and persistence. |
 | `apps/worker` | Token-protected Playwright browser service with persistent profiles. |
-| `apps/computer` | Nonroot Linux image, bounded filesystem helper, and real container verification. |
 | `packages/domain` | Shared types and request validation. |
 | `packages/integrations` | Google and browser protocol adapters. |
 | `packages/backends` | Optional OpenBot HTTP adapter and its identity boundary. |
@@ -220,7 +206,7 @@ flowchart TD
 
 ### OpenBot compatibility
 
-OpenMuse's native client and personal-agent workflows are independent of OpenBot. The disabled OpenBot adapter is pinned and contract-tested against upstream interfaces. Live user/session bridging, routine mapping, and computer backend wiring remain future work. OpenBot's Intelligence runtime is not a raw AG-UI endpoint. [Integration contract](docs/OPENBOT-INTEGRATION.md).
+OpenMuse's native client and personal-agent workflows are independent of OpenBot. The disabled OpenBot adapter is pinned and contract-tested against upstream interfaces. Live user/session bridging and routine mapping remain future work. OpenBot's Intelligence runtime is not a raw AG-UI endpoint. [Integration contract](docs/OPENBOT-INTEGRATION.md).
 
 ## Development
 
@@ -234,10 +220,9 @@ pnpm build:ios
 pnpm build:android
 pnpm --dir apps/worker typecheck
 pnpm test:browser
-pnpm test:computer
 ```
 
-Platform build scripts export JavaScript/Hermes bundles; they do not produce signed app binaries. Browser checks require installed Chromium and public fixture access. CI also exercises the browser and Linux computer containers. See [contribution guidance](CONTRIBUTING.md) and [verification results](docs/VERIFICATION.md).
+Platform build scripts export JavaScript/Hermes bundles; they do not produce signed app binaries. Browser checks require installed Chromium and public fixture access. See [contribution guidance](CONTRIBUTING.md) and [verification results](docs/VERIFICATION.md).
 
 ## Contributing and license
 

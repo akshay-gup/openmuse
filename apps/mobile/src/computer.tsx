@@ -5,14 +5,12 @@ import {
   Monitor,
   Plus,
   RefreshCw,
-  Terminal,
 } from "lucide-react-native";
 import { useEffect, useState } from "react";
 import { AppState, Image, Pressable, Text, View } from "react-native";
 import type { BrowserSession } from "../../../packages/domain/src";
 import { browserAddress } from "./browser-address";
 import { useComputerDraft } from "./computer-drafts";
-import { LinuxWorkspace } from "./computer-workspace";
 import { Button, Card, colors, ErrorNotice, Field, LinkRow, Sheet, s } from "./ui";
 import { useWorkspace } from "./workspace";
 
@@ -175,19 +173,16 @@ export function ComputerSheet() {
           </View>
         )}
         <View style={[s.row, { gap: 8 }]}>
-          {(["Browser", "Terminal", "Files"] as const).map((item) => (
+          {(["Browser", "Files"] as const).map((item) => (
             <Button
               key={item}
               primary={tab === item}
-              icon={item === "Browser" ? Globe2 : item === "Terminal" ? Terminal : FolderOpen}
+              icon={item === "Browser" ? Globe2 : FolderOpen}
               onPress={() => setTab(item)}
             >
               {item}
             </Button>
           ))}
-        </View>
-        <View style={{ display: tab === "Browser" ? "none" : "flex" }}>
-          <LinuxWorkspace tab={tab === "Files" ? "Files" : "Terminal"} />
         </View>
         <ErrorNotice error={error} />
         {tab === "Browser" ? (

@@ -10,13 +10,11 @@ import { ActionService } from "./actions.ts";
 import { agentConfigured, makeRuntime } from "./agent.ts";
 import { createAuth } from "./auth.ts";
 import { BrowserService } from "./browser.ts";
-import { ComputerService, type DockerRunner } from "./computer.ts";
-import { computerRoutes } from "./computer-routes.ts";
 import { assertApiDeploymentConfig, type Config } from "./config.ts";
 import type { Store } from "./db.ts";
 import { agentRoutes } from "./engine/routes.ts";
 import { AgentService } from "./engine/service.ts";
-import { ComputerThreadStore, type ThreadBindingStore } from "./engine/threads.ts";
+import { LocalDiskThreadStore, type ThreadBindingStore } from "./engine/threads.ts";
 import { AppError } from "./errors.ts";
 import { Files } from "./files.ts";
 import { GoogleAuth } from "./google-auth.ts";
@@ -25,7 +23,7 @@ import { WorkspaceService } from "./workspace.ts";
 export async function createApp(
   db: Store,
   config: Config,
-  options: { docker?: DockerRunner; threads?: ThreadBindingStore } = {},
+  options: { threads?: ThreadBindingStore } = {},
 ) {
   assertApiDeploymentConfig(config);
   const auth = await createAuth(db, config),
@@ -40,7 +38,6 @@ export async function createApp(
     connection: (owner) => workspace.connection(owner),
   });
   const browser = new BrowserService(db, config, auth, files);
-  const computer = new ComputerService(db, config, options.docker);
   const agent = new AgentService(
     db,
     config,
@@ -48,8 +45,7 @@ export async function createApp(
     files,
     actions,
     browser,
-    computer,
-    options.threads ?? new ComputerThreadStore(computer),
+    options.threads ?? new LocalDiskThreadStore(config.dataDir),
   );
   const intelligence = new CopilotKitIntelligence({ apiKey: config.intelligenceApiKey });
   const runtime = makeRuntime(config, agent, auth, intelligence);
@@ -160,7 +156,6 @@ export async function createApp(
     return c.json(snapshot);
   });
   app.route("/api/agent", agentRoutes(agent));
-  app.route("/api/computer", computerRoutes(computer, files));
   app.get("/api/calendars", async (c) => c.json(await workspace.calendars(c.get("owner"))));
   app.get("/api/calendar/events", async (c) => {
     const query = z
@@ -357,5 +352,5 @@ export async function createApp(
   app.get("/", (c) =>
     c.json({ name: "OpenMuse", app: "http://localhost:8081", health: "/api/health" }),
   );
-  return { app, auth, files, actions, workspace, agent, computer };
+  return { app, auth, files, actions, workspace, agent };
 }

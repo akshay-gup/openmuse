@@ -49,9 +49,6 @@ export interface Config {
   workerUrl?: string;
   workerToken?: string;
   taskWorkerEnabled?: boolean;
-  computerEnabled?: boolean;
-  computerImage?: string;
-  computerDeploymentId?: string;
   /** Restrict this process's task worker to one channel. Unset = claim all (legacy). */
   workerChannelId?: string;
   /** When true, the main process manages per-channel worker processes. */
@@ -143,9 +140,6 @@ export function readConfig(): Config {
     workerChannelId: process.env.OPENMUSE_CHANNEL?.trim() || undefined,
     manageChannels: process.env.OPENMUSE_MANAGE_CHANNELS === "true",
     channelWorkerIdleMinutes: Number(process.env.OPENMUSE_CHANNEL_IDLE_MINUTES ?? 30),
-    computerEnabled: process.env.COMPUTER_ENABLED === "true",
-    computerImage: process.env.COMPUTER_IMAGE ?? "openmuse-computer:local",
-    computerDeploymentId: process.env.COMPUTER_DEPLOYMENT_ID,
     allowedOrigins: (
       process.env.ALLOWED_ORIGINS ?? "http://localhost:8081,http://127.0.0.1:8081"
     ).split(","),
