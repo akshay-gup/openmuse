@@ -1,4 +1,4 @@
-# OpenMuse roadmap (`collab` branch)
+# Hive roadmap (`collab` branch)
 
 Direction: a self-contained, agent-native team chat. One box, one process serving
 API + web UI, OpenCode as the agent backend, threads as durable agent sessions.

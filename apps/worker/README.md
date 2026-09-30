@@ -1,6 +1,6 @@
-# OpenMuse browser worker
+# Hive browser worker
 
-An independent Node/Playwright service for the OpenMuse server. There is no OpenBot dependency. The server owns app authentication and user ownership; this worker accepts requests only from a trusted server holding `WORKER_TOKEN`.
+An independent Node/Playwright service for the Hive server. There is no OpenBot dependency. The server owns app authentication and user ownership; this worker accepts requests only from a trusted server holding `WORKER_TOKEN`.
 
 ## Run
 
@@ -90,4 +90,4 @@ pnpm --dir apps/worker exec playwright install chromium
 pnpm dev:browser
 ```
 
-The local worker binds to `127.0.0.1:8790` and stores profiles in `.openmuse/browser-profiles` by default. Docker sets `WORKER_HOST=0.0.0.0` inside its container; Compose publishes only the loopback host port. `WORKER_DATA_DIR` selects another private profile directory.
+The local worker binds to `127.0.0.1:8790` and stores profiles in `.hive/browser-profiles` by default. Docker sets `WORKER_HOST=0.0.0.0` inside its container; Compose publishes only the loopback host port. `WORKER_DATA_DIR` selects another private profile directory.

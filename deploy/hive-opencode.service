@@ -1,14 +1,14 @@
 [Unit]
-Description=OpenCode server for OpenMuse (opencode serve)
+Description=OpenCode server for Hive (opencode serve)
 After=network.target
 
 [Service]
 Type=simple
-User=openmuse
-WorkingDirectory=/opt/openmuse
+User=hive
+WorkingDirectory=/opt/hive
 # Shared env file: OPENCODE_SERVER_PASSWORD enables Basic auth (username
 # "opencode"); provider keys (OPENAI_API_KEY, ...) configure models.
-EnvironmentFile=/etc/openmuse/openmuse.env
+EnvironmentFile=/etc/hive/hive.env
 ExecStart=/usr/local/bin/opencode serve --port 4096 --log-level INFO
 Restart=on-failure
 RestartSec=5

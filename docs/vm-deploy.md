@@ -20,16 +20,16 @@ the pinned `@opencode-ai/sdk` 1.18.33 (the API asserts the major version on boot
 
 ```sh
 # 1. Service user and directories
-sudo useradd -r -m -s /usr/sbin/nologin openmuse
-sudo mkdir -p /opt/openmuse /etc/openmuse
-sudo chown openmuse:openmuse /opt/openmuse /etc/openmuse
+sudo useradd -r -m -s /usr/sbin/nologin hive
+sudo mkdir -p /opt/hive /etc/hive
+sudo chown hive:hive /opt/hive /etc/hive
 
-# 2. App code (as the openmuse user)
-sudo -u openmuse git clone <repo> /opt/openmuse   # or copy the built tree
-cd /opt/openmuse
-sudo -u openmuse pnpm install
-sudo -u openmuse pnpm build:server
-sudo -u openmuse pnpm build:web
+# 2. App code (as the hive user)
+sudo -u hive git clone <repo> /opt/hive   # or copy the built tree
+cd /opt/hive
+sudo -u hive pnpm install
+sudo -u hive pnpm build:server
+sudo -u hive pnpm build:web
 
 # 3. opencode binary (1.18.x) — install once, usable by the service user
 sudo curl -fsSL https://opencode.ai/install | sh
@@ -38,12 +38,12 @@ sudo cp ~/.opencode/bin/opencode /usr/local/bin/opencode
 opencode --version   # want 1.18.x
 
 # 4. Env file (root-owned, service-readable only)
-sudo tee /etc/openmuse/openmuse.env > /dev/null <<'EOF'
+sudo tee /etc/hive/hive.env > /dev/null <<'EOF'
 WORKSPACE_MODE=live
 HOST=127.0.0.1
 PORT=8787
-PUBLIC_API_URL=https://muse.example.com
-OPENMUSE_ACCESS_KEY=<24+ random chars>
+PUBLIC_API_URL=https://hive.example.com
+HIVE_ACCESS_KEY=<24+ random chars>
 TOKEN_ENCRYPTION_KEY=<32 random bytes, base64>
 CPK_INTELLIGENCE_API_KEY=<copilotkit project key>
 AGENT_BACKEND=opencode
@@ -51,27 +51,27 @@ MODEL=openai/gpt-5
 OPENAI_API_KEY=<provider key for MODEL>
 OPENCODE_SERVER_URL=http://127.0.0.1:4096
 OPENCODE_SERVER_PASSWORD=<random password for opencode serve Basic auth>
-AGENT_MENTION=@openmuse
+AGENT_MENTION=@hive
 EOF
-sudo chown root:openmuse /etc/openmuse/openmuse.env
-sudo chmod 640 /etc/openmuse/openmuse.env
+sudo chown root:hive /etc/hive/hive.env
+sudo chmod 640 /etc/hive/hive.env
 
 # 5. Units — opencode first, then the API
-sudo cp deploy/openmuse-opencode.service deploy/openmuse-api.service /etc/systemd/system/
+sudo cp deploy/hive-opencode.service deploy/hive-api.service /etc/systemd/system/
 sudo systemctl daemon-reload
-sudo systemctl enable --now openmuse-opencode
+sudo systemctl enable --now hive-opencode
 sleep 3
 curl -u opencode:<password> http://127.0.0.1:4096/global/health -o /dev/null -w "%{http_code}\n"  # 200
-sudo systemctl enable --now openmuse-api
-sudo journalctl -u openmuse-api -f   # watch for the opencode version assert passing
+sudo systemctl enable --now hive-api
+sudo journalctl -u hive-api -f   # watch for the opencode version assert passing
 
 # 6. HTTPS — point DNS at the VM, then
 sudo cp deploy/Caddyfile /etc/caddy/Caddyfile   # edit the hostname first
 sudo systemctl reload caddy
 ```
 
-Updating later: pull/rebuild in `/opt/openmuse`, then
-`sudo systemctl restart openmuse-api` (leave `openmuse-opencode` running —
+Updating later: pull/rebuild in `/opt/hive`, then
+`sudo systemctl restart hive-api` (leave `hive-opencode` running —
 sessions survive API restarts).
 
 ## Run (local dev)
@@ -87,16 +87,16 @@ Environment:
 | `WORKSPACE_MODE` | yes | `live` (sample mode only binds loopback) |
 | `HOST` | no | `127.0.0.1` default; keep loopback behind a reverse proxy |
 | `PORT` | no | `8787` default |
-| `DATA_DIR` | no | `.openmuse` default; database, files, and `channels/<id>/threads/*.json` live here |
+| `DATA_DIR` | no | `.hive` default; database, files, and `channels/<id>/threads/*.json` live here |
 | `WEB_DIR` | no | overrides the served web UI dir (default `apps/mobile/dist/web`); unset/absent = headless API |
-| `OPENMUSE_ACCESS_KEY` | yes | 24+ random characters; this is the sign-in key |
+| `HIVE_ACCESS_KEY` | yes | 24+ random characters; this is the sign-in key |
 | `TOKEN_ENCRYPTION_KEY` | yes | 32 random bytes, base64-encoded |
 | `CPK_INTELLIGENCE_API_KEY` | yes | `npx copilotkit@latest login`, then `npx copilotkit@latest project select` |
 | `MODEL` | yes | e.g. `openai/gpt-5`; plus the matching provider key (`OPENAI_API_KEY`, …) |
 | `AGENT_BACKEND` | no | `opencode` routes chat through the OpenCode agent layer below |
 | `OPENCODE_SERVER_URL` | no | `http://127.0.0.1:4096` default; the systemd-managed `opencode serve` (never spawned by the API) |
 | `OPENCODE_SERVER_PASSWORD` | no | Basic-auth password for `opencode serve`, if it requires one |
-| `AGENT_MENTION` | no | Mention token that summons the agent in chat (default `@openmuse`). Only a message containing it as a standalone token triggers a run; everything else is plain chat |
+| `AGENT_MENTION` | no | Mention token that summons the agent in chat (default `@hive`). Only a message containing it as a standalone token triggers a run; everything else is plain chat |
 | `PUBLIC_API_URL` | yes | the public https URL; used for OAuth callbacks and CORS |
 
 ## OpenCode agent layer (`AGENT_BACKEND=opencode`)
@@ -110,7 +110,7 @@ first prompt); one global SSE stream fans events out per thread, and the
 in-process AG-UI shim at `/api/agent/opencode/run` translates between
 CopilotKit and OpenCode. Permission rules default to ask, with per-channel and
 per-thread overrides editable in the app. The agent only runs when the latest
-user message mentions it (`AGENT_MENTION`, default `@openmuse`) — otherwise the
+user message mentions it (`AGENT_MENTION`, default `@hive`) — otherwise the
 thread is plain chat; on trigger it receives the full conversation transcript
 plus any attached images.
 
@@ -124,7 +124,7 @@ node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"     
 ## HTTPS (Caddy)
 
 ```caddy
-muse.example.com {
+hive.example.com {
 	reverse_proxy 127.0.0.1:8787
 }
 ```

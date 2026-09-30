@@ -1,5 +1,5 @@
 name: Bug report
-description: Report a reproducible OpenMuse failure
+description: Report a reproducible Hive failure
 title: "[Bug] "
 body:
   - type: textarea

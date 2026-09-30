@@ -1,14 +1,14 @@
 [Unit]
-Description=OpenMuse API (single-process server + web UI)
-After=network.target openmuse-opencode.service
-Wants=openmuse-opencode.service
+Description=Hive API (single-process server + web UI)
+After=network.target hive-opencode.service
+Wants=hive-opencode.service
 
 [Service]
 Type=simple
-User=openmuse
-WorkingDirectory=/opt/openmuse
-EnvironmentFile=/etc/openmuse/openmuse.env
-ExecStart=/usr/bin/node /opt/openmuse/dist/apps/server/src/index.js
+User=hive
+WorkingDirectory=/opt/hive
+EnvironmentFile=/etc/hive/hive.env
+ExecStart=/usr/bin/node /opt/hive/dist/apps/server/src/index.js
 Restart=on-failure
 RestartSec=5
 NoNewPrivileges=true

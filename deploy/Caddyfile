@@ -1,4 +1,4 @@
-# Replace muse.example.com with the VM's public hostname (DNS A record -> VM).
-muse.example.com {
+# Replace hive.example.com with the VM's public hostname (DNS A record -> VM).
+hive.example.com {
 	reverse_proxy 127.0.0.1:8787
 }
