@@ -23,6 +23,9 @@ importers:
       '@hono/node-server':
         specifier: ^1.19.0
         version: 1.19.17(hono@4.13.7)
+      '@opencode-ai/sdk':
+        specifier: 1.18.33
+        version: 1.18.33
       '@tanstack/ai':
         specifier: ^0.59.0
         version: 0.59.0(@opentelemetry/api@1.9.1)(zod@4.6.5)
@@ -1638,6 +1641,9 @@ packages:
   '@noble/hashes@1.8.0':
     resolution: {integrity: sha512-jCs9ldd7NwzpgXDIf6P3+NrHh9/sD6CQdxHyjQI+h/6rDNo88ypBxxz45UDuZHz9r3tNz7N/VInSVoVdtXEI4A==}
     engines: {node: ^14.21.3 || >=16}
+
+  '@opencode-ai/sdk@1.18.33':
+    resolution: {integrity: sha512-Nyurky9+AA2tvZ6my8UtO5pxPoXxrNypqjeEqMshBGiR542glOy+KE1Y+3lwWU+Z6HC/hSmrdXNbX81+qiuTzg==}
 
   '@opentelemetry/api@1.9.1':
     resolution: {integrity: sha512-gLyJlPHPZYdAk1JENA9LeHejZe1Ti77/pTeFm/nMXmQH/HFZlcS/O2XJB+L8fkbrNSqhdtlvjBVjxwUYanNH5Q==}
@@ -8315,6 +8321,10 @@ snapshots:
       - supports-color
 
   '@noble/hashes@1.8.0': {}
+
+  '@opencode-ai/sdk@1.18.33':
+    dependencies:
+      cross-spawn: 7.0.6
 
   '@opentelemetry/api@1.9.1': {}
 

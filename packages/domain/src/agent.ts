@@ -187,6 +187,11 @@ export interface ChannelThread {
   /** Display name; client-derived, defaults to "General" for the first thread. */
   name: string;
   createdAt: string;
+  /**
+   * Bound OpenCode session id (`AGENT_BACKEND=opencode`). Persisted before
+   * the first prompt so the thread can always find its session.
+   */
+  opencodeSessionId?: string;
 }
 export const monitorInputSchema = z
   .object({

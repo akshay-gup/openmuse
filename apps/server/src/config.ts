@@ -44,6 +44,10 @@ export interface Config {
   agentBackend: "sample" | "model" | "agui";
   agentUrl?: string;
   agentToken?: string;
+  /** Base URL of the systemd-managed `opencode serve` (AGENT_BACKEND=opencode). */
+  opencodeServerUrl?: string;
+  /** OPENCODE_SERVER_PASSWORD; enables Basic auth against `opencode serve`. */
+  opencodeServerPassword?: string;
   intelligenceApiKey?: string;
   googleClientId?: string;
   googleClientSecret?: string;
@@ -133,6 +137,8 @@ export function readConfig(): Config {
     agentBackend: backend,
     agentUrl: process.env.AGENT_URL,
     agentToken: process.env.AGENT_TOKEN,
+    opencodeServerUrl: process.env.OPENCODE_SERVER_URL?.trim() || undefined,
+    opencodeServerPassword: process.env.OPENCODE_SERVER_PASSWORD?.trim() || undefined,
     intelligenceApiKey: required("CPK_INTELLIGENCE_API_KEY", intelligenceKeyRequiredMessage),
     googleClientId: process.env.GOOGLE_CLIENT_ID,
     googleClientSecret: process.env.GOOGLE_CLIENT_SECRET,
