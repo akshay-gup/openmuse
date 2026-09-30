@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import {
-  ORCHESTRATOR_CHANNEL_ID,
   type AgentTask,
+  ORCHESTRATOR_CHANNEL_ID,
   type RunEvent,
 } from "../../../../packages/domain/src/agent.ts";
 import type { Store } from "../db.ts";
@@ -87,8 +87,7 @@ export class TaskWorker {
       const due = records.filter(
         ({ value: t }) =>
           !this.active.has(t.id) &&
-          (channelId === undefined ||
-            (t.channelId ?? ORCHESTRATOR_CHANNEL_ID) === channelId) &&
+          (channelId === undefined || (t.channelId ?? ORCHESTRATOR_CHANNEL_ID) === channelId) &&
           (t.status === "queued" ||
             (t.status === "scheduled" && Date.parse(t.nextRunAt ?? "") <= this.now()) ||
             (t.status === "running" && Date.parse(t.leaseUntil ?? "") <= this.now()) ||

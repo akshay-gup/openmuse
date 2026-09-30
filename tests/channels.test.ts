@@ -8,9 +8,9 @@ import type { Config } from "../apps/server/src/config.ts";
 import { createStore, type Store } from "../apps/server/src/db.ts";
 import { TaskWorker } from "../apps/server/src/engine/worker.ts";
 import {
-  ORCHESTRATOR_CHANNEL_ID,
   type AgentTask,
   type Channel,
+  ORCHESTRATOR_CHANNEL_ID,
 } from "../packages/domain/src/agent.ts";
 
 let db: Store, server: Awaited<ReturnType<typeof createApp>>, directory: string, token: string;
@@ -138,10 +138,7 @@ test("delegating to a channel revives it and fails for archived ones", async () 
   const channel = await read<Channel>("/channels", { name: "Revive Me" }, 201);
   await read<Channel>(`/channels/${channel.id}/archive`, {});
   const task = await read<AgentTask>("/tasks", { prompt: "Revival task" }, 201);
-  assert.equal(
-    (await request(`/tasks/${task.id}/delegate`, { target: channel.id })).status,
-    404,
-  );
+  assert.equal((await request(`/tasks/${task.id}/delegate`, { target: channel.id })).status, 404);
 });
 
 test("channel workers only claim their own channel's tasks", async () => {

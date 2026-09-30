@@ -11,8 +11,8 @@ import {
 } from "lucide-react-native";
 import { createContext, type ReactNode, useContext, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
-import { Button, colors, ErrorNotice, Field, LinkRow, Sheet, s } from "./ui";
 import { ChannelsSection } from "./channels";
+import { Button, colors, ErrorNotice, Field, LinkRow, Sheet, s } from "./ui";
 import { useWorkspace } from "./workspace";
 
 function newThreadId() {

@@ -28,17 +28,17 @@ import type {
 } from "../../../../packages/domain/src/index.ts";
 import type { ActionService } from "../actions.ts";
 import type { BrowserService } from "../browser.ts";
-import { channelWorkspaceDir, ComputerService } from "../computer.ts";
+import { ComputerService, channelWorkspaceDir } from "../computer.ts";
 import type { Config } from "../config.ts";
 import type { Store } from "../db.ts";
 import { AppError } from "../errors.ts";
 import type { Files } from "../files.ts";
 import { backgroundFailure } from "../log.ts";
 import type { WorkspaceService } from "../workspace.ts";
+import { ChannelManager } from "./channels.ts";
 import { analyzeSpending } from "./finance.ts";
 import { executeModelTask } from "./model.ts";
 import { LostLeaseError, type TaskContext, TaskWorker } from "./worker.ts";
-import { ChannelManager } from "./channels.ts";
 
 const hash = (text: string) => createHash("sha256").update(text).digest("hex");
 const date = () => new Date().toISOString();
@@ -163,8 +163,7 @@ export class AgentService {
   async createChannel(owner: string, raw: unknown): Promise<Channel> {
     const input = createChannelSchema.parse(raw);
     await this.ensureOrchestratorChannel(owner);
-    if (input.id === ORCHESTRATOR_CHANNEL_ID)
-      throw new AppError("Channel id is reserved", 409);
+    if (input.id === ORCHESTRATOR_CHANNEL_ID) throw new AppError("Channel id is reserved", 409);
     const slug =
       input.name
         .toLowerCase()
@@ -199,7 +198,11 @@ export class AgentService {
       throw new AppError("The orchestrator channel cannot be archived", 409);
     const channel = await this.db.get<Channel>(owner, "channels", id);
     if (!channel) throw new AppError("Channel not found", 404);
-    const updated: Channel = { ...channel, status: "archived", updatedAt: new Date().toISOString() };
+    const updated: Channel = {
+      ...channel,
+      status: "archived",
+      updatedAt: new Date().toISOString(),
+    };
     await this.db.put(owner, "channels", updated);
     return updated;
   }

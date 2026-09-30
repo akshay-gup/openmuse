@@ -2,9 +2,9 @@ import { Archive, Hash, Plus, RefreshCw } from "lucide-react-native";
 import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import {
-  ORCHESTRATOR_CHANNEL_ID,
   type AgentTask,
   type Channel,
+  ORCHESTRATOR_CHANNEL_ID,
   type TaskStatus,
 } from "../../../packages/domain/src/agent";
 import { Button, colors, ErrorNotice, Field, s } from "./ui";
@@ -53,9 +53,7 @@ function ChannelTasks({ channel, onOpenTask }: { channel: Channel; onOpenTask: (
       {tasks.map((task) => {
         const state = taskState(task.status);
         const elsewhere =
-          task.originChannelId === channel.id &&
-          task.channelId !== channel.id &&
-          task.channelId
+          task.originChannelId === channel.id && task.channelId !== channel.id && task.channelId
             ? ` · in ${task.channelId === ORCHESTRATOR_CHANNEL_ID ? "orchestrator" : task.channelId}`
             : "";
         return (
@@ -124,8 +122,7 @@ export function ChannelsSection({ onClose }: { onClose: () => void }) {
   const sorted = [...(channels ?? [])].sort((a, b) => {
     if (a.id === ORCHESTRATOR_CHANNEL_ID) return -1;
     if (b.id === ORCHESTRATOR_CHANNEL_ID) return 1;
-    const rank = (c: Channel) =>
-      c.status === "active" ? 0 : c.status === "idle" ? 1 : 2;
+    const rank = (c: Channel) => (c.status === "active" ? 0 : c.status === "idle" ? 1 : 2);
     return rank(a) - rank(b);
   });
 

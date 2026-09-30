@@ -1,11 +1,11 @@
-import { spawn, type ChildProcess } from "node:child_process";
+import { type ChildProcess, spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  ORCHESTRATOR_CHANNEL_ID,
   type AgentTask,
   type Channel,
+  ORCHESTRATOR_CHANNEL_ID,
 } from "../../../../packages/domain/src/agent.ts";
 import type { Config } from "../config.ts";
 import type { Store } from "../db.ts";
@@ -33,7 +33,10 @@ export class ChannelManager {
   private timer?: ReturnType<typeof setInterval>;
   private stopping = false;
   private reconciling = false;
-  private readonly children = new Map<string, { owner: string; channel: Channel; proc: ChildProcess }>();
+  private readonly children = new Map<
+    string,
+    { owner: string; channel: Channel; proc: ChildProcess }
+  >();
 
   constructor(
     private readonly db: Store,
