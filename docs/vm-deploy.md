@@ -74,6 +74,28 @@ Updating later: pull/rebuild in `/opt/hive`, then
 `sudo systemctl restart hive-api` (leave `hive-opencode` running —
 sessions survive API restarts).
 
+## Public URL without your own DNS (Cloudflare Tunnel)
+
+When you want a public https URL per box without managing DNS records:
+
+```sh
+# Instant throwaway URL, no account needed:
+cloudflared tunnel --url http://127.0.0.1:8787
+# -> https://<random>.trycloudflare.com
+```
+
+For stable subdomains across many boxes (one-time setup): add your domain to
+Cloudflare, create one wildcard CNAME (`*.example.com` → the tunnel), then run
+`cloudflared tunnel` with a per-box hostname (`hive-1.example.com`,
+`hive-2.example.com`, …). No per-box DNS work after that.
+
+Alternative if you're already on Tailscale: `tailscale funnel 8787` exposes the
+box publicly via `https://<tailnet>.ts.net` — same private mesh, plus a public
+door when you want one.
+
+Set `PUBLIC_API_URL` to whichever public URL you use (OAuth callbacks need
+https); keep `HOST=127.0.0.1` so the API itself only listens on loopback.
+
 ## Quick launch without public DNS (Tailscale)
 
 For throwaway boxes or many of them, skip DNS and Caddy: put the VM on your
