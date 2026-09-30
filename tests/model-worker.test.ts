@@ -31,21 +31,18 @@ test("CopilotKit model worker executes server tools and persists the confirmed o
     { name: "finish_task", arguments: { summary: "Saved your weekend plan with two steps." } },
   ];
   const { requests } = await modelFixture(t, (index) => calls[index]);
-  const server = await createApp(
-    db,
-    {
-      mode: "sample",
-      port: 8787,
-      host: "127.0.0.1",
-      publicUrl: "http://localhost:8787",
-      dataDir: directory,
-      agentBackend: "model",
-      intelligenceApiKey: "test-project-key-never-sent",
-      model: "openai/fixture",
-      googleRedirectUri: "http://localhost:8787/api/google/callback",
-      allowedOrigins: [],
-    },
-  );
+  const server = await createApp(db, {
+    mode: "sample",
+    port: 8787,
+    host: "127.0.0.1",
+    publicUrl: "http://localhost:8787",
+    dataDir: directory,
+    agentBackend: "model",
+    intelligenceApiKey: "test-project-key-never-sent",
+    model: "openai/fixture",
+    googleRedirectUri: "http://localhost:8787/api/google/callback",
+    allowedOrigins: [],
+  });
   try {
     const task = await server.agent.createTask("owner", {
       prompt: "Make a weekend plan",

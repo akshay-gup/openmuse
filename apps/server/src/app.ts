@@ -4,7 +4,7 @@ import { readFile, stat } from "node:fs/promises";
 import { extname, join, relative, resolve } from "node:path";
 import { MessageSchema } from "@ag-ui/core";
 import { CopilotKitIntelligence } from "@copilotkit/runtime/v2";
-import { Hono, type Context } from "hono";
+import { type Context, Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { cors } from "hono/cors";
 import { z } from "zod";
@@ -405,7 +405,10 @@ const webContentTypes: Record<string, string> = {
 async function serveWebFile(c: Context, root: string, pathname: string) {
   const send = async (file: string) => {
     const data = await readFile(file);
-    c.header("Content-Type", webContentTypes[extname(file).toLowerCase()] ?? "application/octet-stream");
+    c.header(
+      "Content-Type",
+      webContentTypes[extname(file).toLowerCase()] ?? "application/octet-stream",
+    );
     return c.body(new Uint8Array(data));
   };
   const candidate = join(root, pathname);

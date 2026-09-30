@@ -1,11 +1,4 @@
-import {
-  FileText,
-  FolderOpen,
-  Globe2,
-  Monitor,
-  Plus,
-  RefreshCw,
-} from "lucide-react-native";
+import { FileText, FolderOpen, Globe2, Monitor, Plus, RefreshCw } from "lucide-react-native";
 import { useEffect, useState } from "react";
 import { AppState, Image, Pressable, Text, View } from "react-native";
 import type { BrowserSession } from "../../../packages/domain/src";
