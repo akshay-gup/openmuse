@@ -1,0 +1,19 @@
+[Unit]
+Description=OpenMuse API (single-process server + web UI)
+After=network.target openmuse-opencode.service
+Wants=openmuse-opencode.service
+
+[Service]
+Type=simple
+User=openmuse
+WorkingDirectory=/opt/openmuse
+EnvironmentFile=/etc/openmuse/openmuse.env
+ExecStart=/usr/bin/node /opt/openmuse/dist/apps/server/src/index.js
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+# On boot the API healthchecks `opencode serve` and fails loud if it is
+# unreachable; Restart=on-failure retries until the opencode unit is up.
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,18 @@
+[Unit]
+Description=OpenCode server for OpenMuse (opencode serve)
+After=network.target
+
+[Service]
+Type=simple
+User=openmuse
+WorkingDirectory=/opt/openmuse
+# Shared env file: OPENCODE_SERVER_PASSWORD enables Basic auth (username
+# "opencode"); provider keys (OPENAI_API_KEY, ...) configure models.
+EnvironmentFile=/etc/openmuse/openmuse.env
+ExecStart=/usr/local/bin/opencode serve --port 4096 --log-level INFO
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

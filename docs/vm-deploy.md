@@ -13,7 +13,68 @@ pnpm build:server   # -> dist/
 pnpm build:web      # -> apps/mobile/dist/web (served by the API)
 ```
 
-## Run
+## Install on the VM
+
+Unit files and a Caddyfile live in `deploy/`. OpenCode 1.18.x on the VM matches
+the pinned `@opencode-ai/sdk` 1.18.33 (the API asserts the major version on boot).
+
+```sh
+# 1. Service user and directories
+sudo useradd -r -m -s /usr/sbin/nologin openmuse
+sudo mkdir -p /opt/openmuse /etc/openmuse
+sudo chown openmuse:openmuse /opt/openmuse /etc/openmuse
+
+# 2. App code (as the openmuse user)
+sudo -u openmuse git clone <repo> /opt/openmuse   # or copy the built tree
+cd /opt/openmuse
+sudo -u openmuse pnpm install
+sudo -u openmuse pnpm build:server
+sudo -u openmuse pnpm build:web
+
+# 3. opencode binary (1.18.x) — install once, usable by the service user
+sudo curl -fsSL https://opencode.ai/install | sh
+# The installer drops the binary in ~/.opencode/bin; copy it system-wide:
+sudo cp ~/.opencode/bin/opencode /usr/local/bin/opencode
+opencode --version   # want 1.18.x
+
+# 4. Env file (root-owned, service-readable only)
+sudo tee /etc/openmuse/openmuse.env > /dev/null <<'EOF'
+WORKSPACE_MODE=live
+HOST=127.0.0.1
+PORT=8787
+PUBLIC_API_URL=https://muse.example.com
+OPENMUSE_ACCESS_KEY=<24+ random chars>
+TOKEN_ENCRYPTION_KEY=<32 random bytes, base64>
+CPK_INTELLIGENCE_API_KEY=<copilotkit project key>
+AGENT_BACKEND=opencode
+MODEL=openai/gpt-5
+OPENAI_API_KEY=<provider key for MODEL>
+OPENCODE_SERVER_URL=http://127.0.0.1:4096
+OPENCODE_SERVER_PASSWORD=<random password for opencode serve Basic auth>
+AGENT_MENTION=@openmuse
+EOF
+sudo chown root:openmuse /etc/openmuse/openmuse.env
+sudo chmod 640 /etc/openmuse/openmuse.env
+
+# 5. Units — opencode first, then the API
+sudo cp deploy/openmuse-opencode.service deploy/openmuse-api.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now openmuse-opencode
+sleep 3
+curl -u opencode:<password> http://127.0.0.1:4096/global/health -o /dev/null -w "%{http_code}\n"  # 200
+sudo systemctl enable --now openmuse-api
+sudo journalctl -u openmuse-api -f   # watch for the opencode version assert passing
+
+# 6. HTTPS — point DNS at the VM, then
+sudo cp deploy/Caddyfile /etc/caddy/Caddyfile   # edit the hostname first
+sudo systemctl reload caddy
+```
+
+Updating later: pull/rebuild in `/opt/openmuse`, then
+`sudo systemctl restart openmuse-api` (leave `openmuse-opencode` running —
+sessions survive API restarts).
+
+## Run (local dev)
 
 ```sh
 pnpm start
