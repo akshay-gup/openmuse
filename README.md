@@ -2,7 +2,7 @@
 
 # OpenMuse
 
-**A personal agent with a browser, terminal, files, and work that keeps going. Compatible with any agent harness.**
+**A personal agent with a browser, files, and work that keeps going — backed by OpenCode, summoned with a mention.**
 
 Ask for an outcome. Follow the plan, review actions, and come back to the result.
 Built with CopilotKit React Native for iOS, Android, and web.
@@ -11,8 +11,6 @@ Built with CopilotKit React Native for iOS, Android, and web.
 
 [![CI](https://github.com/CopilotKit/OpenMuse/actions/workflows/ci.yml/badge.svg)](https://github.com/CopilotKit/OpenMuse/actions/workflows/ci.yml)
 [![MIT license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-
-[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/CopilotKit/OpenMuse)
 
 Clone this template and customize it however you want.
 
@@ -42,15 +40,16 @@ The [Jev aquarium-trip demo](docs/demos/jev-generative-ui.md) walks through a fi
 
 ## What it is
 
-OpenMuse is a personal-agent application with visible work and rich results. It runs its own server, task worker, and browser worker. You can inspect and change the source under the MIT license.
+OpenMuse is a channel-based team chat with an agent in the loop. It runs its own server, task worker, and optional browser worker as one self-contained deployment. You can inspect and change the source under the MIT license.
 
-The agent can browse public pages through the browser worker, work with files and PDFs, and run durable delegated tasks. Graphical desktops and autonomous checkout remain future work.
+Chat threads are plain conversation until you mention `@openmuse` — then the agent wakes with the full thread history and attached files, works as a durable OpenCode session, and asks before risky actions. Delegated tasks run as unattended OpenCode sessions and report back to the originating thread. The agent can browse public pages through the browser worker, work with files and PDFs, and run durable delegated tasks. Graphical desktops and autonomous checkout remain future work.
 
 ## Features
 
 | Surface | What runs in this alpha |
 | --- | --- |
-| **Chat** | CopilotKit headless chat with streamed AG-UI events, mailbox search and reading, send/stop in one input pill, a visible follow-up queue, retained drafts, delegated tasks, and inline email, browser, PDF, plan, and finance cards. |
+| **Chat** | CopilotKit headless chat with streamed AG-UI events, mailbox search and reading, send/stop in one input pill, a visible follow-up queue, retained drafts, delegated tasks, and inline email, browser, PDF, plan, and finance cards. The agent only runs when mentioned (`@openmuse` by default); everything else is plain chat. |
+| **Agent backend** | OpenCode via `AGENT_BACKEND=opencode`: one `opencode serve` process, durable thread→session bindings, a single global event stream, and an in-process AG-UI shim so the client is untouched. Permissions default to ask with approve/deny in the thread, plus per-channel/per-thread rules. |
 | **Activity** | Durable task plans, progress, input requests, pause/resume/cancel/retry, approvals, and saved receipts. SQL leases recover interrupted work. |
 | **Ideas** | Suggestions with source evidence; edit, accept, or dismiss. Sent replies and completed matching work are excluded. |
 | **Goals & Tracking** | Goals and milestones; recurring public-page checks for changes, text availability, or USD price thresholds, with deduplicated alerts and failure backoff. |
@@ -58,7 +57,7 @@ The agent can browse public pages through the browser worker, work with files an
 | **Finance** | Import transaction CSV to create a spending summary with categories, transactions, and a savings-goal action. |
 | **Gmail & Calendar** | Google OAuth adapters, complete mail threads, drafts/attachments, calendar discovery, and reviewed event creation/update/deletion. Live credentials required. |
 | **Personal context** | Editable name, tone, avatar, and memories. Background-update preferences and durable in-app notifications. |
-| **Rich Threads** | CopilotKit Intelligence persistence in every mode, with a stable main conversation, side chats, renaming, archiving, restoring, and replay. A server-only project key is required. |
+| **Rich Threads** | CopilotKit Intelligence persistence in every mode, with thread renaming and replay. A server-only project key is required. |
 
 The [feature inventory](docs/FEATURES.md) describes implemented capabilities and planned extensions. Health/bank/social connectors, device push, voice, generated executable tools, and automatic reservations/payments are on the [roadmap](ROADMAP.md).
 
@@ -71,6 +70,7 @@ Where this fork is headed — self-contained, agent-native team chat:
 - OpenCode agent backend: one `opencode serve` (systemd unit on the VM; the API connects, never spawns), durable thread→session bindings, a single global event stream, and an AG-UI shim so the client is untouched.
 - Permissions default to ask with approve/deny in the thread, plus per-channel/per-thread rules.
 - Delegated tasks run as OpenCode sessions in auto-mode; background permission requests surface in the originating thread.
+- Mention-only chat trigger: the agent runs only when the latest message contains `@openmuse` (env `AGENT_MENTION`); on trigger it receives the full conversation transcript plus attached files.
 
 **Next**
 - Live VM verification: end-to-end task loop with real inference, `opencode serve` systemd unit.
@@ -83,7 +83,7 @@ Details and open questions live in [ROADMAP.md](ROADMAP.md).
 
 ## Quick start
 
-**Requirements:** Node 24 LTS, pnpm 11.19.0, and a CopilotKit Intelligence project key. The local sample app needs no model, Google account, or Docker.
+**Requirements:** Node 24 LTS, pnpm 11.19.0, and a CopilotKit Intelligence project key. The local sample app needs no model or Google account.
 
 ```sh
 git clone https://github.com/CopilotKit/OpenMuse.git openmuse
@@ -110,60 +110,43 @@ Open [localhost:8081](http://localhost:8081). The API runs at [localhost:8787/ap
 2. In **Goals → Track**, create a built-in availability watch, then change the built-in test page to trigger an alert.
 3. In **Menu → Delegate task → Finance**, use **Try example transactions** to create an interactive spending tracker.
 4. Start the [browser worker](#browser-worker) and configure a model, then ask **“Check out Hacker News for cool stuff”** or **“Summarize copilotkit.ai”**. Follow the browser inline and use **Take control** to open its session. For a model-free version of this flow, follow the [AI Mock demo setup](docs/DEMO.md#run-the-agent-browser-demo).
+5. With `AGENT_BACKEND=opencode` and `opencode serve` running, mention **@openmuse** in a thread to summon the agent; messages without a mention are plain chat.
 
 For iOS or Android, use `pnpm --dir apps/mobile ios` or `pnpm --dir apps/mobile android`. Xcode or Android tooling is required. The PDF reader needs an Expo development build; use [native setup](apps/mobile/README.md).
 
-## Deploy on Render
+## Deployment
 
-[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/CopilotKit/OpenMuse)
+This branch deploys as one self-contained process on a VM: the API serves the Expo web UI same-origin, threads and channels persist on local disk under `DATA_DIR`, and `opencode serve` runs as a systemd unit alongside it. Follow **[docs/vm-deploy.md](docs/vm-deploy.md)** — build/run, environment variables, a minimal reverse-proxy config, and the channel storage layout.
 
-[render.yaml](render.yaml) deploys three services: the API, the web app, and a private browser. The API answers `/` with JSON, so the UI is its own static site.
+`render.yaml` (three services: API, web, private browser) is left over from upstream and is no longer the direction. The API still answers `/api/health` for any platform's health check.
 
-### First run
+Key variables for the VM (see the deploy doc for the full table):
 
-1. Click **Deploy to Render**. Wait until `openmuse-api`, `openmuse-web`, and `openmuse-browser` are live.
-2. On `openmuse-api`, open **Environment** and copy `OPENMUSE_ACCESS_KEY`.
-3. Open the `openmuse-web` URL and sign in with that key.
-4. Send a message.
-
-The deploy form asks for two values you provide. Render generates the other two.
-
-| Variable | Set by | If it is missing |
-|---|---|---|
-| `CPK_INTELLIGENCE_API_KEY` | You. Run `npx copilotkit@latest login`, then `npx copilotkit@latest project select`. Keep it on the server. | Chat cannot open a thread. |
-| `OPENAI_API_KEY` | You. Used by the default `openai/gpt-5`. Change `MODEL` and supply the matching provider key for Anthropic or Google. | The model call fails. |
-| `OPENMUSE_ACCESS_KEY` | Render | You cannot sign in. |
-| `TOKEN_ENCRYPTION_KEY` | Render | The API refuses to start in live mode. |
-
-Health check: `https://<openmuse-api>/api/health`.
-
-### Services
-
-| Service | Plan | What it runs |
-|---|---|---|
-| `openmuse-api` | Standard, with a 1 GB disk at `/var/data` | The Hono API and the in-process task worker. `DATA_DIR` is `/var/data/openmuse`. |
-| `openmuse-web` | Static site | The Expo web export. `EXPO_PUBLIC_API_URL` is baked in at build time. |
-| `openmuse-browser` | Private service, Standard, 1 GB disk at `/data` | Playwright and Chromium. The API calls it on the private network. |
-
-**Standard** is the smallest plan that stays up. At 512 MB the process runs out of memory before it binds a port, because PGlite loads an embedded Postgres build.
-
-**The disk** holds the database, PDFs, and the signing key. A redeploy without it wipes that data. Chat threads are stored by CopilotKit Intelligence, so a thread can still load after you sign back in even when the disk was never attached.
-
-**Live mode** is required. Render binds `0.0.0.0`, and sample mode rejects any host that is not loopback. The Blueprint sets `WORKSPACE_MODE=live`.
-
-**Browsing is included, and you can take it out.** `openmuse-browser` is a private service, so it has no public URL. The API reaches it at `http://openmuse-browser:8790` with a token Render generates. If the private hostname is not `openmuse-browser`, set `BROWSER_WORKER_URL` to `http://<that-host>:8790`. To deploy without it, delete the `openmuse-browser` service and the `BROWSER_WORKER_URL` and `WORKER_TOKEN` entries on `openmuse-api`. Chat, drafts, and tasks still run. Page reads, screenshots, and **Take control** do not.
-
-Google mail or calendar needs the setup in the section below. This Blueprint does not start it.
+| Variable | Purpose |
+|---|---|
+| `AGENT_BACKEND=opencode` | Routes chat through the OpenCode agent layer |
+| `OPENCODE_SERVER_URL` | The systemd-managed `opencode serve` (default `http://127.0.0.1:4096`); the API connects, never spawns it |
+| `OPENCODE_SERVER_PASSWORD` | Basic-auth password for `opencode serve`, if it requires one |
+| `MODEL` | Single model for all sessions, e.g. `openai/gpt-5`, plus the matching provider key |
+| `AGENT_MENTION` | Mention token that summons the agent in chat (default `@openmuse`) |
+| `DATA_DIR` | Local storage root (default `.openmuse`); database, files, and `channels/<id>/threads/*.json` |
+| `WEB_DIR` | Overrides the served web UI dir; unset/absent = headless API for native clients |
+| `CPK_INTELLIGENCE_API_KEY` | Server-only CopilotKit Intelligence project key (required in every mode) |
+| `OPENMUSE_ACCESS_KEY` / `TOKEN_ENCRYPTION_KEY` | Sign-in key and at-rest encryption secret for live mode |
 
 ## Configure the agent and Google
 
 Copy the commented settings in [.env.example](.env.example) into your private `.env`:
 
-1. Set `AGENT_BACKEND=model`, `MODEL=provider/model-id`, and the matching provider key. CopilotKit supports the configured OpenAI, Anthropic or Google provider. Fictional data can still be used with a real model. Provider keys stay on the server.
-2. Create or select a CopilotKit Intelligence project with `npx copilotkit@latest login` and `npx copilotkit@latest project select`. Keep the generated `CPK_INTELLIGENCE_API_KEY` on the server.
-3. For personal mail/calendar, set `WORKSPACE_MODE=live`, the generated `CPK_INTELLIGENCE_API_KEY`, a random `OPENMUSE_ACCESS_KEY` of at least 24 characters, and `TOKEN_ENCRYPTION_KEY` containing 32 random bytes encoded as base64. Restart the API.
-4. Configure a Google OAuth web client with Gmail and Calendar APIs enabled. Set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`; register `${PUBLIC_API_URL}/api/google/callback` as its redirect URI. Configure consent/test-user access in your Google project.
-5. Open **Apps → Gmail** (or **Google Calendar**), connect read access, and grant write access when needed. Every send or calendar change still requires its own stored review. Changing/disconnecting the account invalidates pending connection-bound work.
+1. Set `AGENT_BACKEND=opencode`, `MODEL=provider/model-id`, and the matching provider key (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or `GOOGLE_API_KEY`). Provider keys stay on the server.
+2. Run `opencode serve` as a systemd unit (see [docs/vm-deploy.md](docs/vm-deploy.md)); point `OPENCODE_SERVER_URL` at it and set `OPENCODE_SERVER_PASSWORD` if it requires auth. The API healthchecks the server and asserts a compatible version on boot — it never spawns the server itself.
+3. Optionally set `AGENT_MENTION` (default `@openmuse`): only a message containing it as a standalone token summons the agent in chat.
+4. Create or select a CopilotKit Intelligence project with `npx copilotkit@latest login` and `npx copilotkit@latest project select`. Keep the generated `CPK_INTELLIGENCE_API_KEY` on the server.
+5. For personal mail/calendar, set `WORKSPACE_MODE=live`, a random `OPENMUSE_ACCESS_KEY` of at least 24 characters, and `TOKEN_ENCRYPTION_KEY` containing 32 random bytes encoded as base64. Restart the API.
+6. Configure a Google OAuth web client with Gmail and Calendar APIs enabled. Set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`; register `${PUBLIC_API_URL}/api/google/callback` as its redirect URI. Configure consent/test-user access in your Google project.
+7. Open **Apps → Gmail** (or **Google Calendar**), connect read access, and grant write access when needed. Every send or calendar change still requires its own stored review. Changing/disconnecting the account invalidates pending connection-bound work.
+
+`AGENT_BACKEND=model` (model-direct) and `AGENT_BACKEND=agui` (external AG-UI agent at `AGENT_URL`) remain as alternatives; `sample` keeps local fictional data on loopback.
 
 Google credentials are encrypted at rest. File URLs and browser consoles use short-lived signatures. This deployment uses one owner protected by a shared access key; it is not a multi-tenant authentication system. Use HTTPS and restricted network access for a remote host. Keep the default local-data mode on loopback.
 
@@ -201,7 +184,11 @@ Intelligence is a separate service and is not included in this repository's MIT 
 ```mermaid
 flowchart TD
   Client[Expo / React Native / Web] -->|AG-UI and authenticated API| API[Hono + CopilotKit runtime]
+  API --> Shim[In-process AG-UI shim]
+  Shim -->|mention-only trigger| OpenCode[opencode serve — systemd unit, never spawned by the API]
+  OpenCode --> Sessions[Thread → OpenCode session bindings]
   API --> Tasks[Durable task worker]
+  Tasks --> OpenCode
   API --> Threads[CopilotKit Intelligence required in every mode]
   API --> Store[(PGlite or PostgreSQL)]
   Tasks --> Store
@@ -216,7 +203,7 @@ flowchart TD
 | Directory | Purpose |
 | --- | --- |
 | `apps/mobile` | Shared iOS, Android, and web UI with CopilotKit headless hooks. |
-| `apps/server` | API, CopilotKit runtime, identity boundary, task engine, reviews, files, and persistence. |
+| `apps/server` | API, CopilotKit runtime, identity boundary, OpenCode agent layer, task engine, reviews, files, and persistence. |
 | `apps/worker` | Token-protected Playwright browser service with persistent profiles. |
 | `packages/domain` | Shared types and request validation. |
 | `packages/integrations` | Google and browser protocol adapters. |
