@@ -1,5 +1,9 @@
 import { randomUUID } from "node:crypto";
-import type { AgentTask, RunEvent } from "../../../../packages/domain/src/agent.ts";
+import {
+  ORCHESTRATOR_CHANNEL_ID,
+  type AgentTask,
+  type RunEvent,
+} from "../../../../packages/domain/src/agent.ts";
 import type { Store } from "../db.ts";
 import { backgroundFailure } from "../log.ts";
 
@@ -34,6 +38,12 @@ export class TaskWorker {
       leaseMs?: number;
       pollMs?: number;
       settled?: (owner: string, task: AgentTask) => Promise<void>;
+      /**
+       * When set, this worker only claims tasks belonging to the channel.
+       * Unset (the default) claims everything: the pre-channels behavior,
+       * used by the orchestrator worker.
+       */
+      channelId?: string;
     } = {},
   ) {}
   private now() {
@@ -73,9 +83,12 @@ export class TaskWorker {
     this.lastTickAt = new Date(this.now()).toISOString();
     try {
       const records = await this.db.scan<AgentTask>("tasks");
+      const channelId = this.options.channelId;
       const due = records.filter(
         ({ value: t }) =>
           !this.active.has(t.id) &&
+          (channelId === undefined ||
+            (t.channelId ?? ORCHESTRATOR_CHANNEL_ID) === channelId) &&
           (t.status === "queued" ||
             (t.status === "scheduled" && Date.parse(t.nextRunAt ?? "") <= this.now()) ||
             (t.status === "running" && Date.parse(t.leaseUntil ?? "") <= this.now()) ||

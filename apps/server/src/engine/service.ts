@@ -57,6 +57,9 @@ export class AgentService {
   ) {
     this.worker = new TaskWorker(db, (owner, task, context) => this.execute(owner, task, context), {
       settled: (owner, task) => this.publishOutcome(owner, task),
+      // In orchestrator mode the main process only runs orchestrator-channel tasks;
+      // per-channel workers (spawned separately) claim their own channels.
+      channelId: config.manageChannels ? ORCHESTRATOR_CHANNEL_ID : config.workerChannelId,
     });
   }
   start() {
