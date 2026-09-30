@@ -5,7 +5,16 @@
  * per-directory SDK clients, thread ↔ session bindings, and (Phase 2+)
  * the global event pipeline and AG-UI shim.
  */
+
+export {
+  lastUserText,
+  type OpencodeShimDeps,
+  opencodeShimRoutes,
+  parseModelRef,
+  RunTranslator,
+} from "./agui.ts";
 export { type OpencodeClient, OpencodeClientPool } from "./client.ts";
+export { type OpenCodeEvent, OpencodeEventBus } from "./events.ts";
 export {
   buildSessionRuleset,
   defaultSessionRuleset,

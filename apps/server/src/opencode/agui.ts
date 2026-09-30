@@ -1,0 +1,462 @@
+/**
+ * AG-UI shim over OpenCode sessions.
+ *
+ * The CopilotKit runtime's `agents` factory points the "opencode" backend at
+ * POST /api/agent/opencode/run on this same process (in-process shim, no
+ * loopback HTTP hop). The shim translates:
+ * - AG-UI RunAgentInput -> OpenCode `session.promptAsync`, with a synthetic
+ *   context part (channel/thread metadata the model sees but that never
+ *   surfaces as a real turn) prepended to the user's prompt;
+ * - OpenCode global events -> AG-UI events (`TEXT_MESSAGE_*`, `TOOL_CALL_*`,
+ *   `RUN_STARTED/FINISHED/ERROR`), with synthetic parts filtered on egress
+ *   and busy/idle derived from `session.status` / `session.idle` only.
+ *
+ * One run per thread at a time: a second concurrent run is rejected (409),
+ * since two runs on one session would interleave on a single event stream.
+ * Prompt dispatch is serialized through the bus's per-thread action queue.
+ */
+import { Hono } from "hono";
+import { z } from "zod";
+import type { Config } from "../config.ts";
+import type { AgentService } from "../engine/service.ts";
+import type { OpencodeClientPool } from "./client.ts";
+import type { OpenCodeEvent, OpencodeEventBus } from "./events.ts";
+import { ensureThreadSession } from "./sessions.ts";
+
+export interface OpencodeShimDeps {
+  service: AgentService;
+  bus: OpencodeEventBus;
+  pool: OpencodeClientPool;
+  config: Config;
+}
+
+const runInputSchema = z.object({
+  threadId: z.string().min(1),
+  runId: z.string().min(1),
+  messages: z.array(z.any()),
+});
+
+type RunInput = z.infer<typeof runInputSchema>;
+
+/** Bound for a run whose terminal events never arrive (e.g. a reconnect gap). */
+const RUN_TIMEOUT_MS = 10 * 60_000;
+/** Truncation for tool results forwarded as TOOL_CALL_RESULT content. */
+const TOOL_RESULT_LIMIT = 2_000;
+
+export function parseModelRef(
+  model: string | undefined,
+): { providerID: string; modelID: string } | undefined {
+  if (!model) return undefined;
+  const slash = model.indexOf("/");
+  if (slash <= 0 || slash === model.length - 1) return undefined;
+  return { providerID: model.slice(0, slash), modelID: model.slice(slash + 1) };
+}
+
+/** Last user message text, following ConversationAgent's convention. */
+export function lastUserText(messages: Array<Record<string, unknown>>): string | undefined {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const message = messages[i];
+    if (message?.role !== "user") continue;
+    const content = message.content;
+    if (typeof content === "string") return content;
+    if (Array.isArray(content)) {
+      const text = content
+        .filter((part) => part?.type === "text" && typeof part.text === "string")
+        .map((part) => part.text)
+        .join("");
+      if (text) return text;
+    }
+  }
+  return undefined;
+}
+
+interface TextTrack {
+  started: boolean;
+  emitted: number;
+}
+
+interface ToolTrack {
+  started: boolean;
+  argsSent: boolean;
+  ended: boolean;
+}
+
+type AguiEvent = Record<string, unknown>;
+
+/**
+ * Translates one run's OpenCode events into AG-UI events. Created per run;
+ * the bus drops stale-session events before they reach it.
+ */
+export class RunTranslator {
+  private readonly messageRoles = new Map<string, string>();
+  private readonly partMeta = new Map<string, { type: string; synthetic?: boolean }>();
+  private readonly texts = new Map<string, TextTrack>();
+  private readonly tools = new Map<string, ToolTrack>();
+  private finished = false;
+
+  constructor(
+    private readonly input: RunInput,
+    private readonly send: (event: AguiEvent) => void,
+    private readonly done: () => void,
+  ) {}
+
+  handle(event: OpenCodeEvent): void {
+    if (this.finished) return;
+    const props = event.properties;
+    switch (event.type) {
+      case "message.updated": {
+        const info = props.info as { id?: string; role?: string } | undefined;
+        if (info?.id && info.role) this.messageRoles.set(info.id, info.role);
+        return;
+      }
+      case "message.part.updated": {
+        const part = props.part as {
+          id?: string;
+          messageID?: string;
+          type?: string;
+          synthetic?: boolean;
+          text?: string;
+          callID?: string;
+          tool?: string;
+          state?: { status?: string; input?: unknown; output?: string; error?: string };
+        };
+        if (!part?.id || !part.messageID || !part.type) return;
+        this.partMeta.set(part.id, { type: part.type, synthetic: part.synthetic });
+        if (part.synthetic) return; // egress filter for synthetic context parts
+        if (part.type === "text" && typeof part.text === "string") {
+          if (this.messageRoles.get(part.messageID) !== "assistant") return;
+          this.streamText(part.messageID, part.text);
+        } else if (part.type === "tool" && part.callID && part.tool && part.state) {
+          this.streamTool(part.messageID, part.callID, part.tool, part.state);
+        }
+        return;
+      }
+      case "message.part.delta": {
+        const meta = this.partMeta.get(props.partID as string);
+        if (!meta || meta.synthetic || meta.type !== "text") return;
+        if (this.messageRoles.get(props.messageID as string) !== "assistant") return;
+        const delta = props.delta;
+        if (typeof delta !== "string" || !delta) return;
+        this.streamDelta(props.messageID as string, delta);
+        return;
+      }
+      case "session.status": {
+        const status = props.status as { type?: string } | undefined;
+        if (status?.type === "idle") this.finish();
+        return;
+      }
+      case "session.idle":
+        this.finish();
+        return;
+      case "session.error": {
+        const error = props.error as { message?: string } | undefined;
+        const message =
+          typeof error?.message === "string" && error.message
+            ? error.message
+            : "The OpenCode session reported an error";
+        this.fail(message);
+        return;
+      }
+      case "permission.asked":
+        // Phase 3 surfaces this for user reply; until then it is informational.
+        this.send({
+          type: "CUSTOM",
+          name: "permission-requested",
+          value: {
+            requestId: props.id,
+            permission: props.permission,
+            patterns: props.patterns,
+            metadata: props.metadata,
+          },
+        });
+        return;
+      default:
+        return;
+    }
+  }
+
+  private streamText(messageID: string, fullText: string): void {
+    let track = this.texts.get(messageID);
+    if (!track) {
+      track = { started: false, emitted: 0 };
+      this.texts.set(messageID, track);
+    }
+    if (!track.started) {
+      this.send({ type: "TEXT_MESSAGE_START", messageId: messageID, role: "assistant" });
+      track.started = true;
+    }
+    const rest = fullText.slice(track.emitted);
+    if (rest) {
+      this.send({ type: "TEXT_MESSAGE_CONTENT", messageId: messageID, delta: rest });
+      track.emitted = fullText.length;
+    }
+  }
+
+  private streamDelta(messageID: string, delta: string): void {
+    if (!delta) return;
+    const track = this.texts.get(messageID);
+    if (!track?.started) {
+      // Delta arrived before the part snapshot: open the message, then stream.
+      this.streamText(messageID, delta);
+      return;
+    }
+    this.send({ type: "TEXT_MESSAGE_CONTENT", messageId: messageID, delta });
+    track.emitted += delta.length;
+  }
+
+  private streamTool(
+    parentMessageId: string,
+    callID: string,
+    tool: string,
+    state: { status?: string; input?: unknown; output?: string; error?: string },
+  ): void {
+    let track = this.tools.get(callID);
+    if (!track) {
+      track = { started: false, argsSent: false, ended: false };
+      this.tools.set(callID, track);
+    }
+    const current = track;
+    const start = () => {
+      this.send({
+        type: "TOOL_CALL_START",
+        toolCallId: callID,
+        toolCallName: tool,
+        parentMessageId,
+      });
+      current.started = true;
+    };
+    if (!track.started && (state.status === "pending" || state.status === "running")) start();
+    if (track.started && !track.argsSent && state.input != null) {
+      this.send({
+        type: "TOOL_CALL_ARGS",
+        toolCallId: callID,
+        delta: JSON.stringify(state.input),
+      });
+      track.argsSent = true;
+    }
+    if (!track.ended && (state.status === "completed" || state.status === "error")) {
+      if (!track.started) start();
+      this.send({ type: "TOOL_CALL_END", toolCallId: callID });
+      const content =
+        state.status === "completed" ? (state.output ?? "") : `error: ${state.error ?? "unknown"}`;
+      this.send({
+        type: "TOOL_CALL_RESULT",
+        messageId: `toolresult-${callID}`,
+        toolCallId: callID,
+        role: "tool",
+        content: content.slice(0, TOOL_RESULT_LIMIT),
+      });
+      track.ended = true;
+    }
+  }
+
+  private finish(): void {
+    if (this.finished) return;
+    this.finished = true;
+    for (const [messageID, track] of this.texts) {
+      if (track.started) this.send({ type: "TEXT_MESSAGE_END", messageId: messageID });
+    }
+    for (const [callID, track] of this.tools) {
+      if (track.started && !track.ended) this.send({ type: "TOOL_CALL_END", toolCallId: callID });
+    }
+    this.send({ type: "RUN_FINISHED", threadId: this.input.threadId, runId: this.input.runId });
+    this.done();
+  }
+
+  fail(message: string): void {
+    if (this.finished) return;
+    this.finished = true;
+    this.send({ type: "RUN_ERROR", message, code: "OPENCODE_RUN_FAILED" });
+    this.done();
+  }
+}
+
+interface RunContext {
+  deps: OpencodeShimDeps;
+  owner: string;
+  input: RunInput;
+  send: (event: AguiEvent) => void;
+  signal: AbortSignal;
+  inflight: Map<string, string>;
+  onAbort: () => void;
+  session?: { sessionId: string; directory: string };
+  unsubscribe?: () => void;
+  translator?: RunTranslator;
+  timer?: ReturnType<typeof setTimeout>;
+  settled: boolean;
+}
+
+/** Idempotent run teardown: unsubscribe, clear the in-flight guard, stop timers. */
+function settleRun(ctx: RunContext): void {
+  if (ctx.settled) return;
+  ctx.settled = true;
+  ctx.unsubscribe?.();
+  if (ctx.timer) clearTimeout(ctx.timer);
+  ctx.signal.removeEventListener("abort", ctx.onAbort);
+  if (ctx.inflight.get(ctx.input.threadId) === ctx.input.runId) {
+    ctx.inflight.delete(ctx.input.threadId);
+  }
+}
+
+async function abortRunSession(ctx: RunContext): Promise<void> {
+  const session = ctx.session;
+  if (!session) return;
+  try {
+    await ctx.deps.pool
+      .forDirectory(session.directory)
+      .session.abort({ sessionID: session.sessionId, directory: session.directory });
+  } catch {
+    // Best effort: the session may already be gone.
+  }
+}
+
+async function runOpencodeTurn(ctx: RunContext): Promise<void> {
+  const { deps, owner, input, send, signal } = ctx;
+
+  let resolveDone!: () => void;
+  const donePromise = new Promise<void>((resolve) => {
+    resolveDone = resolve;
+  });
+  const finish = () => {
+    settleRun(ctx);
+    resolveDone();
+  };
+
+  const onTimeout = () => {
+    void abortRunSession(ctx).finally(() => {
+      if (ctx.translator) ctx.translator.fail("The run timed out");
+      else {
+        send({ type: "RUN_ERROR", message: "The run timed out", code: "OPENCODE_RUN_FAILED" });
+        finish();
+      }
+    });
+  };
+  ctx.timer = setTimeout(onTimeout, RUN_TIMEOUT_MS);
+  // Don't hold the process open for a run whose client already went away.
+  (ctx.timer as unknown as { unref?: () => void }).unref?.();
+  const onAbort = () => {
+    void abortRunSession(ctx).finally(() => {
+      if (ctx.translator) ctx.translator.fail("The run was cancelled");
+      else {
+        send({ type: "RUN_ERROR", message: "The run was cancelled", code: "OPENCODE_RUN_FAILED" });
+        finish();
+      }
+    });
+  };
+  ctx.onAbort = onAbort;
+  signal.addEventListener("abort", onAbort, { once: true });
+
+  try {
+    const binding = await deps.service.channelOfThread(owner, input.threadId);
+    if (!binding) throw new Error(`Thread ${input.threadId} not found`);
+    const { sessionId, directory } = await ensureThreadSession(
+      { threads: deps.service.threads, clients: deps.pool, config: deps.config },
+      owner,
+      input.threadId,
+    );
+    ctx.session = { sessionId, directory };
+    deps.bus.track(input.threadId, sessionId);
+
+    const userText = lastUserText(input.messages as Array<Record<string, unknown>>);
+    if (!userText?.trim()) throw new Error("No user message to send");
+
+    const translator = new RunTranslator(input, send, finish);
+    ctx.translator = translator;
+    ctx.unsubscribe = deps.bus.onEvent(input.threadId, (event) => translator.handle(event));
+
+    send({ type: "RUN_STARTED", threadId: input.threadId, runId: input.runId });
+
+    await deps.bus.waitForConnection();
+    const client = deps.pool.forDirectory(directory);
+    const model = parseModelRef(deps.config.model);
+    await deps.bus.enqueue(input.threadId, () =>
+      client.session.promptAsync({
+        sessionID: sessionId,
+        directory,
+        ...(model ? { model } : {}),
+        parts: [
+          {
+            type: "text",
+            synthetic: true,
+            text: `[openmuse context] channel=${binding.channelId} thread=${input.threadId} name=${binding.name}`,
+          },
+          { type: "text", text: userText },
+        ],
+      }),
+    );
+    // Completion (or failure) arrives via the event subscription above.
+    await donePromise;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown OpenCode error";
+    if (ctx.translator) ctx.translator.fail(message);
+    else {
+      send({ type: "RUN_ERROR", message, code: "OPENCODE_RUN_FAILED" });
+      finish();
+    }
+  }
+}
+
+export function opencodeShimRoutes(deps: OpencodeShimDeps) {
+  const app = new Hono<{ Variables: { owner: string } }>();
+  // One in-flight run per thread: threadId -> runId. The check-and-set below is
+  // synchronous, so concurrent requests for the same thread cannot both pass.
+  const inflight = new Map<string, string>();
+
+  app.post("/run", async (c) => {
+    const owner = c.get("owner");
+    let body: unknown;
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json({ error: "Invalid JSON body" }, 400);
+    }
+    const parsed = runInputSchema.safeParse(body);
+    if (!parsed.success) return c.json({ error: "Invalid run input" }, 400);
+    const { threadId, runId } = parsed.data;
+    if (inflight.has(threadId)) {
+      return c.json({ error: "A run is already in progress on this thread" }, 409);
+    }
+    inflight.set(threadId, runId);
+
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream<Uint8Array>({
+      async start(controller) {
+        const send = (event: AguiEvent) => {
+          try {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+          } catch {
+            // Controller closed (client went away); the abort handler cleans up.
+          }
+        };
+        const ctx: RunContext = {
+          deps,
+          owner,
+          input: parsed.data,
+          send,
+          signal: c.req.raw.signal,
+          inflight,
+          settled: false,
+          onAbort: () => undefined,
+        };
+        try {
+          await runOpencodeTurn(ctx);
+        } finally {
+          settleRun(ctx);
+          try {
+            controller.close();
+          } catch {
+            // Already closed.
+          }
+        }
+      },
+    });
+    return new Response(stream, {
+      headers: {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        Connection: "keep-alive",
+      },
+    });
+  });
+  return app;
+}

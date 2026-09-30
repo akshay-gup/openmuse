@@ -41,7 +41,7 @@ export interface Config {
   jevMode?: "off" | "sample" | "live";
   typesafeApiKey?: string;
   jevModel?: string;
-  agentBackend: "sample" | "model" | "agui";
+  agentBackend: "sample" | "model" | "agui" | "opencode";
   agentUrl?: string;
   agentToken?: string;
   /** Base URL of the systemd-managed `opencode serve` (AGENT_BACKEND=opencode). */
@@ -108,8 +108,8 @@ export function readConfig(): Config {
   if (mode !== "sample" && mode !== "live")
     throw new Error("WORKSPACE_MODE must be sample or live");
   const backend = process.env.AGENT_BACKEND ?? (mode === "sample" ? "sample" : "model");
-  if (backend !== "sample" && backend !== "model" && backend !== "agui")
-    throw new Error("AGENT_BACKEND must be sample, model or agui");
+  if (backend !== "sample" && backend !== "model" && backend !== "agui" && backend !== "opencode")
+    throw new Error("AGENT_BACKEND must be sample, model, agui or opencode");
   if (mode === "live" && backend === "sample")
     throw new Error("Live workspaces cannot use the sample agent");
   const jevMode = process.env.JEV_MODE ?? "off";

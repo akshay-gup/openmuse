@@ -13,6 +13,7 @@ import type { AgentService } from "./engine/service.ts";
 import { createJevAdapter, type JevAdapter } from "./jev/adapter.ts";
 
 export function agentConfigured(config: Config) {
+  if (config.agentBackend === "opencode") return true; // boot gates on server reachability
   return (
     config.agentBackend === "sample" ||
     (config.agentBackend === "agui"
@@ -35,25 +36,29 @@ export function makeRuntime(
   let jevAdapter: JevAdapter | undefined;
   const sharedJevAdapter = () => (jevAdapter ??= createJevAdapter(config));
   const agents: AgentsFactory = async ({ request }) => ({
-    default:
-      config.agentBackend === "sample"
-        ? new ConversationAgent(
-            config,
-            service,
-            await auth.owner(request.headers.get("authorization") ?? undefined),
-            sharedJevAdapter(),
-          )
-        : config.agentBackend === "agui"
-          ? new HttpAgent({
-              url: config.agentUrl ?? "http://127.0.0.1:1/unconfigured",
-              headers: config.agentToken ? { Authorization: `Bearer ${config.agentToken}` } : {},
-            })
-          : new ConversationAgent(
-              config,
-              service,
-              await auth.owner(request.headers.get("authorization") ?? undefined),
-              sharedJevAdapter(),
-            ),
+    default: await (async () => {
+      const authorization = request.headers.get("authorization") ?? undefined;
+      if (config.agentBackend === "agui") {
+        return new HttpAgent({
+          url: config.agentUrl ?? "http://127.0.0.1:1/unconfigured",
+          headers: config.agentToken ? { Authorization: `Bearer ${config.agentToken}` } : {},
+        });
+      }
+      if (config.agentBackend === "opencode") {
+        // In-process shim: forward the caller's auth so the shim route
+        // resolves the owner the same way this request did.
+        return new HttpAgent({
+          url: `${config.publicUrl}/api/agent/opencode/run`,
+          headers: authorization ? { authorization } : {},
+        });
+      }
+      return new ConversationAgent(
+        config,
+        service,
+        await auth.owner(authorization),
+        sharedJevAdapter(),
+      );
+    })(),
   });
   const runtime = new CopilotRuntime({
     agents,

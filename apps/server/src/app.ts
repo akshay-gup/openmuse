@@ -21,6 +21,13 @@ import { LocalDiskThreadStore, type ThreadBindingStore } from "./engine/threads.
 import { AppError } from "./errors.ts";
 import { Files } from "./files.ts";
 import { GoogleAuth } from "./google-auth.ts";
+import {
+  connectionFromConfig,
+  ensureOpencodeServerReachable,
+  OpencodeClientPool,
+  OpencodeEventBus,
+  opencodeShimRoutes,
+} from "./opencode/index.ts";
 import { WorkspaceService } from "./workspace.ts";
 
 export async function createApp(
@@ -159,6 +166,19 @@ export async function createApp(
     return c.json(snapshot);
   });
   app.route("/api/agent", agentRoutes(agent));
+  // OpenCode backend: fail loud on boot if the systemd-managed server is
+  // unreachable, then start the global event bus and mount the AG-UI shim.
+  let opencode: { stop(): Promise<void> } | undefined;
+  if (config.agentBackend === "opencode") {
+    const connection = connectionFromConfig(config);
+    const { version } = await ensureOpencodeServerReachable(connection);
+    console.log(`OpenCode server reachable at ${connection.url} (v${version})`);
+    const bus = new OpencodeEventBus(connection);
+    const pool = new OpencodeClientPool(connection);
+    bus.start();
+    app.route("/api/agent/opencode", opencodeShimRoutes({ service: agent, bus, pool, config }));
+    opencode = { stop: () => bus.stop() };
+  }
   app.get("/api/calendars", async (c) => c.json(await workspace.calendars(c.get("owner"))));
   app.get("/api/calendar/events", async (c) => {
     const query = z
@@ -369,7 +389,7 @@ export async function createApp(
       });
     }
   }
-  return { app, auth, files, actions, workspace, agent };
+  return { app, auth, files, actions, workspace, agent, opencode };
 }
 
 /**

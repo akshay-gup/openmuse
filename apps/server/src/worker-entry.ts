@@ -8,7 +8,7 @@ if (!config.databaseUrl)
     "A separate task worker requires DATABASE_URL. Embedded PGlite runs inside the API process.",
   );
 const db = await createStore({ databaseUrl: config.databaseUrl });
-const { agent } = await createApp(db, config);
+const { agent, opencode } = await createApp(db, config);
 agent.start();
 console.log("OpenMuse task worker running");
 let stopping = false;
@@ -16,6 +16,7 @@ const stop = async () => {
   if (stopping) return;
   stopping = true;
   await agent.stop();
+  await opencode?.stop();
   await db.close();
   process.exit(0);
 };
