@@ -48,4 +48,9 @@ export {
   type SessionContext,
   sessionDirectory,
 } from "./sessions.ts";
-export { type OpencodeTaskRuntime, parseTaskOutcome, runOpencodeTask, TaskTextCollector } from "./tasks.ts";
+export {
+  type OpencodeTaskRuntime,
+  parseTaskOutcome,
+  runOpencodeTask,
+  TaskTextCollector,
+} from "./tasks.ts";

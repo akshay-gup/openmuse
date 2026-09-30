@@ -50,7 +50,13 @@ export class PermissionTracker {
 
   /** Record a `permission.asked` event. Idempotent on request id. */
   record(
-    scope: { scope: string; threadId?: string; taskId?: string; channelId: string; directory: string },
+    scope: {
+      scope: string;
+      threadId?: string;
+      taskId?: string;
+      channelId: string;
+      directory: string;
+    },
     props: AskedPermissionProps,
   ): PendingPermissionRequest {
     const existing = this.pending.get(props.id);

@@ -26,8 +26,8 @@ import {
   ensureOpencodeServerReachable,
   OpencodeClientPool,
   OpencodeEventBus,
-  opencodeShimRoutes,
   opencodePermissionRoutes,
+  opencodeShimRoutes,
   PermissionRulesStore,
   PermissionTracker,
 } from "./opencode/index.ts";

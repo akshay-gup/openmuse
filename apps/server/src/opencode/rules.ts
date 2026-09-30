@@ -15,7 +15,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { ChannelThread } from "../../../../packages/domain/src/agent.ts";
 import { safeChannelDirName } from "../engine/threads.ts";
-import { invalidRuleLines, parsePermissionRules, type PermissionRuleset } from "./permissions.ts";
+import { invalidRuleLines, type PermissionRuleset, parsePermissionRules } from "./permissions.ts";
 
 interface ChannelPermissionFile {
   rules: string[];
@@ -26,7 +26,10 @@ const EMPTY: ChannelPermissionFile = { rules: [], threads: {} };
 
 function normalize(raw: unknown): string[] {
   if (!Array.isArray(raw)) return [];
-  return raw.filter((line): line is string => typeof line === "string").map((line) => line.trim()).filter(Boolean);
+  return raw
+    .filter((line): line is string => typeof line === "string")
+    .map((line) => line.trim())
+    .filter(Boolean);
 }
 
 export class PermissionRulesStore {

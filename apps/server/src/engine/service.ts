@@ -35,13 +35,13 @@ import type { Store } from "../db.ts";
 import { AppError } from "../errors.ts";
 import type { Files } from "../files.ts";
 import { backgroundFailure } from "../log.ts";
+import type { OpencodeTaskRuntime } from "../opencode/index.ts";
 import type { WorkspaceService } from "../workspace.ts";
 import { ChannelManager } from "./channels.ts";
 import { analyzeSpending } from "./finance.ts";
 import { executeModelTask } from "./model.ts";
 import { channelWorkspaceDir, LocalDiskThreadStore, type ThreadBindingStore } from "./threads.ts";
 import { LostLeaseError, type TaskContext, TaskWorker } from "./worker.ts";
-import type { OpencodeTaskRuntime } from "../opencode/index.ts";
 
 const hash = (text: string) => createHash("sha256").update(text).digest("hex");
 const date = () => new Date().toISOString();

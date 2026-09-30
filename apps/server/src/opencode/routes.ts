@@ -55,13 +55,14 @@ export function opencodePermissionRoutes(deps: OpencodeShimDeps) {
     const pending = deps.tracker.get(requestId);
     if (!pending) return c.json({ error: "Permission request is not pending" }, 404);
     try {
-      const answered = await deps.tracker.reply(deps, requestId, parsed.data.reply as PermissionReply);
+      const answered = await deps.tracker.reply(
+        deps,
+        requestId,
+        parsed.data.reply as PermissionReply,
+      );
       return c.json({ ok: true, ...serialize(answered) });
     } catch (error) {
-      return c.json(
-        { error: error instanceof Error ? error.message : "Reply failed" },
-        502,
-      );
+      return c.json({ error: error instanceof Error ? error.message : "Reply failed" }, 502);
     }
   });
 
