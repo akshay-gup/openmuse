@@ -7,6 +7,8 @@ import {
   type AgentNotification,
   type AgentTask,
   type AgentWorkspace,
+  type Channel,
+  createChannelSchema,
   createTaskSchema,
   type Evidence,
   type Goal,
@@ -14,6 +16,7 @@ import {
   type Idea,
   type Monitor,
   monitorInputSchema,
+  ORCHESTRATOR_CHANNEL_ID,
   type RunEvent,
 } from "../../../../packages/domain/src/agent.ts";
 import type {
@@ -120,6 +123,69 @@ export class AgentService {
       name: "OpenMuse",
       tone: "warm",
     });
+    await this.ensureOrchestratorChannel(owner);
+  }
+  /** The orchestrator channel always exists: the fixed control-plane surface. */
+  async ensureOrchestratorChannel(owner: string): Promise<Channel> {
+    const existing = await this.db.get<Channel>(owner, "channels", ORCHESTRATOR_CHANNEL_ID);
+    if (existing) return existing;
+    const now = new Date().toISOString();
+    const channel: Channel = {
+      id: ORCHESTRATOR_CHANNEL_ID,
+      name: "Orchestrator",
+      status: "active",
+      createdBy: owner,
+      createdAt: now,
+      updatedAt: now,
+      workerPid: null,
+      lastActiveAt: now,
+    };
+    await this.db.insertIfAbsent(owner, "channels", channel);
+    return (await this.db.get<Channel>(owner, "channels", ORCHESTRATOR_CHANNEL_ID)) ?? channel;
+  }
+  async listChannels(owner: string): Promise<Channel[]> {
+    await this.ensureOrchestratorChannel(owner);
+    return this.db.list<Channel>(owner, "channels");
+  }
+  async createChannel(owner: string, raw: unknown): Promise<Channel> {
+    const input = createChannelSchema.parse(raw);
+    await this.ensureOrchestratorChannel(owner);
+    if (input.id === ORCHESTRATOR_CHANNEL_ID)
+      throw new AppError("Channel id is reserved", 409);
+    const id = input.id ?? input.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || randomUUID().slice(0, 8);
+    if (await this.db.get<Channel>(owner, "channels", id))
+      throw new AppError("Channel already exists", 409);
+    const now = new Date().toISOString();
+    const channel: Channel = {
+      id,
+      name: input.name,
+      status: "active",
+      createdBy: owner,
+      createdAt: now,
+      updatedAt: now,
+      workerPid: null,
+      lastActiveAt: now,
+    };
+    await this.db.put(owner, "channels", channel);
+    return channel;
+  }
+  async archiveChannel(owner: string, id: string): Promise<Channel> {
+    if (id === ORCHESTRATOR_CHANNEL_ID)
+      throw new AppError("The orchestrator channel cannot be archived", 409);
+    const channel = await this.db.get<Channel>(owner, "channels", id);
+    if (!channel) throw new AppError("Channel not found", 404);
+    const updated: Channel = { ...channel, status: "archived", updatedAt: new Date().toISOString() };
+    await this.db.put(owner, "channels", updated);
+    return updated;
+  }
+  /** Tasks visible in a channel: owned by it, or delegated elsewhere but requested here. */
+  async channelTasks(owner: string, channelId: string): Promise<AgentTask[]> {
+    const tasks = await this.db.list<AgentTask>(owner, "tasks");
+    return tasks.filter(
+      (t) =>
+        (t.channelId ?? ORCHESTRATOR_CHANNEL_ID) === channelId ||
+        (t.originChannelId ?? ORCHESTRATOR_CHANNEL_ID) === channelId,
+    );
   }
   async snapshot(owner: string): Promise<AgentWorkspace> {
     await this.ensure(owner);
@@ -181,6 +247,12 @@ export class AgentService {
     const input = createTaskSchema.parse(raw);
     if (input.goalId && !(await this.db.get(owner, "goals", input.goalId)))
       throw new AppError("Goal not found", 404);
+    const channelId = input.channelId ?? ORCHESTRATOR_CHANNEL_ID;
+    if (
+      channelId !== ORCHESTRATOR_CHANNEL_ID &&
+      !(await this.db.get<Channel>(owner, "channels", channelId))
+    )
+      throw new AppError("Channel not found", 404);
     const id = idempotencyKey ? hash(`task:${idempotencyKey}`) : randomUUID();
     const existing = await this.db.get<AgentTask>(owner, "tasks", id);
     if (existing) return existing;
@@ -209,6 +281,9 @@ export class AgentService {
       prompt: input.prompt,
       kind: input.kind,
       goalId: input.goalId,
+      channelId,
+      originChannelId: channelId,
+      delegatedTo: null,
       status: held ? "paused" : "queued",
       plan: titles.map((title, i) => ({ id: String(i), title, status: "pending" })),
       evidence: [],
