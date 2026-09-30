@@ -12,6 +12,7 @@ import {
 import { createContext, type ReactNode, useContext, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { Button, colors, ErrorNotice, Field, LinkRow, Sheet, s } from "./ui";
+import { ChannelsSection } from "./channels";
 import { useWorkspace } from "./workspace";
 
 function newThreadId() {
@@ -167,6 +168,9 @@ export function ThreadsSheet({ onClose }: { onClose: () => void }) {
             >
               New side chat
             </Button>
+            <View style={{ marginTop: 12 }}>
+              <ChannelsSection onClose={onClose} />
+            </View>
             <View style={[s.between, { marginTop: 12 }]}>
               <Text style={s.heading}>Side chats</Text>
               <Button small onPress={() => setArchived(!archived)}>

@@ -165,7 +165,12 @@ export class AgentService {
     await this.ensureOrchestratorChannel(owner);
     if (input.id === ORCHESTRATOR_CHANNEL_ID)
       throw new AppError("Channel id is reserved", 409);
-    const id = input.id ?? input.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || randomUUID().slice(0, 8);
+    const slug =
+      input.name
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "") || randomUUID().slice(0, 8);
+    const id = input.id ?? slug;
     if (await this.db.get<Channel>(owner, "channels", id))
       throw new AppError("Channel already exists", 409);
     const now = new Date().toISOString();
