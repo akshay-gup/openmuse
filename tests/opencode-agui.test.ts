@@ -352,14 +352,20 @@ describe("opencodeShimRoutes", () => {
   });
 
   it("rejects a second concurrent run on the same thread with 409", async () => {
-    // channelOfThread never resolves: the first run stays in-flight.
+    // channelOfThread never resolves: the first run stays in-flight. The first
+    // run mentions the agent so it passes the mention gate and blocks there.
+    const mentioned = JSON.stringify({
+      threadId: "t1",
+      runId: "r1",
+      messages: [{ role: "user", content: "@openmuse do work" }],
+    });
     const app = opencodeShimRoutes(
       stubDeps({ channelOfThread: () => new Promise(() => undefined) }),
     );
     const first = app.request("/run", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ threadId: "t1", runId: "r1", messages: [] }),
+      body: mentioned,
     });
     await new Promise((r) => setTimeout(r, 50));
     const second = await app.request("/run", {

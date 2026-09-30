@@ -35,6 +35,7 @@ Environment:
 | `AGENT_BACKEND` | no | `opencode` routes chat through the OpenCode agent layer below |
 | `OPENCODE_SERVER_URL` | no | `http://127.0.0.1:4096` default; the systemd-managed `opencode serve` (never spawned by the API) |
 | `OPENCODE_SERVER_PASSWORD` | no | Basic-auth password for `opencode serve`, if it requires one |
+| `AGENT_MENTION` | no | Mention token that summons the agent in chat (default `@openmuse`). Only a message containing it as a standalone token triggers a run; everything else is plain chat |
 | `PUBLIC_API_URL` | yes | the public https URL; used for OAuth callbacks and CORS |
 
 ## OpenCode agent layer (`AGENT_BACKEND=opencode`)
@@ -46,8 +47,11 @@ it never spawns the server itself. Each channel thread gets one OpenCode
 session (bound via `opencodeSessionId` in its thread file, created before the
 first prompt); one global SSE stream fans events out per thread, and the
 in-process AG-UI shim at `/api/agent/opencode/run` translates between
-CopilotKit and OpenCode. Permission rules default to ask; per-channel/thread
-overrides land in a later phase.
+CopilotKit and OpenCode. Permission rules default to ask, with per-channel and
+per-thread overrides editable in the app. The agent only runs when the latest
+user message mentions it (`AGENT_MENTION`, default `@openmuse`) — otherwise the
+thread is plain chat; on trigger it receives the full conversation transcript
+plus any attached images.
 
 Generate the secrets:
 
