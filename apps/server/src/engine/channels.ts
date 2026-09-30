@@ -114,6 +114,9 @@ export class ChannelManager {
           if (this.children.has(k)) this.kill(k, channel, owner, "archived");
           continue;
         }
+        // Idle channels stay down until new work flips them back to active
+        // (createTask/delegateTask do that via lastActiveAt).
+        if (channel.status !== "active") continue;
         live.add(k);
         if (!this.children.has(k)) this.spawn(owner, channel);
       }
