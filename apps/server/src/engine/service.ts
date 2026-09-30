@@ -8,6 +8,7 @@ import {
   type AgentTask,
   type AgentWorkspace,
   type Channel,
+  type ChannelThread,
   createChannelSchema,
   createTaskSchema,
   type Evidence,
@@ -38,6 +39,7 @@ import type { WorkspaceService } from "../workspace.ts";
 import { ChannelManager } from "./channels.ts";
 import { analyzeSpending } from "./finance.ts";
 import { executeModelTask } from "./model.ts";
+import { ComputerThreadStore, type ThreadBindingStore } from "./threads.ts";
 import { LostLeaseError, type TaskContext, TaskWorker } from "./worker.ts";
 
 const hash = (text: string) => createHash("sha256").update(text).digest("hex");
@@ -48,6 +50,8 @@ export class AgentService {
   private maintenance?: ReturnType<typeof setInterval>;
   private refreshing = false;
   private channels?: ChannelManager;
+  /** threadId → binding, keyed `${owner}/${threadId}`. Invalidated on write. */
+  private readonly threadChannelCache = new Map<string, ChannelThread>();
   constructor(
     readonly db: Store,
     readonly config: Config,
@@ -56,6 +60,7 @@ export class AgentService {
     readonly actions: ActionService,
     readonly browser: BrowserService,
     readonly computer: ComputerService = new ComputerService(db, config),
+    readonly threads: ThreadBindingStore = new ComputerThreadStore(computer),
   ) {
     this.worker = new TaskWorker(db, (owner, task, context) => this.execute(owner, task, context), {
       settled: (owner, task) => this.publishOutcome(owner, task),
@@ -191,6 +196,13 @@ export class AgentService {
     } catch {
       /* computer unavailable */
     }
+    // A new channel is never a dead room: it starts with a General thread.
+    // Independent of mkdir so an injectable thread store works without Docker.
+    try {
+      await this.registerThread(owner, channel.id, "General");
+    } catch {
+      /* thread store unavailable */
+    }
     return channel;
   }
   async archiveChannel(owner: string, id: string): Promise<Channel> {
@@ -205,6 +217,80 @@ export class AgentService {
     };
     await this.db.put(owner, "channels", updated);
     return updated;
+  }
+  /**
+   * Bind a new conversation thread to a channel. The thread id is
+   * server-generated; the binding is a JSON file in the channel's workspace
+   * dir (`threads/<threadId>.json`). Bindings are append-only, never rebound.
+   */
+  async registerThread(owner: string, channelId: string, name?: string): Promise<ChannelThread> {
+    const channel = await this.db.get<Channel>(owner, "channels", channelId);
+    if (!channel || channel.status === "archived") throw new AppError("Channel not found", 404);
+    const existing = await this.threads.list(owner, channelId);
+    const binding: ChannelThread = {
+      threadId: randomUUID(),
+      channelId,
+      name:
+        name?.trim().slice(0, 80) ||
+        (existing.length === 0 ? "General" : `Thread ${existing.length + 1}`),
+      createdAt: new Date().toISOString(),
+    };
+    await this.threads.write(owner, binding);
+    this.threadChannelCache.set(`${owner}/${binding.threadId}`, binding);
+    await this.db.put(owner, "channels", {
+      ...channel,
+      status: "active",
+      lastActiveAt: binding.createdAt,
+      updatedAt: binding.createdAt,
+    });
+    return binding;
+  }
+  /**
+   * Idempotently bind a client-known thread id to a channel. Used for the
+   * orchestrator's main chat thread, whose id originates on the client.
+   */
+  async ensureThreadBinding(
+    owner: string,
+    threadId: string,
+    channelId: string,
+    name?: string,
+  ): Promise<ChannelThread> {
+    const cached = await this.channelOfThread(owner, threadId);
+    if (cached) return cached;
+    const channel = await this.db.get<Channel>(owner, "channels", channelId);
+    if (!channel || channel.status === "archived") throw new AppError("Channel not found", 404);
+    const binding: ChannelThread = {
+      threadId,
+      channelId,
+      name: name?.trim().slice(0, 80) || "Main chat",
+      createdAt: new Date().toISOString(),
+    };
+    await this.threads.write(owner, binding);
+    this.threadChannelCache.set(`${owner}/${threadId}`, binding);
+    return binding;
+  }
+  /** Threads bound to a channel, oldest first. */
+  async listChannelThreads(owner: string, channelId: string): Promise<ChannelThread[]> {
+    const channel = await this.db.get<Channel>(owner, "channels", channelId);
+    if (!channel) throw new AppError("Channel not found", 404);
+    return this.threads.list(owner, channelId);
+  }
+  /** Reverse lookup: which channel does this thread belong to? Cached. */
+  async channelOfThread(owner: string, threadId: string): Promise<ChannelThread | null> {
+    const key = `${owner}/${threadId}`;
+    const cached = this.threadChannelCache.get(key);
+    if (cached) return cached;
+    const all = await this.threads.scan(owner);
+    this.threadChannelCache.clear();
+    for (const binding of all) this.threadChannelCache.set(`${owner}/${binding.threadId}`, binding);
+    return this.threadChannelCache.get(key) ?? null;
+  }
+  /** A thread's work queue: tasks delegated from it, in creation order. */
+  async threadTasks(owner: string, threadId: string): Promise<AgentTask[]> {
+    const tasks = await this.db.list<AgentTask>(owner, "tasks");
+    return tasks
+      .filter((t) => t.threadId === threadId)
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   }
   /** Tasks visible in a channel: owned by it, or delegated elsewhere but requested here. */
   async channelTasks(owner: string, channelId: string): Promise<AgentTask[]> {
@@ -359,6 +445,7 @@ export class AgentService {
       channelId,
       originChannelId: channelId,
       delegatedTo: null,
+      threadId: input.threadId,
       status: held ? "paused" : "queued",
       plan: titles.map((title, i) => ({ id: String(i), title, status: "pending" })),
       evidence: [],

@@ -63,6 +63,36 @@ export function agentRoutes(service: AgentService): Hono<{ Variables: { owner: s
   app.get("/channels/:id/tasks", async (c) =>
     c.json(await service.channelTasks(c.get("owner"), c.req.param("id"))),
   );
+  app.post("/channels/:id/threads", async (c) => {
+    const raw = await c.req.text();
+    const body = z
+      .object({ name: z.string().trim().min(1).max(80).optional() })
+      .parse(raw ? JSON.parse(raw) : {});
+    return c.json(await service.registerThread(c.get("owner"), c.req.param("id"), body.name), 201);
+  });
+  app.get("/channels/:id/threads", async (c) =>
+    c.json(await service.listChannelThreads(c.get("owner"), c.req.param("id"))),
+  );
+  app.post("/threads/bind", async (c) => {
+    const body = z
+      .object({
+        threadId: z.string().trim().min(1).max(120),
+        channelId: z.string().trim().min(1).max(80),
+        name: z.string().trim().min(1).max(80).optional(),
+      })
+      .parse(await c.req.json());
+    return c.json(
+      await service.ensureThreadBinding(c.get("owner"), body.threadId, body.channelId, body.name),
+    );
+  });
+  app.get("/threads/:threadId/channel", async (c) => {
+    const binding = await service.channelOfThread(c.get("owner"), c.req.param("threadId"));
+    if (!binding) throw new AppError("Thread is not bound to a channel", 404);
+    return c.json(binding);
+  });
+  app.get("/threads/:threadId/tasks", async (c) =>
+    c.json(await service.threadTasks(c.get("owner"), c.req.param("threadId"))),
+  );
   app.post("/tasks/:id/delegate", async (c) => {
     const body = z
       .object({
