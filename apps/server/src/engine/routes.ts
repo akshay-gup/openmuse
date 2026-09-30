@@ -85,6 +85,10 @@ export function agentRoutes(service: AgentService): Hono<{ Variables: { owner: s
       await service.ensureThreadBinding(c.get("owner"), body.threadId, body.channelId, body.name),
     );
   });
+  app.patch("/threads/:threadId", async (c) => {
+    const body = z.object({ name: z.string().trim().min(1).max(80) }).parse(await c.req.json());
+    return c.json(await service.renameThread(c.get("owner"), c.req.param("threadId"), body.name));
+  });
   app.get("/threads/:threadId/channel", async (c) => {
     const binding = await service.channelOfThread(c.get("owner"), c.req.param("threadId"));
     if (!binding) throw new AppError("Thread is not bound to a channel", 404);

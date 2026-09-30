@@ -153,3 +153,30 @@ test("tasks delegated from a thread form its work queue", async () => {
   const otherQueue = await read<AgentTask[]>(`/threads/${other.threadId}/tasks`);
   assert.deepEqual(otherQueue, []);
 });
+
+test("renaming a thread updates its display name only", async () => {
+  const channel = await read<Channel>("/channels", { name: "Renames" }, 201);
+  const thread = await read<ChannelThread>(`/channels/${channel.id}/threads`, {}, 201);
+  const renamed = await read<ChannelThread>(
+    `/threads/${thread.threadId}`,
+    { name: "  Better name  " },
+    200,
+    "PATCH",
+  );
+  assert.equal(renamed.name, "Better name");
+  assert.equal(renamed.threadId, thread.threadId);
+  // The binding is untouched: reverse lookup still resolves the same channel.
+  const binding = await read<ChannelThread>(`/threads/${thread.threadId}/channel`);
+  assert.equal(binding.channelId, channel.id);
+  assert.equal(binding.name, "Better name");
+  const threads = await read<ChannelThread[]>(`/channels/${channel.id}/threads`);
+  assert.equal(threads[0].name, "Better name");
+});
+
+test("renaming rejects blank names and unknown threads", async () => {
+  const channel = await read<Channel>("/channels", { name: "Rename guard" }, 201);
+  const thread = await read<ChannelThread>(`/channels/${channel.id}/threads`, {}, 201);
+  await read(`/threads/${thread.threadId}`, { name: "   " }, 422, "PATCH");
+  await read(`/threads/${thread.threadId}`, { name: "x".repeat(81) }, 422, "PATCH");
+  await read(`/threads/does-not-exist`, { name: "Nope" }, 404, "PATCH");
+});

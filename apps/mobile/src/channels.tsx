@@ -1,7 +1,16 @@
 import { useThreads } from "@copilotkit/react-native/headless";
-import { Archive, Hash, MessagesSquare, Plus, RefreshCw } from "lucide-react-native";
+import {
+  Archive,
+  Check,
+  Hash,
+  MessagesSquare,
+  Pencil,
+  Plus,
+  RefreshCw,
+  X,
+} from "lucide-react-native";
 import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, Pressable, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, Text, TextInput, View } from "react-native";
 import {
   type AgentTask,
   type Channel,
@@ -26,6 +35,115 @@ function taskState(status: TaskStatus): { label: string; color: string } {
     default:
       return { label: "waiting", color: colors.muted };
   }
+}
+
+function ThreadRow({
+  binding,
+  archived,
+  onOpen,
+  onRenamed,
+}: {
+  binding: ChannelThread;
+  archived?: boolean;
+  onOpen: () => void;
+  onRenamed: (binding: ChannelThread) => void;
+}) {
+  const { api } = useWorkspace();
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(binding.name);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  async function save() {
+    const name = draft.trim();
+    if (!name || name === binding.name) {
+      setEditing(false);
+      return;
+    }
+    setSaving(true);
+    setError("");
+    try {
+      const renamed = await api.request<ChannelThread>(
+        `/api/agent/threads/${binding.threadId}`,
+        { name },
+        "PATCH",
+      );
+      onRenamed(renamed);
+      setEditing(false);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (editing) {
+    return (
+      <View style={{ gap: 4 }}>
+        <View style={[s.row, { gap: 8, alignItems: "center" }]}>
+          <TextInput
+            autoFocus
+            value={draft}
+            onChangeText={setDraft}
+            onSubmitEditing={() => void save()}
+            maxLength={80}
+            accessibilityLabel="Thread name"
+            style={[s.input, { flex: 1, paddingVertical: 6 }]}
+          />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Save thread name"
+            disabled={saving}
+            onPress={() => void save()}
+            style={{ padding: 6 }}
+          >
+            <Check size={16} color={colors.blueDark} />
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Cancel rename"
+            onPress={() => {
+              setDraft(binding.name);
+              setEditing(false);
+            }}
+            style={{ padding: 6 }}
+          >
+            <X size={16} color={colors.muted} />
+          </Pressable>
+        </View>
+        {!!error && <ErrorNotice error={error} />}
+      </View>
+    );
+  }
+
+  return (
+    <View style={[s.row, { gap: 4, alignItems: "center" }]}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Open thread: ${binding.name}`}
+        onPress={onOpen}
+        style={[s.row, { flex: 1, gap: 8, paddingVertical: 6, alignItems: "center" }]}
+      >
+        <MessagesSquare size={16} color={colors.muted} />
+        <Text style={[s.text, { flex: 1 }]} numberOfLines={1}>
+          {binding.name}
+        </Text>
+        {archived && <Text style={s.small}>archived</Text>}
+      </Pressable>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Rename thread: ${binding.name}`}
+        onPress={() => {
+          setDraft(binding.name);
+          setError("");
+          setEditing(true);
+        }}
+        style={{ padding: 6 }}
+      >
+        <Pencil size={14} color={colors.muted} />
+      </Pressable>
+    </View>
+  );
 }
 
 function ChannelThreads({ channel, onClose }: { channel: Channel; onClose: () => void }) {
@@ -91,19 +209,17 @@ function ChannelThreads({ channel, onClose }: { channel: Channel; onClose: () =>
         bindings.map((binding) => {
           const thread = meta.get(binding.threadId);
           return (
-            <Pressable
+            <ThreadRow
               key={binding.threadId}
-              accessibilityRole="button"
-              accessibilityLabel={`Open thread: ${binding.name}`}
-              onPress={() => openThread(binding)}
-              style={[s.row, { gap: 8, paddingVertical: 6 }]}
-            >
-              <MessagesSquare size={16} color={colors.muted} />
-              <Text style={[s.text, { flex: 1 }]} numberOfLines={1}>
-                {binding.name}
-              </Text>
-              {thread?.archived && <Text style={s.small}>archived</Text>}
-            </Pressable>
+              binding={binding}
+              archived={thread?.archived}
+              onOpen={() => openThread(binding)}
+              onRenamed={(renamed) =>
+                setBindings((list) =>
+                  list ? list.map((b) => (b.threadId === renamed.threadId ? renamed : b)) : list,
+                )
+              }
+            />
           );
         })
       )}

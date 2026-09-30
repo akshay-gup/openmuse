@@ -260,6 +260,15 @@ export class AgentService {
     this.threadChannelCache.set(`${owner}/${threadId}`, binding);
     return binding;
   }
+  /** Rename a thread's display name. The binding (thread → channel) is untouched. */
+  async renameThread(owner: string, threadId: string, name: string): Promise<ChannelThread> {
+    const binding = await this.channelOfThread(owner, threadId);
+    if (!binding) throw new AppError("Thread is not bound to a channel", 404);
+    const renamed: ChannelThread = { ...binding, name };
+    await this.threads.write(owner, renamed);
+    this.threadChannelCache.set(`${owner}/${threadId}`, renamed);
+    return renamed;
+  }
   /** Threads bound to a channel, oldest first. */
   async listChannelThreads(owner: string, channelId: string): Promise<ChannelThread[]> {
     const channel = await this.db.get<Channel>(owner, "channels", channelId);
