@@ -36,6 +36,8 @@ export interface AgentTask {
   originChannelId?: string;
   /** Where a delegated task currently sits: null, "orchestrator", or a channel id. */
   delegatedTo?: string | null;
+  /** Why the task was delegated (shown in queue views). */
+  delegationReason?: string;
   plan: TaskStep[];
   evidence: Evidence[];
   input: Record<string, unknown>;

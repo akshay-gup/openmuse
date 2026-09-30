@@ -207,6 +207,47 @@ export class AgentService {
         (t.originChannelId ?? ORCHESTRATOR_CHANNEL_ID) === channelId,
     );
   }
+  /**
+   * Hand a task to the orchestrator or another channel. The task keeps its
+   * origin channel so status stays visible where the work was requested.
+   * Only non-running tasks can be delegated; a worker mid-execution should
+   * checkpoint to waiting first.
+   */
+  async delegateTask(
+    owner: string,
+    id: string,
+    target: string,
+    reason?: string,
+  ): Promise<AgentTask> {
+    const task = await this.getTask(owner, id);
+    if (task.status === "running" && task.leaseId)
+      throw new AppError("Task is running; checkpoint it to waiting before delegating", 409);
+    if (target !== ORCHESTRATOR_CHANNEL_ID) {
+      const channel = await this.db.get<Channel>(owner, "channels", target);
+      if (!channel || channel.status === "archived")
+        throw new AppError("Target channel not found", 404);
+    }
+    const updated: AgentTask = {
+      ...task,
+      originChannelId: task.originChannelId ?? task.channelId ?? ORCHESTRATOR_CHANNEL_ID,
+      channelId: target,
+      delegatedTo: target,
+      delegationReason: reason?.slice(0, 500),
+      status: task.status === "paused" ? "paused" : "queued",
+      leaseId: null,
+      leaseUntil: null,
+      updatedAt: new Date().toISOString(),
+    };
+    await this.db.put(owner, "tasks", updated);
+    const channel = await this.db.get<Channel>(owner, "channels", target);
+    if (channel)
+      await this.db.put(owner, "channels", {
+        ...channel,
+        status: "active",
+        lastActiveAt: new Date().toISOString(),
+      });
+    return updated;
+  }
   async snapshot(owner: string): Promise<AgentWorkspace> {
     await this.ensure(owner);
     const [tasks, goals, monitors, ideas, memories, artifacts, notifications, identity] =

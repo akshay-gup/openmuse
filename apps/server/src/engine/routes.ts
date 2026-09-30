@@ -63,6 +63,17 @@ export function agentRoutes(service: AgentService): Hono<{ Variables: { owner: s
   app.get("/channels/:id/tasks", async (c) =>
     c.json(await service.channelTasks(c.get("owner"), c.req.param("id"))),
   );
+  app.post("/tasks/:id/delegate", async (c) => {
+    const body = z
+      .object({
+        target: z.string().trim().min(1).max(80),
+        reason: z.string().trim().min(1).max(500).optional(),
+      })
+      .parse(await c.req.json());
+    return c.json(
+      await service.delegateTask(c.get("owner"), c.req.param("id"), body.target, body.reason),
+    );
+  });
   app.post("/goals", async (c) =>
     c.json(await service.createGoal(c.get("owner"), await c.req.json()), 201),
   );
