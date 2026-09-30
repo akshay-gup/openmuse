@@ -62,6 +62,25 @@ The agent can browse public pages through the browser worker, work with files an
 
 The [feature inventory](docs/FEATURES.md) describes implemented capabilities and planned extensions. Health/bank/social connectors, device push, voice, generated executable tools, and automatic reservations/payments are on the [roadmap](ROADMAP.md).
 
+## Roadmap
+
+Where this fork is headed — self-contained, agent-native team chat:
+
+**Shipped**
+- Single-process VM deployment: the API serves the web UI same-origin, threads/channels persist on local disk (`DATA_DIR`), Docker computer removed. See [docs/vm-deploy.md](docs/vm-deploy.md).
+- OpenCode agent backend: one `opencode serve` (systemd unit on the VM; the API connects, never spawns), durable thread→session bindings, a single global event stream, and an AG-UI shim so the client is untouched.
+- Permissions default to ask with approve/deny in the thread, plus per-channel/per-thread rules.
+- Delegated tasks run as OpenCode sessions in auto-mode; background permission requests surface in the originating thread.
+
+**Next**
+- Live VM verification: end-to-end task loop with real inference, `opencode serve` systemd unit.
+- Shared-computer arbitration between channel workers on the one box.
+- Orchestrator queue and new-tab routing for delegated tasks.
+- Multi-tenant membership: invites, channel visibility, orchestrator scope, roles (decisions pending).
+- Browser access (deferred); native mobile against the same API.
+
+Details and open questions live in [ROADMAP.md](ROADMAP.md).
+
 ## Quick start
 
 **Requirements:** Node 24 LTS, pnpm 11.19.0, and a CopilotKit Intelligence project key. The local sample app needs no model, Google account, or Docker.

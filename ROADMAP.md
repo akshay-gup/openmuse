@@ -1,32 +1,56 @@
-# OpenMuse roadmap
+# OpenMuse roadmap (`collab` branch)
 
-The release is a personal-agent alpha: delegate a job, inspect its plan, supply missing information, review an action, and return to a saved result. The [reference inventory](docs/FEATURES.md) is broader than this release.
+Direction: a self-contained, agent-native team chat. One box, one process serving
+API + web UI, OpenCode as the agent backend, threads as durable agent sessions.
 
-## Shipped locally
+## Shipped
 
-- CopilotKit React Native chat and rich task/artifact cards on iOS, Android, and web.
-- Server-owned jobs, plans, checkpoints, leases, retries, cancellation, and action receipts.
-- Ideas with evidence, Goals, milestones, public-page tracking, and an in-app notification inbox.
-- Persistent Chromium sessions, public-page reading, screenshots, manual interaction, and PDF downloads.
-- A private Docker Linux computer with bounded terminal commands, persistent workspace files, a text editor, PDF import/export, command receipts, and stop/restart recovery. Terminal networking is disabled.
-- PDF viewing and supported form filling, reviewed Gmail/Calendar adapters, CSV spending artifacts, identity, and editable memory.
+- **Self-contained VM deployment** — the Hono API serves the Expo web export
+  same-origin (SPA fallback, `WEB_DIR` override); channel/thread storage moved
+  from the Docker computer to local disk (`DATA_DIR/channels/<id>/threads/<id>.json`,
+  a layout that doubles as future OpenCode working directories); Docker computer,
+  terminal, and computer routes/docs/tests fully removed. See `docs/vm-deploy.md`.
+  `render.yaml` left as-is.
+- **OpenCode agent backend** (`AGENT_BACKEND=opencode`) — one `opencode serve`
+  process (a systemd unit on the VM; the API connects, healthchecks, and
+  version-asserts, never spawns it); per-channel scoping via directory header;
+  a single global SSE stream with per-thread filtering and serialized queues;
+  busy/idle derived from status events only; an in-process AG-UI shim
+  (`POST /api/agent/opencode/run`) so the mobile/web client is untouched;
+  thread→session bindings persisted before the first prompt; single `MODEL` env.
+- **Permissions** — default `ask`; `permission.asked` tracked per thread and
+  surfaced as approve/deny in the thread UI; per-channel/per-thread rules stored
+  under `DATA_DIR` and applied as session permission overrides (directory-level
+  allows stay in server config); pending requests rejected on teardown.
+- **Task worker on OpenCode** — delegated tasks run as OpenCode sessions in
+  auto-mode (default-ask would stall unattended runs); `TASK_COMPLETE:` /
+  `TASK_BLOCKED:` markers parsed from final text; background permission requests
+  surface in the originating thread.
+- **Channel/thread engine** — channels as worker scopes, threads as sessions,
+  user-driven rename (display metadata only; ID-based paths stable), new channels
+  start with zero threads.
 
-## Integration acceptance next
+## Next
 
-- [ ] Live Google OAuth, mail, attachment, and calendar acceptance on real test accounts.
-- [ ] CopilotKit Intelligence Rich Threads persistence/replay and cross-device acceptance with a project key.
-- [ ] Live model acceptance for open-ended delegated jobs and source-based research.
-- [ ] Installed Android emulator/device smoke tests. Android bundles already export; iPhone simulator has been exercised.
-- [ ] OpenBot user/session bridge, routines, and computer backend. The disabled HTTP adapter is contract-tested; it is not a live connection.
+- [ ] Live VM verification: end-to-end task loop with real inference (needs
+      provider keys on the VM); `opencode serve` systemd unit definition.
+- [ ] Shared-computer arbitration between channel workers on the one box
+      (today workers share the filesystem with no scoping).
+- [ ] Orchestrator queue and new-tab routing for delegated tasks; delegated
+      status (queued/working/done) visible in the originating channel.
+- [ ] Multi-tenant membership semantics — awaiting decisions:
+      - [ ] Invites: owner-only or any member?
+      - [ ] Visibility: all channels visible or private-by-default with explicit sharing?
+      - [ ] Orchestrator scope: global across members or per-owner/member?
+      - [ ] Owner/admin roles and member permissions.
+      - [ ] Privacy of the orchestrator/global queue.
+- [ ] Browser access (deferred).
+- [ ] Native mobile against the same API.
 
-## Product extensions
+## Non-goals for now
 
-- [ ] Interactive terminal sessions, desktop applications, per-person VM orchestration, controlled network access, and workspace disk quotas. The current [Linux computer](docs/COMPUTER.md) supports one owner per deployment.
-- [ ] Agent-operated interactive websites, reservations, customer service, and carefully scoped purchase handoff.
-- [ ] Google Drive/Docs and individually validated social, bank, and health connectors.
-- [ ] Device push notifications, voice input/replies, and image generation.
-- [ ] OCR/scanned PDFs, more form types, and calendar recurrence editing.
-- [ ] Adaptive long-term plans, broader source-backed ideas, and a managed registry for generated tools.
-- [ ] Multi-user authentication, deployment hardening, retention/export controls, and operational recovery.
+- Personal OAuth integrations (e.g. Gmail) for workers.
+- Horizontal service splitting — the single box serves a small collaborator group.
 
-Each item needs its own authentication, capability boundaries, failure behavior, and end-to-end evidence before it becomes a supported feature. No dates or third-party API access are promised.
+Each item needs its own capability boundaries, failure behavior, and end-to-end
+evidence before it becomes a supported feature. No dates are promised.
