@@ -1,12 +1,15 @@
-import { Archive, Hash, Plus, RefreshCw } from "lucide-react-native";
+import { useThreads } from "@copilotkit/react-native/headless";
+import { Archive, Hash, MessagesSquare, Plus, RefreshCw } from "lucide-react-native";
 import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import {
   type AgentTask,
   type Channel,
+  type ChannelThread,
   ORCHESTRATOR_CHANNEL_ID,
   type TaskStatus,
 } from "../../../packages/domain/src/agent";
+import { useMuseThread } from "./threads";
 import { Button, colors, ErrorNotice, Field, s } from "./ui";
 import { useWorkspace } from "./workspace";
 
@@ -23,6 +26,89 @@ function taskState(status: TaskStatus): { label: string; color: string } {
     default:
       return { label: "waiting", color: colors.muted };
   }
+}
+
+function ChannelThreads({ channel, onClose }: { channel: Channel; onClose: () => void }) {
+  const { api, navigate } = useWorkspace();
+  const { select } = useMuseThread();
+  const [bindings, setBindings] = useState<ChannelThread[] | null>(null);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const copilotThreads = useThreads({ agentId: "default", includeArchived: true, limit: 100 });
+
+  const load = useCallback(async () => {
+    setError("");
+    try {
+      setBindings(await api.request<ChannelThread[]>(`/api/agent/channels/${channel.id}/threads`));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }, [api, channel.id]);
+  useEffect(() => {
+    setBindings(null);
+    void load();
+  }, [load]);
+
+  function openThread(binding: ChannelThread) {
+    select({ id: binding.threadId, existing: true });
+    navigate("chat");
+    onClose();
+  }
+
+  async function newThread() {
+    setError("");
+    setBusy(true);
+    try {
+      const binding = await api.request<ChannelThread>(
+        `/api/agent/channels/${channel.id}/threads`,
+        {},
+      );
+      select({ id: binding.threadId, existing: false });
+      navigate("chat");
+      onClose();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const meta = new Map(copilotThreads.threads.map((t) => [t.id, t]));
+  return (
+    <View style={{ gap: 2 }}>
+      <View style={s.between}>
+        <Text style={s.small}>Threads</Text>
+        <Button small icon={Plus} disabled={busy} onPress={() => void newThread()}>
+          New thread
+        </Button>
+      </View>
+      <ErrorNotice error={error} />
+      {!bindings ? (
+        <ActivityIndicator color={colors.blueDark} />
+      ) : bindings.length === 0 ? (
+        <Text style={s.muted}>No threads yet.</Text>
+      ) : (
+        bindings.map((binding) => {
+          const thread = meta.get(binding.threadId);
+          return (
+            <Pressable
+              key={binding.threadId}
+              accessibilityRole="button"
+              accessibilityLabel={`Open thread: ${binding.name}`}
+              onPress={() => openThread(binding)}
+              style={[s.row, { gap: 8, paddingVertical: 6 }]}
+            >
+              <MessagesSquare size={16} color={colors.muted} />
+              <Text style={[s.text, { flex: 1 }]} numberOfLines={1}>
+                {binding.name}
+              </Text>
+              {thread?.archived && <Text style={s.small}>archived</Text>}
+            </Pressable>
+          );
+        })
+      )}
+    </View>
+  );
 }
 
 function ChannelTasks({ channel, onOpenTask }: { channel: Channel; onOpenTask: () => void }) {
@@ -184,7 +270,15 @@ export function ChannelsSection({ onClose }: { onClose: () => void }) {
                   </Button>
                 )}
               </Pressable>
-              {isOpen && <ChannelTasks channel={channel} onOpenTask={onClose} />}
+              {isOpen && (
+                <View style={{ gap: 10 }}>
+                  <ChannelThreads channel={channel} onClose={onClose} />
+                  <View style={{ gap: 2 }}>
+                    <Text style={s.small}>Tasks</Text>
+                    <ChannelTasks channel={channel} onOpenTask={onClose} />
+                  </View>
+                </View>
+              )}
             </View>
           );
         })
