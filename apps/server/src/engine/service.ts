@@ -28,7 +28,7 @@ import type {
 } from "../../../../packages/domain/src/index.ts";
 import type { ActionService } from "../actions.ts";
 import type { BrowserService } from "../browser.ts";
-import { ComputerService } from "../computer.ts";
+import { channelWorkspaceDir, ComputerService } from "../computer.ts";
 import type { Config } from "../config.ts";
 import type { Store } from "../db.ts";
 import { AppError } from "../errors.ts";
@@ -38,6 +38,7 @@ import type { WorkspaceService } from "../workspace.ts";
 import { analyzeSpending } from "./finance.ts";
 import { executeModelTask } from "./model.ts";
 import { LostLeaseError, type TaskContext, TaskWorker } from "./worker.ts";
+import { ChannelManager } from "./channels.ts";
 
 const hash = (text: string) => createHash("sha256").update(text).digest("hex");
 const date = () => new Date().toISOString();
@@ -46,6 +47,7 @@ export class AgentService {
   readonly worker: TaskWorker;
   private maintenance?: ReturnType<typeof setInterval>;
   private refreshing = false;
+  private channels?: ChannelManager;
   constructor(
     readonly db: Store,
     readonly config: Config,
@@ -64,6 +66,12 @@ export class AgentService {
   }
   start() {
     this.worker.start();
+    // In orchestrator mode the main process also manages per-channel workers.
+    // (A channel worker itself never manages: workerChannelId is set there.)
+    if (this.config.manageChannels && !this.config.workerChannelId) {
+      this.channels = new ChannelManager(this.db, this.config);
+      this.channels.start();
+    }
     // Maintenance is independent of the HTTP response and reconciles durable records.
     void this.maintain().catch((error) => backgroundFailure("initial maintenance", error));
     this.maintenance = setInterval(() => {
@@ -73,6 +81,8 @@ export class AgentService {
   async stop() {
     if (this.maintenance) clearInterval(this.maintenance);
     this.maintenance = undefined;
+    await this.channels?.stop();
+    this.channels = undefined;
     await this.worker.stop();
     while (this.refreshing) await new Promise((resolve) => setTimeout(resolve, 10));
   }
@@ -170,6 +180,13 @@ export class AgentService {
       lastActiveAt: now,
     };
     await this.db.put(owner, "channels", channel);
+    // Best-effort: give the channel its own directory in the shared computer.
+    // The computer may be disabled or stopped; that must not fail creation.
+    try {
+      await this.computer.mkdir(owner, channelWorkspaceDir(channel.id));
+    } catch {
+      /* computer unavailable */
+    }
     return channel;
   }
   async archiveChannel(owner: string, id: string): Promise<Channel> {
@@ -203,7 +220,13 @@ export class AgentService {
         this.db.list<AgentNotification>(owner, "notifications"),
         this.db.get<AgentIdentity>(owner, "agent-settings", "identity"),
       ]);
-    const heartbeat = await this.db.get<{ lastTickAt: string }>("system", "worker-status", "tasks");
+    const heartbeat =
+      (await this.db.get<{ lastTickAt: string }>("system", "worker-status", "tasks")) ??
+      (await this.db.get<{ lastTickAt: string }>(
+        "system",
+        "worker-status",
+        `tasks:${ORCHESTRATOR_CHANNEL_ID}`,
+      ));
     return {
       tasks,
       goals,
@@ -304,6 +327,13 @@ export class AgentService {
     };
     await this.ensure(owner);
     await this.db.insertIfAbsent(owner, "tasks", task);
+    const channel = await this.db.get<Channel>(owner, "channels", channelId);
+    if (channel)
+      await this.db.put(owner, "channels", {
+        ...channel,
+        status: "active",
+        lastActiveAt: new Date().toISOString(),
+      });
     return (await this.db.get<AgentTask>(owner, "tasks", id)) ?? task;
   }
   async control(owner: string, id: string, action: "pause" | "resume" | "cancel" | "retry") {

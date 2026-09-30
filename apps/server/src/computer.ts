@@ -137,6 +137,15 @@ export function workspacePath(path: string): string {
     throw new AppError("Choose an absolute path inside /workspace", 422);
   return normalized;
 }
+/**
+ * A channel's working directory inside the single shared computer.
+ * All channel workers can read sibling directories; each channel treats
+ * its own directory as home. The orchestrator owns the computer itself.
+ */
+export function channelWorkspaceDir(channelId: string): string {
+  const safe = channelId.replace(/[^a-z0-9-]/g, "-").slice(0, 80) || "channel";
+  return `/workspace/channels/${safe}`;
+}
 const inspectionSchema = z.object({
   Id: z.string(),
   Name: z.string(),

@@ -75,7 +75,7 @@ export class TaskWorker {
     if (this.stopping) return;
     if (this.running)
       await this.db.put("system", "worker-status", {
-        id: "tasks",
+        id: this.options.channelId ? `tasks:${this.options.channelId}` : "tasks",
         lastTickAt: new Date(this.now()).toISOString(),
       });
     if (this.ticking) return;
