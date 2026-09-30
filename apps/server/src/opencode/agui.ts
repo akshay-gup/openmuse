@@ -5,11 +5,20 @@
  * POST /api/agent/opencode/run on this same process (in-process shim, no
  * loopback HTTP hop). The shim translates:
  * - AG-UI RunAgentInput -> OpenCode `session.promptAsync`, with a synthetic
- *   context part (channel/thread metadata the model sees but that never
- *   surfaces as a real turn) prepended to the user's prompt;
+ *   context part (channel/thread metadata plus the full visible conversation
+ *   transcript, which the model sees but that never surfaces as a real turn)
+ *   prepended to the user's prompt;
  * - OpenCode global events -> AG-UI events (`TEXT_MESSAGE_*`, `TOOL_CALL_*`,
  *   `RUN_STARTED/FINISHED/ERROR`), with synthetic parts filtered on egress
  *   and busy/idle derived from `session.status` / `session.idle` only.
+ *
+ * Mention-only triggering: the agent runs only when the last user message
+ * contains the configured mention token (`AGENT_MENTION`, default `@openmuse`)
+ * as a standalone token. Anything else is plain chat — the run completes
+ * immediately as a no-op (`RUN_STARTED` then `RUN_FINISHED`, no OpenCode
+ * session touched) and the agent stays silent. When triggered, the full
+ * transcript of everyone talking (plus attached images as native file parts)
+ * goes to the session so the agent catches up on what it missed while idle.
  *
  * One run per thread at a time: a second concurrent run is rejected (409),
  * since two runs on one session would interleave on a single event stream.
@@ -59,19 +68,137 @@ export function parseModelRef(
 /** Last user message text, following ConversationAgent's convention. */
 export function lastUserText(messages: Array<Record<string, unknown>>): string | undefined {
   for (let i = messages.length - 1; i >= 0; i--) {
-    const message = messages[i];
-    if (message?.role !== "user") continue;
-    const content = message.content;
-    if (typeof content === "string") return content;
-    if (Array.isArray(content)) {
-      const text = content
-        .filter((part) => part?.type === "text" && typeof part.text === "string")
-        .map((part) => part.text)
-        .join("");
-      if (text) return text;
-    }
+    const text = messageText(messages[i]);
+    if (messages[i]?.role === "user" && text) return text;
   }
   return undefined;
+}
+
+/** Joined text of a message's text content parts (string content included). */
+export function messageText(message: Record<string, unknown> | undefined): string {
+  if (!message) return "";
+  const content = message.content;
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) {
+    return content
+      .filter((part) => part?.type === "text" && typeof part.text === "string")
+      .map((part) => part.text)
+      .join("");
+  }
+  return "";
+}
+
+/** Normalize the AGENT_MENTION env value to a mention token (default `@openmuse`). */
+export function normalizeMention(raw: string | undefined): string {
+  const trimmed = (raw ?? "").trim();
+  if (!trimmed) return "@openmuse";
+  return trimmed.startsWith("@") ? trimmed : `@${trimmed}`;
+}
+
+function mentionPattern(mention: string): RegExp {
+  const escaped = mention.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  // Standalone token: not glued to a letter, digit, or underscore on either side,
+  // so `@openmuseX` and `mail@openmuse` do not count as mentions.
+  return new RegExp(`(^|[^\\p{L}\\p{N}_])${escaped}(?=[^\\p{L}\\p{N}_]|$)`, "iu");
+}
+
+/** True when the text mentions the agent as a standalone token (case-insensitive). */
+export function mentionsAgent(text: string, mention: string): boolean {
+  return mentionPattern(mention).test(text);
+}
+
+/** Remove the mention token from prompt text, collapsing leftover whitespace. */
+export function stripMention(text: string, mention: string): string {
+  return text
+    .replace(new RegExp(mentionPattern(mention).source, "giu"), "$1")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** True when the run should invoke the agent: the last user message mentions it. */
+export function shouldTriggerRun(
+  messages: Array<Record<string, unknown>>,
+  mention: string,
+): boolean {
+  const text = lastUserText(messages);
+  return !!text && mentionsAgent(text, mention);
+}
+
+interface ImageSource {
+  type?: string;
+  value?: string;
+  mimeType?: string;
+}
+
+export interface PromptFilePart {
+  type: "file";
+  mime: string;
+  url: string;
+}
+
+/** Image content parts of one message, mapped to OpenCode native file parts. */
+export function messageFileParts(message: Record<string, unknown> | undefined): PromptFilePart[] {
+  const content = message?.content;
+  if (!Array.isArray(content)) return [];
+  const parts: PromptFilePart[] = [];
+  for (const part of content) {
+    if (part?.type !== "image") continue;
+    const source = part.source as ImageSource | undefined;
+    if (!source || typeof source.value !== "string" || !source.value) continue;
+    const mime = source.mimeType?.trim() || "application/octet-stream";
+    const url = source.type === "data" ? `data:${mime};base64,${source.value}` : source.value;
+    parts.push({ type: "file", mime, url });
+  }
+  return parts;
+}
+
+/** Native file parts from the triggering (last user) message only. */
+export function promptFileParts(messages: Array<Record<string, unknown>>): PromptFilePart[] {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i]?.role === "user") return messageFileParts(messages[i]);
+  }
+  return [];
+}
+
+/** Cap for the transcript forwarded in the synthetic context part. */
+const TRANSCRIPT_LIMIT = 20_000;
+
+/**
+ * The full visible conversation as `Speaker: text` lines, oldest first.
+ * Speaker is the message's `name` when present, otherwise the role label —
+ * never invented. Image attachments become markers (their native parts only
+ * travel with the triggering message). Oldest lines are dropped past the cap
+ * so the agent catches up on the most recent discussion.
+ */
+export function buildTranscript(messages: Array<Record<string, unknown>>): string {
+  const lines: string[] = [];
+  for (const message of messages) {
+    const role = message?.role;
+    if (role !== "user" && role !== "assistant") continue;
+    const rawName = message.name;
+    const speaker =
+      typeof rawName === "string" && rawName.trim()
+        ? rawName.trim()
+        : role === "user"
+          ? "User"
+          : "Assistant";
+    const text = messageText(message);
+    const markers = messageFileParts(message).map((f) => `[attached file (${f.mime})]`);
+    const body = [text, ...markers].filter(Boolean).join("\n");
+    if (!body) continue;
+    lines.push(`${speaker}: ${body}`);
+  }
+  let transcript = lines.join("\n");
+  if (transcript.length > TRANSCRIPT_LIMIT) {
+    // Drop oldest lines until the tail fits; the recent discussion matters most.
+    let dropped = 0;
+    for (const line of lines) {
+      if (transcript.length - dropped <= TRANSCRIPT_LIMIT) break;
+      dropped += line.length + 1; // +1 for the "\n" join separator
+    }
+    transcript = `[earlier history omitted]\n${transcript.slice(dropped)}`;
+  }
+  return transcript;
 }
 
 interface TextTrack {
@@ -336,6 +463,20 @@ async function abortRunSession(ctx: RunContext): Promise<void> {
 
 async function runOpencodeTurn(ctx: RunContext): Promise<void> {
   const { deps, owner, input, send, signal } = ctx;
+  const mention = normalizeMention(deps.config.agentMention);
+
+  // Mention-only triggering: without the mention token in the last user
+  // message this is plain chat. Complete the run as a no-op — the message is
+  // already persisted by CopilotKit; the agent stays silent and OpenCode is
+  // never touched (no session, no prompt). The in-flight slot is released by
+  // settleRun in the route's finally block.
+  const messages = input.messages as Array<Record<string, unknown>>;
+  const userText = lastUserText(messages);
+  if (!userText || !mentionsAgent(userText, mention)) {
+    send({ type: "RUN_STARTED", threadId: input.threadId, runId: input.runId });
+    send({ type: "RUN_FINISHED", threadId: input.threadId, runId: input.runId });
+    return;
+  }
 
   let resolveDone!: () => void;
   const donePromise = new Promise<void>((resolve) => {
@@ -391,8 +532,13 @@ async function runOpencodeTurn(ctx: RunContext): Promise<void> {
     ctx.session = { sessionId, directory };
     deps.bus.track(input.threadId, sessionId);
 
-    const userText = lastUserText(input.messages as Array<Record<string, unknown>>);
-    if (!userText?.trim()) throw new Error("No user message to send");
+    const transcript = buildTranscript(messages);
+    const stripped = stripMention(userText, mention);
+    // A bare mention ("@openmuse" and nothing else) still summons the agent;
+    // point it at the conversation it just received.
+    const promptText =
+      stripped || "(summoned by mention with no additional text — see the conversation above)";
+    const fileParts = promptFileParts(messages);
 
     const translator = new RunTranslator(input, send, finish, {
       onAsked: (asked) => {
@@ -427,9 +573,13 @@ async function runOpencodeTurn(ctx: RunContext): Promise<void> {
           {
             type: "text",
             synthetic: true,
-            text: `[openmuse context] channel=${binding.channelId} thread=${input.threadId} name=${binding.name}`,
+            text:
+              `[openmuse context] channel=${binding.channelId} thread=${input.threadId} name=${binding.name}\n` +
+              `You were summoned by mention and have not participated until now. ` +
+              `The full visible conversation (everyone talking) follows so you can catch up:\n${transcript}`,
           },
-          { type: "text", text: userText },
+          ...fileParts,
+          { type: "text", text: promptText },
         ],
       }),
     );
