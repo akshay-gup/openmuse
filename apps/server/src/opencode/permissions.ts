@@ -64,3 +64,24 @@ export function defaultSessionRuleset(): PermissionRuleset {
 export function buildSessionRuleset(userRules: PermissionRuleset): PermissionRuleset {
   return [...defaultSessionRuleset(), ...userRules];
 }
+
+/**
+ * Lines that don't parse to any rule (empty lines are skipped, not invalid).
+ * Used to 422 bad rule submissions with the offending line named.
+ */
+export function invalidRuleLines(rules: string[]): string[] {
+  return rules
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0 && parsePermissionRules([line]).length === 0);
+}
+
+/**
+ * Unattended task-worker sessions: default-ask would stall on TTL
+ * auto-reject with no user present to answer, so task sessions run
+ * allow-all. The scoping boundary is the channel workspace directory
+ * (session cwd) plus the server config's directory rules — not these rules.
+ * Interactive chat threads still get the default-ask base.
+ */
+export function taskSessionRuleset(): PermissionRuleset {
+  return [{ permission: "*", pattern: "*", action: "allow" }];
+}

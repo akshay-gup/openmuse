@@ -41,6 +41,7 @@ import { analyzeSpending } from "./finance.ts";
 import { executeModelTask } from "./model.ts";
 import { channelWorkspaceDir, LocalDiskThreadStore, type ThreadBindingStore } from "./threads.ts";
 import { LostLeaseError, type TaskContext, TaskWorker } from "./worker.ts";
+import type { OpencodeTaskRuntime } from "../opencode/index.ts";
 
 const hash = (text: string) => createHash("sha256").update(text).digest("hex");
 const date = () => new Date().toISOString();
@@ -52,6 +53,11 @@ export class AgentService {
   private channels?: ChannelManager;
   /** threadId → binding, keyed `${owner}/${threadId}`. Invalidated on write. */
   private readonly threadChannelCache = new Map<string, ChannelThread>();
+  /**
+   * Set by createApp when AGENT_BACKEND=opencode. Routes task-worker
+   * execution through OpenCode sessions; also enables session title sync.
+   */
+  opencodeRuntime?: OpencodeTaskRuntime;
   constructor(
     readonly db: Store,
     readonly config: Config,
@@ -266,6 +272,16 @@ export class AgentService {
     const renamed: ChannelThread = { ...binding, name };
     await this.threads.write(owner, renamed);
     this.threadChannelCache.set(`${owner}/${threadId}`, renamed);
+    // Keep the OpenCode session title in sync when the thread is bound.
+    const runtime = this.opencodeRuntime;
+    if (runtime && renamed.opencodeSessionId) {
+      const directory = channelWorkspaceDir(this.config.dataDir, renamed.channelId);
+      const sessionId = renamed.opencodeSessionId;
+      void runtime.pool
+        .forDirectory(directory)
+        .session.update({ sessionID: sessionId, directory, title: name })
+        .catch(() => undefined);
+    }
     return renamed;
   }
   /** Threads bound to a channel, oldest first. */

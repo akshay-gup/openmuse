@@ -2,14 +2,18 @@ import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { ChannelThread } from "../../../../packages/domain/src/agent.ts";
 
+/** Filesystem-safe channel directory name (also used for permissions.json). */
+export function safeChannelDirName(channelId: string): string {
+  return channelId.replace(/[^a-z0-9-]/g, "-").slice(0, 80) || "channel";
+}
+
 /**
  * A channel's working directory on the API server's local disk, under DATA_DIR.
  * All channel workers share the box; each channel treats its own directory as
  * home. These directories are the future OpenCode session working directories.
  */
 export function channelWorkspaceDir(baseDir: string, channelId: string): string {
-  const safe = channelId.replace(/[^a-z0-9-]/g, "-").slice(0, 80) || "channel";
-  return join(baseDir, "channels", safe);
+  return join(baseDir, "channels", safeChannelDirName(channelId));
 }
 
 const threadsDir = (baseDir: string, channelId: string) =>
