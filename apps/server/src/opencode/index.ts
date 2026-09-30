@@ -13,14 +13,25 @@ export {
   parseModelRef,
   RunTranslator,
 } from "./agui.ts";
+export {
+  type AskedPermissionProps,
+  type PendingPermissionRequest,
+  type PermissionReply,
+  PermissionTracker,
+  type TrackerReplyDeps,
+} from "./approvals.ts";
 export { type OpencodeClient, OpencodeClientPool } from "./client.ts";
 export { type OpenCodeEvent, OpencodeEventBus } from "./events.ts";
 export {
   buildSessionRuleset,
   defaultSessionRuleset,
+  invalidRuleLines,
   type PermissionRuleset,
   parsePermissionRules,
+  taskSessionRuleset,
 } from "./permissions.ts";
+export { opencodePermissionRoutes } from "./routes.ts";
+export { PermissionRulesStore } from "./rules.ts";
 export {
   assertCompatibleServerVersion,
   connectionFromConfig,
@@ -37,3 +48,4 @@ export {
   type SessionContext,
   sessionDirectory,
 } from "./sessions.ts";
+export { type OpencodeTaskRuntime, parseTaskOutcome, runOpencodeTask, TaskTextCollector } from "./tasks.ts";

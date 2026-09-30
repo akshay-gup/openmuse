@@ -27,6 +27,9 @@ import {
   OpencodeClientPool,
   OpencodeEventBus,
   opencodeShimRoutes,
+  opencodePermissionRoutes,
+  PermissionRulesStore,
+  PermissionTracker,
 } from "./opencode/index.ts";
 import { WorkspaceService } from "./workspace.ts";
 
@@ -175,8 +178,12 @@ export async function createApp(
     console.log(`OpenCode server reachable at ${connection.url} (v${version})`);
     const bus = new OpencodeEventBus(connection);
     const pool = new OpencodeClientPool(connection);
+    const tracker = new PermissionTracker();
+    const rules = new PermissionRulesStore(config.dataDir);
     bus.start();
-    app.route("/api/agent/opencode", opencodeShimRoutes({ service: agent, bus, pool, config }));
+    const shimDeps = { service: agent, bus, pool, config, tracker, rules };
+    app.route("/api/agent/opencode", opencodeShimRoutes(shimDeps));
+    app.route("/api/agent/opencode", opencodePermissionRoutes(shimDeps));
     opencode = { stop: () => bus.stop() };
   }
   app.get("/api/calendars", async (c) => c.json(await workspace.calendars(c.get("owner"))));

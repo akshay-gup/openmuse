@@ -19,8 +19,10 @@ import { Hono } from "hono";
 import { z } from "zod";
 import type { Config } from "../config.ts";
 import type { AgentService } from "../engine/service.ts";
+import type { AskedPermissionProps, PermissionTracker } from "./approvals.ts";
 import type { OpencodeClientPool } from "./client.ts";
 import type { OpenCodeEvent, OpencodeEventBus } from "./events.ts";
+import type { PermissionRulesStore } from "./rules.ts";
 import { ensureThreadSession } from "./sessions.ts";
 
 export interface OpencodeShimDeps {
@@ -28,6 +30,8 @@ export interface OpencodeShimDeps {
   bus: OpencodeEventBus;
   pool: OpencodeClientPool;
   config: Config;
+  tracker: PermissionTracker;
+  rules: PermissionRulesStore;
 }
 
 const runInputSchema = z.object({
@@ -83,6 +87,11 @@ interface ToolTrack {
 
 type AguiEvent = Record<string, unknown>;
 
+export interface TranslatorPermissionHooks {
+  onAsked?: (props: AskedPermissionProps) => void;
+  onReplied?: (requestId: string) => void;
+}
+
 /**
  * Translates one run's OpenCode events into AG-UI events. Created per run;
  * the bus drops stale-session events before they reach it.
@@ -98,6 +107,7 @@ export class RunTranslator {
     private readonly input: RunInput,
     private readonly send: (event: AguiEvent) => void,
     private readonly done: () => void,
+    private readonly permissionHooks: TranslatorPermissionHooks = {},
   ) {}
 
   handle(event: OpenCodeEvent): void {
@@ -157,19 +167,33 @@ export class RunTranslator {
         this.fail(message);
         return;
       }
-      case "permission.asked":
+      case "permission.asked": {
+        const asked: AskedPermissionProps = {
+          id: props.id as string,
+          sessionID: props.sessionID as string,
+          permission: props.permission as string,
+          patterns: (props.patterns as string[]) ?? [],
+          tool: props.tool as { messageID: string; callID: string } | undefined,
+        };
+        this.permissionHooks.onAsked?.(asked);
         // Phase 3 surfaces this for user reply; until then it is informational.
         this.send({
           type: "CUSTOM",
           name: "permission-requested",
           value: {
-            requestId: props.id,
-            permission: props.permission,
-            patterns: props.patterns,
+            requestId: asked.id,
+            permission: asked.permission,
+            patterns: asked.patterns,
             metadata: props.metadata,
           },
         });
         return;
+      }
+      case "permission.replied": {
+        const requestId = props.requestID as string | undefined;
+        if (requestId) this.permissionHooks.onReplied?.(requestId);
+        return;
+      }
       default:
         return;
     }
@@ -324,6 +348,8 @@ async function runOpencodeTurn(ctx: RunContext): Promise<void> {
 
   const onTimeout = () => {
     void abortRunSession(ctx).finally(() => {
+      // A permission left hanging stalls the session forever; reject the lot.
+      void deps.tracker.rejectAllForScope(deps, input.threadId);
       if (ctx.translator) ctx.translator.fail("The run timed out");
       else {
         send({ type: "RUN_ERROR", message: "The run timed out", code: "OPENCODE_RUN_FAILED" });
@@ -336,6 +362,9 @@ async function runOpencodeTurn(ctx: RunContext): Promise<void> {
   (ctx.timer as unknown as { unref?: () => void }).unref?.();
   const onAbort = () => {
     void abortRunSession(ctx).finally(() => {
+      // The user walked away mid-run: reject pending permissions so the
+      // session doesn't hang on them forever.
+      void deps.tracker.rejectAllForScope(deps, input.threadId);
       if (ctx.translator) ctx.translator.fail("The run was cancelled");
       else {
         send({ type: "RUN_ERROR", message: "The run was cancelled", code: "OPENCODE_RUN_FAILED" });
@@ -350,7 +379,12 @@ async function runOpencodeTurn(ctx: RunContext): Promise<void> {
     const binding = await deps.service.channelOfThread(owner, input.threadId);
     if (!binding) throw new Error(`Thread ${input.threadId} not found`);
     const { sessionId, directory } = await ensureThreadSession(
-      { threads: deps.service.threads, clients: deps.pool, config: deps.config },
+      {
+        threads: deps.service.threads,
+        clients: deps.pool,
+        config: deps.config,
+        userRules: (binding) => deps.rules.effectiveRules(binding),
+      },
       owner,
       input.threadId,
     );
@@ -360,7 +394,22 @@ async function runOpencodeTurn(ctx: RunContext): Promise<void> {
     const userText = lastUserText(input.messages as Array<Record<string, unknown>>);
     if (!userText?.trim()) throw new Error("No user message to send");
 
-    const translator = new RunTranslator(input, send, finish);
+    const translator = new RunTranslator(input, send, finish, {
+      onAsked: (asked) => {
+        deps.tracker.record(
+          {
+            scope: input.threadId,
+            threadId: input.threadId,
+            channelId: binding.channelId,
+            directory,
+          },
+          asked,
+        );
+      },
+      onReplied: (requestId) => {
+        deps.tracker.remove(requestId);
+      },
+    });
     ctx.translator = translator;
     ctx.unsubscribe = deps.bus.onEvent(input.threadId, (event) => translator.handle(event));
 
