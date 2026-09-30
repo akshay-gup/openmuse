@@ -99,7 +99,7 @@ export function useMuseThread() {
   return context;
 }
 export function ThreadsSheet({ onClose }: { onClose: () => void }) {
-  const { enabled, mainId, loading, error: mainError, retry, select } = useMuseThread();
+  const { enabled, mainId, loading, error: mainError, retry, select, selection } = useMuseThread();
   const { workspace, open, navigate, refresh } = useWorkspace();
   const [error, setError] = useState("");
   async function mutate(action: () => Promise<void>) {
@@ -168,7 +168,7 @@ export function ThreadsSheet({ onClose }: { onClose: () => void }) {
           detail="A plan, document, or spending summary"
           onPress={() => {
             onClose();
-            open({ type: "delegate" });
+            open({ type: "delegate", threadId: enabled ? selection.id : undefined });
           }}
         />
         <LinkRow

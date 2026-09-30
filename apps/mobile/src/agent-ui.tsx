@@ -874,7 +874,7 @@ function FinanceArtifact({ artifact }: { artifact: AgentArtifact }) {
     </Card>
   );
 }
-export function DelegateSheet() {
+export function DelegateSheet({ threadId }: { threadId?: string }) {
   const { workspace, close, open } = useWorkspace();
   const { delegate } = useAgentWorkspace();
   const [kind, setKind] = useState<AgentTask["kind"]>("plan");
@@ -890,6 +890,7 @@ export function DelegateSheet() {
       const task = await delegate({
         prompt: prompt.trim(),
         kind,
+        threadId,
         input: kind === "finance" ? { csv } : kind === "document" ? { messageId } : {},
       });
       open({ type: "task", taskId: task.id });
