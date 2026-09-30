@@ -53,6 +53,16 @@ export function agentRoutes(service: AgentService): Hono<{ Variables: { owner: s
       await service.answer(c.get("owner"), c.req.param("id"), body.answer, body.fields),
     );
   });
+  app.get("/channels", async (c) => c.json(await service.listChannels(c.get("owner"))));
+  app.post("/channels", async (c) =>
+    c.json(await service.createChannel(c.get("owner"), await c.req.json()), 201),
+  );
+  app.post("/channels/:id/archive", async (c) =>
+    c.json(await service.archiveChannel(c.get("owner"), c.req.param("id"))),
+  );
+  app.get("/channels/:id/tasks", async (c) =>
+    c.json(await service.channelTasks(c.get("owner"), c.req.param("id"))),
+  );
   app.post("/goals", async (c) =>
     c.json(await service.createGoal(c.get("owner"), await c.req.json()), 201),
   );
