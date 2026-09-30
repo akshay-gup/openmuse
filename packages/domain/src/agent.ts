@@ -38,6 +38,8 @@ export interface AgentTask {
   delegatedTo?: string | null;
   /** Why the task was delegated (shown in queue views). */
   delegationReason?: string;
+  /** Thread the work was delegated from. A thread's task list is its work queue. */
+  threadId?: string;
   plan: TaskStep[];
   evidence: Evidence[];
   input: Record<string, unknown>;
@@ -145,6 +147,7 @@ export const createTaskSchema = z.object({
   kind: z.enum(["agent", "document", "monitor", "finance", "plan"]).default("agent"),
   goalId: z.string().optional(),
   channelId: z.string().trim().min(1).max(80).optional(),
+  threadId: z.string().trim().min(1).max(120).optional(),
   input: z.record(z.string(), z.unknown()).default({}),
 });
 export type CreateTaskInput = z.infer<typeof createTaskSchema>;
@@ -173,6 +176,18 @@ export const createChannelSchema = z.object({
     .optional(),
 });
 export type CreateChannelInput = z.infer<typeof createChannelSchema>;
+/**
+ * A conversation thread bound to a channel. The binding is stored as a JSON
+ * file at `<channelWorkspaceDir>/threads/<threadId>.json` (OpenCode-style),
+ * not in the records table. Bindings are append-only and never rebound.
+ */
+export interface ChannelThread {
+  threadId: string;
+  channelId: string;
+  /** Display name; client-derived, defaults to "General" for the first thread. */
+  name: string;
+  createdAt: string;
+}
 export const monitorInputSchema = z
   .object({
     title: z.string().min(1).max(160),
