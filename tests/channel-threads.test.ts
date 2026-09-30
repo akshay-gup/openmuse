@@ -62,17 +62,17 @@ after(async () => {
   if (directory) await rm(directory, { recursive: true, force: true });
 });
 
-test("creating a channel starts it with a General thread", async () => {
+test("creating a channel starts with no threads", async () => {
   const channel = await read<Channel>("/channels", { name: "Threaded project" }, 201);
   const threads = await read<ChannelThread[]>(`/channels/${channel.id}/threads`);
-  assert.equal(threads.length, 1);
-  assert.equal(threads[0].name, "General");
-  assert.equal(threads[0].channelId, channel.id);
-  assert.ok(threads[0].threadId);
+  assert.equal(threads.length, 0);
 });
 
 test("new threads get server-generated ids and sequential names", async () => {
   const channel = await read<Channel>("/channels", { name: "Numbered threads" }, 201);
+  const first = await read<ChannelThread>(`/channels/${channel.id}/threads`, {}, 201);
+  assert.ok(first.threadId);
+  assert.equal(first.name, "Thread 1");
   const second = await read<ChannelThread>(`/channels/${channel.id}/threads`, {}, 201);
   assert.ok(second.threadId);
   assert.equal(second.name, "Thread 2");
@@ -86,16 +86,17 @@ test("new threads get server-generated ids and sequential names", async () => {
   assert.equal(threads.length, 3);
   assert.deepEqual(
     threads.map((t) => t.name),
-    ["General", "Thread 2", "Research"],
+    ["Thread 1", "Thread 2", "Research"],
   );
 });
 
 test("creating a thread on a missing or archived channel 404s", async () => {
   await read("/channels/nope/threads", {}, 404);
   const channel = await read<Channel>("/channels", { name: "Doomed" }, 201);
+  await read(`/channels/${channel.id}/threads`, { name: "Last words" }, 201);
   await read(`/channels/${channel.id}/archive`, {}, 200);
   await read(`/channels/${channel.id}/threads`, {}, 404);
-  // History survives archiving: the General thread is still listed.
+  // History survives archiving: threads are still listed.
   const threads = await read<ChannelThread[]>(
     `/channels/${channel.id}/threads`,
     undefined,
@@ -103,12 +104,13 @@ test("creating a thread on a missing or archived channel 404s", async () => {
     "GET",
   );
   assert.equal(threads.length, 1);
+  assert.equal(threads[0].name, "Last words");
 });
 
 test("thread reverse lookup resolves the owning channel", async () => {
   const channel = await read<Channel>("/channels", { name: "Lookup" }, 201);
-  const [general] = await read<ChannelThread[]>(`/channels/${channel.id}/threads`);
-  const binding = await read<ChannelThread>(`/threads/${general.threadId}/channel`);
+  const thread = await read<ChannelThread>(`/channels/${channel.id}/threads`, {}, 201);
+  const binding = await read<ChannelThread>(`/threads/${thread.threadId}/channel`);
   assert.equal(binding.channelId, channel.id);
   await read(`/threads/does-not-exist/channel`, undefined, 404, "GET");
 });
@@ -131,19 +133,19 @@ test("binding a client-known thread id is idempotent", async () => {
 
 test("tasks delegated from a thread form its work queue", async () => {
   const channel = await read<Channel>("/channels", { name: "Queued work" }, 201);
-  const [general] = await read<ChannelThread[]>(`/channels/${channel.id}/threads`);
+  const first = await read<ChannelThread>(`/channels/${channel.id}/threads`, {}, 201);
   const other = await read<ChannelThread>(`/channels/${channel.id}/threads`, {}, 201);
   const task = await read<AgentTask>(
     "/tasks",
     {
       prompt: "Research thread queue",
       channelId: channel.id,
-      threadId: general.threadId,
+      threadId: first.threadId,
     },
     201,
   );
-  assert.equal(task.threadId, general.threadId);
-  const queue = await read<AgentTask[]>(`/threads/${general.threadId}/tasks`);
+  assert.equal(task.threadId, first.threadId);
+  const queue = await read<AgentTask[]>(`/threads/${first.threadId}/tasks`);
   assert.deepEqual(
     queue.map((t) => t.id),
     [task.id],

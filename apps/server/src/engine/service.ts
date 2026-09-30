@@ -196,13 +196,6 @@ export class AgentService {
     } catch {
       /* computer unavailable */
     }
-    // A new channel is never a dead room: it starts with a General thread.
-    // Independent of mkdir so an injectable thread store works without Docker.
-    try {
-      await this.registerThread(owner, channel.id, "General");
-    } catch {
-      /* thread store unavailable */
-    }
     return channel;
   }
   async archiveChannel(owner: string, id: string): Promise<Channel> {
@@ -230,9 +223,7 @@ export class AgentService {
     const binding: ChannelThread = {
       threadId: randomUUID(),
       channelId,
-      name:
-        name?.trim().slice(0, 80) ||
-        (existing.length === 0 ? "General" : `Thread ${existing.length + 1}`),
+      name: name?.trim().slice(0, 80) || `Thread ${existing.length + 1}`,
       createdAt: new Date().toISOString(),
     };
     await this.threads.write(owner, binding);
