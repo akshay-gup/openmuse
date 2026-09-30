@@ -31,9 +31,9 @@ export interface AgentTask {
   status: TaskStatus;
   goalId?: string;
   /** Owning channel. Tasks are claimed by the worker assigned to this channel. */
-  channelId: string;
+  channelId?: string;
   /** Channel where the work was requested. Differs from channelId after delegation. */
-  originChannelId: string;
+  originChannelId?: string;
   /** Where a delegated task currently sits: null, "orchestrator", or a channel id. */
   delegatedTo?: string | null;
   plan: TaskStep[];
