@@ -1,7 +1,10 @@
 import { randomUUID } from "node:crypto";
+import { existsSync } from "node:fs";
+import { readFile, stat } from "node:fs/promises";
+import { extname, join, relative, resolve } from "node:path";
 import { MessageSchema } from "@ag-ui/core";
 import { CopilotKitIntelligence } from "@copilotkit/runtime/v2";
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { cors } from "hono/cors";
 import { z } from "zod";
@@ -349,8 +352,84 @@ export async function createApp(
     );
     return new Response(body, { status: response.status, headers: response.headers });
   });
-  app.get("/", (c) =>
-    c.json({ name: "OpenMuse", app: "http://localhost:8081", health: "/api/health" }),
-  );
+  app.get("/", (c) => {
+    const webRoot = webRootDir(config);
+    return webRoot
+      ? serveWebFile(c, webRoot, "index.html")
+      : c.json({ name: "OpenMuse", health: "/api/health" });
+  });
+  {
+    // Same-origin web UI: unknown non-API routes fall back to the app shell.
+    const webRoot = webRootDir(config);
+    if (webRoot) {
+      app.get("/*", (c) => {
+        const pathname = new URL(c.req.url).pathname;
+        if (pathname === "/api" || pathname.startsWith("/api/")) return c.notFound();
+        return serveWebFile(c, webRoot, decodeURIComponent(pathname));
+      });
+    }
+  }
   return { app, auth, files, actions, workspace, agent };
+}
+
+/**
+ * Directory holding the Expo web export (`pnpm build:web`), served by the API
+ * itself so one process is the whole app. WEB_DIR overrides the default
+ * `apps/mobile/dist/web` (resolved from the process working directory).
+ * Absent directory = headless API for native/mobile clients.
+ */
+function webRootDir(config: Config): string | undefined {
+  const dir = resolve(config.webDir ?? "apps/mobile/dist/web");
+  return existsSync(join(dir, "index.html")) ? dir : undefined;
+}
+
+const webContentTypes: Record<string, string> = {
+  ".html": "text/html; charset=utf-8",
+  ".js": "text/javascript; charset=utf-8",
+  ".mjs": "text/javascript; charset=utf-8",
+  ".css": "text/css; charset=utf-8",
+  ".json": "application/json; charset=utf-8",
+  ".map": "application/json; charset=utf-8",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".svg": "image/svg+xml",
+  ".ico": "image/x-icon",
+  ".webp": "image/webp",
+  ".woff": "font/woff",
+  ".woff2": "font/woff2",
+  ".ttf": "font/ttf",
+  ".txt": "text/plain; charset=utf-8",
+};
+
+async function serveWebFile(c: Context, root: string, pathname: string) {
+  const send = async (file: string) => {
+    const data = await readFile(file);
+    c.header("Content-Type", webContentTypes[extname(file).toLowerCase()] ?? "application/octet-stream");
+    return c.body(new Uint8Array(data));
+  };
+  const candidate = join(root, pathname);
+  // Never escape the web root (path traversal).
+  if (!relative(root, candidate) || relative(root, candidate).startsWith("..")) {
+    try {
+      return await send(join(root, "index.html"));
+    } catch {
+      return c.notFound();
+    }
+  }
+  try {
+    const info = await stat(candidate);
+    try {
+      return await send(info.isDirectory() ? join(candidate, "index.html") : candidate);
+    } catch {
+      return c.notFound();
+    }
+  } catch {
+    // SPA fallback: client-side routes serve the app shell.
+    try {
+      return await send(join(root, "index.html"));
+    } catch {
+      return c.notFound();
+    }
+  }
 }

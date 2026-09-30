@@ -1,7 +1,17 @@
 import { Platform } from "react-native";
 
+/**
+ * API base URL. On web the UI is served by the API itself, so same-origin is
+ * the default and EXPO_PUBLIC_API_URL is only needed for split deployments.
+ */
+const sameOrigin =
+  Platform.OS === "web" && typeof window !== "undefined" && window.location?.origin
+    ? window.location.origin
+    : undefined;
+
 export const API_URL = (
   process.env.EXPO_PUBLIC_API_URL ||
+  sameOrigin ||
   (Platform.OS === "android" ? "http://10.0.2.2:8787" : "http://localhost:8787")
 ).replace(/\/$/, "");
 

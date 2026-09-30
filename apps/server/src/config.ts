@@ -33,6 +33,8 @@ export interface Config {
   publicUrl: string;
   dataDir: string;
   databaseUrl?: string;
+  /** Override for the served web UI directory; defaults to apps/mobile/dist/web. */
+  webDir?: string;
   accessKey?: string;
   encryptionKey?: string;
   model?: string;
@@ -121,6 +123,7 @@ export function readConfig(): Config {
     publicUrl,
     dataDir: resolve(process.env.DATA_DIR ?? ".openmuse"),
     databaseUrl: process.env.DATABASE_URL,
+    webDir: process.env.WEB_DIR?.trim() || undefined,
     accessKey: process.env.OPENMUSE_ACCESS_KEY,
     encryptionKey: process.env.TOKEN_ENCRYPTION_KEY,
     model: process.env.MODEL,
