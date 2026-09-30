@@ -1,0 +1,153 @@
+import assert from "node:assert/strict";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { after, before, test } from "node:test";
+import { createApp } from "../apps/server/src/app.ts";
+import type { Config } from "../apps/server/src/config.ts";
+import { createStore, type Store } from "../apps/server/src/db.ts";
+import { MemoryThreadStore } from "../apps/server/src/engine/threads.ts";
+import {
+  type AgentTask,
+  type Channel,
+  type ChannelThread,
+  ORCHESTRATOR_CHANNEL_ID,
+} from "../packages/domain/src/agent.ts";
+
+let db: Store, server: Awaited<ReturnType<typeof createApp>>, directory: string, token: string;
+
+const headers = () => ({ Authorization: `Bearer ${token}`, "Content-Type": "application/json" });
+const request = (path: string, body?: unknown, method?: string) =>
+  server.app.request(`/api/agent${path}`, {
+    headers: headers(),
+    ...(method === undefined && body === undefined
+      ? {}
+      : {
+          method: method ?? "POST",
+          ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+        }),
+  });
+async function read<T>(path: string, body?: unknown, status = 200, method?: string): Promise<T> {
+  const response = await request(path, body, method);
+  assert.equal(response.status, status, await response.clone().text());
+  return response.json();
+}
+
+before(async () => {
+  directory = await mkdtemp(join(tmpdir(), "openmuse-channel-threads-"));
+  db = await createStore({ dataDir: join(directory, "db") });
+  const config: Config = {
+    mode: "sample",
+    port: 8787,
+    host: "127.0.0.1",
+    publicUrl: "http://localhost:8787",
+    dataDir: directory,
+    agentBackend: "sample",
+    intelligenceApiKey: "test-project-key-never-sent",
+    googleRedirectUri: "http://localhost:8787/api/google/callback",
+    allowedOrigins: ["http://localhost:8081"],
+  };
+  server = await createApp(db, config, { threads: new MemoryThreadStore() });
+  const session = await server.app.request("/api/session", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: "{}",
+  });
+  assert.equal(session.status, 200);
+  token = (await session.json()).token;
+});
+after(async () => {
+  await server?.agent?.stop();
+  await db?.close();
+  if (directory) await rm(directory, { recursive: true, force: true });
+});
+
+test("creating a channel starts it with a General thread", async () => {
+  const channel = await read<Channel>("/channels", { name: "Threaded project" }, 201);
+  const threads = await read<ChannelThread[]>(`/channels/${channel.id}/threads`);
+  assert.equal(threads.length, 1);
+  assert.equal(threads[0].name, "General");
+  assert.equal(threads[0].channelId, channel.id);
+  assert.ok(threads[0].threadId);
+});
+
+test("new threads get server-generated ids and sequential names", async () => {
+  const channel = await read<Channel>("/channels", { name: "Numbered threads" }, 201);
+  const second = await read<ChannelThread>(`/channels/${channel.id}/threads`, {}, 201);
+  assert.ok(second.threadId);
+  assert.equal(second.name, "Thread 2");
+  const named = await read<ChannelThread>(
+    `/channels/${channel.id}/threads`,
+    { name: "Research" },
+    201,
+  );
+  assert.equal(named.name, "Research");
+  const threads = await read<ChannelThread[]>(`/channels/${channel.id}/threads`);
+  assert.equal(threads.length, 3);
+  assert.deepEqual(
+    threads.map((t) => t.name),
+    ["General", "Thread 2", "Research"],
+  );
+});
+
+test("creating a thread on a missing or archived channel 404s", async () => {
+  await read("/channels/nope/threads", {}, 404);
+  const channel = await read<Channel>("/channels", { name: "Doomed" }, 201);
+  await read(`/channels/${channel.id}/archive`, {}, 200);
+  await read(`/channels/${channel.id}/threads`, {}, 404);
+  // History survives archiving: the General thread is still listed.
+  const threads = await read<ChannelThread[]>(
+    `/channels/${channel.id}/threads`,
+    undefined,
+    200,
+    "GET",
+  );
+  assert.equal(threads.length, 1);
+});
+
+test("thread reverse lookup resolves the owning channel", async () => {
+  const channel = await read<Channel>("/channels", { name: "Lookup" }, 201);
+  const [general] = await read<ChannelThread[]>(`/channels/${channel.id}/threads`);
+  const binding = await read<ChannelThread>(`/threads/${general.threadId}/channel`);
+  assert.equal(binding.channelId, channel.id);
+  await read(`/threads/does-not-exist/channel`, undefined, 404, "GET");
+});
+
+test("binding a client-known thread id is idempotent", async () => {
+  const first = await read<ChannelThread>("/threads/bind", {
+    threadId: "main-thread-id",
+    channelId: ORCHESTRATOR_CHANNEL_ID,
+    name: "Main chat",
+  });
+  assert.equal(first.threadId, "main-thread-id");
+  const second = await read<ChannelThread>("/threads/bind", {
+    threadId: "main-thread-id",
+    channelId: ORCHESTRATOR_CHANNEL_ID,
+  });
+  assert.deepEqual(second, first);
+  const resolved = await read<ChannelThread>("/threads/main-thread-id/channel");
+  assert.equal(resolved.channelId, ORCHESTRATOR_CHANNEL_ID);
+});
+
+test("tasks delegated from a thread form its work queue", async () => {
+  const channel = await read<Channel>("/channels", { name: "Queued work" }, 201);
+  const [general] = await read<ChannelThread[]>(`/channels/${channel.id}/threads`);
+  const other = await read<ChannelThread>(`/channels/${channel.id}/threads`, {}, 201);
+  const task = await read<AgentTask>(
+    "/tasks",
+    {
+      prompt: "Research thread queue",
+      channelId: channel.id,
+      threadId: general.threadId,
+    },
+    201,
+  );
+  assert.equal(task.threadId, general.threadId);
+  const queue = await read<AgentTask[]>(`/threads/${general.threadId}/tasks`);
+  assert.deepEqual(
+    queue.map((t) => t.id),
+    [task.id],
+  );
+  const otherQueue = await read<AgentTask[]>(`/threads/${other.threadId}/tasks`);
+  assert.deepEqual(otherQueue, []);
+});
