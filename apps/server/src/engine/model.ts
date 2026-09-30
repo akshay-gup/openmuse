@@ -5,6 +5,7 @@ import { defineTool } from "@copilotkit/runtime/v2";
 import { z } from "zod";
 import type { AgentTask, Channel } from "../../../../packages/domain/src/agent.ts";
 import { emailDraftSchema, eventDraftSchema } from "../../../../packages/domain/src/index.ts";
+import { runOpencodeTask } from "../opencode/tasks.ts";
 import type { AgentService } from "./service.ts";
 import { tanstackAgent } from "./tanstack-agent.ts";
 import type { TaskContext } from "./worker.ts";
@@ -22,6 +23,10 @@ export async function executeModelTask(
       question:
         "A model is required for this open-ended task. Configure MODEL and its provider key on the server, then reply ‘continue’. The document, monitor and finance workflows can run without a model.",
     };
+  // OpenCode backend: tasks run as unattended OpenCode sessions in the
+  // channel's workspace directory (allow-all rules; no user to ask).
+  if (service.opencodeRuntime)
+    return runOpencodeTask(service.opencodeRuntime, service, owner, initial, ctx);
   let task = initial;
   let outcome: Partial<AgentTask> | undefined;
   const operations =

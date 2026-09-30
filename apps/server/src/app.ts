@@ -184,6 +184,7 @@ export async function createApp(
     const shimDeps = { service: agent, bus, pool, config, tracker, rules };
     app.route("/api/agent/opencode", opencodeShimRoutes(shimDeps));
     app.route("/api/agent/opencode", opencodePermissionRoutes(shimDeps));
+    agent.opencodeRuntime = { bus, pool, tracker, config };
     opencode = { stop: () => bus.stop() };
   }
   app.get("/api/calendars", async (c) => c.json(await workspace.calendars(c.get("owner"))));
