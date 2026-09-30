@@ -1,0 +1,14 @@
+[Unit]
+Description=Hive Cloudflare Tunnel
+After=network-online.target hive-api.service
+Wants=network-online.target
+
+[Service]
+User=hive
+ExecStart=/usr/local/bin/cloudflared tunnel --config /etc/hive/cloudflared.yml run
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

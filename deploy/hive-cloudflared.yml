@@ -1,0 +1,7 @@
+# Copy to /etc/hive/cloudflared.yml on the VM and fill in the placeholders.
+tunnel: TUNNEL_ID
+credentials-file: /etc/hive/cloudflared-credentials.json
+ingress:
+  - hostname: PUBLIC_HOSTNAME
+    service: http://127.0.0.1:8787
+  - service: http_status:404

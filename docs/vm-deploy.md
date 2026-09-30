@@ -74,27 +74,41 @@ Updating later: pull/rebuild in `/opt/hive`, then
 `sudo systemctl restart hive-api` (leave `hive-opencode` running —
 sessions survive API restarts).
 
-## Public URL without your own DNS (Cloudflare Tunnel)
+## Public URL via Cloudflare Tunnel (free, recommended)
 
-When you want a public https URL per box without managing DNS records:
+One-time setup (~5 min):
+
+1. Create a free Cloudflare account and add your domain (DNS only — the
+   registration stays where it is). Change the nameservers at your registrar
+   to the ones Cloudflare gives you.
+2. On the VM, install cloudflared:
+   `curl -fsSL https://pkg.cloudflare.com/cloudflare-main.gpg | sudo tee /usr/share/keyrings/cloudflare-main.gpg >/dev/null`
+   then add the apt repo and `sudo apt install cloudflared` (or download the
+   binary to `/usr/local/bin`).
+3. `sudo -u hive cloudflared tunnel login` — open the printed URL in your
+   browser and authorize. This drops credentials in `~hive/.cloudflared/`.
+
+Per box (each box gets its own stable public hostname):
 
 ```sh
-# Instant throwaway URL, no account needed:
-cloudflared tunnel --url http://127.0.0.1:8787
-# -> https://<random>.trycloudflare.com
+sudo -u hive cloudflared tunnel create hive-1
+# note the tunnel ID it prints
+sudo -u hive cloudflared tunnel route dns hive-1 hive-1.example.com
+# cloudflared creates the DNS record for you — no manual DNS
+sudo cp ~/.cloudflared/<tunnel-id>.json /etc/hive/cloudflared-credentials.json
+# copy deploy/hive-cloudflared.yml to /etc/hive/cloudflared.yml,
+# filling in TUNNEL_ID and PUBLIC_HOSTNAME (hive-1.example.com)
+sudo cp deploy/hive-cloudflared.service /etc/systemd/system/
+sudo systemctl daemon-reload && sudo systemctl enable --now hive-cloudflared
 ```
 
-For stable subdomains across many boxes (one-time setup): add your domain to
-Cloudflare, create one wildcard CNAME (`*.example.com` → the tunnel), then run
-`cloudflared tunnel` with a per-box hostname (`hive-1.example.com`,
-`hive-2.example.com`, …). No per-box DNS work after that.
+Then set `PUBLIC_API_URL=https://hive-1.example.com` in `/etc/hive/hive.env`
+(OAuth callbacks need https) and restart `hive-api`. Keep `HOST=127.0.0.1` —
+the tunnel is the only door in.
 
-Alternative if you're already on Tailscale: `tailscale funnel 8787` exposes the
-box publicly via `https://<tailnet>.ts.net` — same private mesh, plus a public
-door when you want one.
-
-Set `PUBLIC_API_URL` to whichever public URL you use (OAuth callbacks need
-https); keep `HOST=127.0.0.1` so the API itself only listens on loopback.
+Throwaway alternative with no account at all:
+`cloudflared tunnel --url http://127.0.0.1:8787` hands you a random
+`https://<random>.trycloudflare.com` instantly.
 
 ## Quick launch without public DNS (Tailscale)
 
