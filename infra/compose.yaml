@@ -1,4 +1,4 @@
-name: openmuse
+name: hive
 services:
   browser-worker:
     build:

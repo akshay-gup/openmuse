@@ -22,7 +22,7 @@ import type { ChannelThread } from "../packages/domain/src/agent.ts";
 
 let directory = "";
 before(async () => {
-  directory = await mkdtemp(join(tmpdir(), "openmuse-opencode-"));
+  directory = await mkdtemp(join(tmpdir(), "hive-opencode-"));
   config.dataDir = directory;
 });
 after(async () => {

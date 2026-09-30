@@ -139,7 +139,7 @@ describe("RunTranslator", () => {
         part: textPart({
           id: "prt_ctx",
           messageID: "msg_u",
-          text: "[openmuse context]",
+          text: "[hive context]",
           synthetic: true,
         }),
         time: 1,
@@ -357,7 +357,7 @@ describe("opencodeShimRoutes", () => {
     const mentioned = JSON.stringify({
       threadId: "t1",
       runId: "r1",
-      messages: [{ role: "user", content: "@openmuse do work" }],
+      messages: [{ role: "user", content: "@hive do work" }],
     });
     const app = opencodeShimRoutes(
       stubDeps({ channelOfThread: () => new Promise(() => undefined) }),

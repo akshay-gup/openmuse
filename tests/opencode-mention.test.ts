@@ -18,13 +18,13 @@ import {
 } from "../apps/server/src/opencode/agui.ts";
 import { OpencodeEventBus } from "../apps/server/src/opencode/events.ts";
 
-const MENTION = "@openmuse";
+const MENTION = "@hive";
 
 describe("normalizeMention", () => {
-  it("defaults to @openmuse", () => {
-    assert.equal(normalizeMention(undefined), "@openmuse");
-    assert.equal(normalizeMention(""), "@openmuse");
-    assert.equal(normalizeMention("   "), "@openmuse");
+  it("defaults to @hive", () => {
+    assert.equal(normalizeMention(undefined), "@hive");
+    assert.equal(normalizeMention(""), "@hive");
+    assert.equal(normalizeMention("   "), "@hive");
   });
   it("trims and adds a missing @", () => {
     assert.equal(normalizeMention("  helper  "), "@helper");
@@ -34,20 +34,20 @@ describe("normalizeMention", () => {
 
 describe("mentionsAgent", () => {
   it("matches a standalone token", () => {
-    assert.ok(mentionsAgent("@openmuse do the thing", MENTION));
-    assert.ok(mentionsAgent("hey @openmuse, look at this", MENTION));
-    assert.ok(mentionsAgent("(@openmuse)", MENTION));
-    assert.ok(mentionsAgent("thanks @openmuse.", MENTION));
+    assert.ok(mentionsAgent("@hive do the thing", MENTION));
+    assert.ok(mentionsAgent("hey @hive, look at this", MENTION));
+    assert.ok(mentionsAgent("(@hive)", MENTION));
+    assert.ok(mentionsAgent("thanks @hive.", MENTION));
   });
   it("is case-insensitive", () => {
-    assert.ok(mentionsAgent("@OpenMuse help", MENTION));
-    assert.ok(mentionsAgent("ping @OPENMUSE", MENTION));
+    assert.ok(mentionsAgent("@Hive help", MENTION));
+    assert.ok(mentionsAgent("ping @HIVE", MENTION));
   });
   it("rejects glued tokens", () => {
-    assert.ok(!mentionsAgent("@openmuseX do it", MENTION));
-    assert.ok(!mentionsAgent("mail@openmuse", MENTION));
-    assert.ok(!mentionsAgent("@openmuse2", MENTION));
-    assert.ok(!mentionsAgent("the openmuse bot", MENTION));
+    assert.ok(!mentionsAgent("@hiveX do it", MENTION));
+    assert.ok(!mentionsAgent("mail@hive", MENTION));
+    assert.ok(!mentionsAgent("@hive2", MENTION));
+    assert.ok(!mentionsAgent("the hive bot", MENTION));
   });
   it("rejects absence", () => {
     assert.ok(!mentionsAgent("just chatting here", MENTION));
@@ -64,7 +64,7 @@ describe("shouldTriggerRun", () => {
   it("triggers on a mention in the last user message", () => {
     assert.ok(
       shouldTriggerRun(
-        [msg("user", "hello"), msg("assistant", "hi"), msg("user", "@openmuse summarize")],
+        [msg("user", "hello"), msg("assistant", "hi"), msg("user", "@hive summarize")],
         MENTION,
       ),
     );
@@ -72,33 +72,33 @@ describe("shouldTriggerRun", () => {
   it("ignores a mention in an older message", () => {
     assert.ok(
       !shouldTriggerRun(
-        [msg("user", "@openmuse summarize"), msg("assistant", "ok"), msg("user", "never mind")],
+        [msg("user", "@hive summarize"), msg("assistant", "ok"), msg("user", "never mind")],
         MENTION,
       ),
     );
   });
   it("ignores mentions in assistant messages", () => {
     assert.ok(
-      !shouldTriggerRun([msg("user", "hi"), msg("assistant", "try @openmuse for that")], MENTION),
+      !shouldTriggerRun([msg("user", "hi"), msg("assistant", "try @hive for that")], MENTION),
     );
   });
   it("is false with no user message", () => {
-    assert.ok(!shouldTriggerRun([msg("assistant", "@openmuse hi")], MENTION));
+    assert.ok(!shouldTriggerRun([msg("assistant", "@hive hi")], MENTION));
     assert.ok(!shouldTriggerRun([], MENTION));
   });
 });
 
 describe("stripMention", () => {
   it("removes the token and tidies whitespace", () => {
-    assert.equal(stripMention("@openmuse do the thing", MENTION), "do the thing");
-    assert.equal(stripMention("hey @OpenMuse, do it", MENTION), "hey , do it");
-    assert.equal(stripMention("@openmuse", MENTION), "");
+    assert.equal(stripMention("@hive do the thing", MENTION), "do the thing");
+    assert.equal(stripMention("hey @Hive, do it", MENTION), "hey , do it");
+    assert.equal(stripMention("@hive", MENTION), "");
   });
   it("removes every occurrence", () => {
-    assert.equal(stripMention("@openmuse one @openmuse two", MENTION), "one two");
+    assert.equal(stripMention("@hive one @hive two", MENTION), "one two");
   });
   it("leaves non-mentions alone", () => {
-    assert.equal(stripMention("@openmuseX do it", MENTION), "@openmuseX do it");
+    assert.equal(stripMention("@hiveX do it", MENTION), "@hiveX do it");
   });
 });
 
@@ -197,12 +197,12 @@ describe("promptFileParts", () => {
     const parts = promptFileParts([
       { role: "user", content: [image] },
       { role: "assistant", content: "ok" },
-      { role: "user", content: "@openmuse go" },
+      { role: "user", content: "@hive go" },
     ]);
     assert.deepEqual(parts, []);
     const parts2 = promptFileParts([
-      { role: "user", content: "@openmuse go" },
-      { role: "user", content: [{ type: "text", text: "@openmuse see" }, image] },
+      { role: "user", content: "@hive go" },
+      { role: "user", content: [{ type: "text", text: "@hive see" }, image] },
     ]);
     assert.equal(parts2.length, 1);
     assert.equal(parts2[0].type, "file");
@@ -216,7 +216,7 @@ describe("opencodeShimRoutes mention gating", () => {
       service,
       bus: new OpencodeEventBus(testConnection),
       pool: {},
-      config: { model: "openai/gpt-4o", agentMention: "@openmuse" },
+      config: { model: "openai/gpt-4o", agentMention: "@hive" },
     }) as unknown as Parameters<typeof opencodeShimRoutes>[0];
 
   const eventTypes = async (res: Response): Promise<string[]> =>

@@ -13,7 +13,7 @@
  *   and busy/idle derived from `session.status` / `session.idle` only.
  *
  * Mention-only triggering: the agent runs only when the last user message
- * contains the configured mention token (`AGENT_MENTION`, default `@openmuse`)
+ * contains the configured mention token (`AGENT_MENTION`, default `@hive`)
  * as a standalone token. Anything else is plain chat — the run completes
  * immediately as a no-op (`RUN_STARTED` then `RUN_FINISHED`, no OpenCode
  * session touched) and the agent stays silent. When triggered, the full
@@ -88,17 +88,17 @@ export function messageText(message: Record<string, unknown> | undefined): strin
   return "";
 }
 
-/** Normalize the AGENT_MENTION env value to a mention token (default `@openmuse`). */
+/** Normalize the AGENT_MENTION env value to a mention token (default `@hive`). */
 export function normalizeMention(raw: string | undefined): string {
   const trimmed = (raw ?? "").trim();
-  if (!trimmed) return "@openmuse";
+  if (!trimmed) return "@hive";
   return trimmed.startsWith("@") ? trimmed : `@${trimmed}`;
 }
 
 function mentionPattern(mention: string): RegExp {
   const escaped = mention.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   // Standalone token: not glued to a letter, digit, or underscore on either side,
-  // so `@openmuseX` and `mail@openmuse` do not count as mentions.
+  // so `@hiveX` and `mail@hive` do not count as mentions.
   return new RegExp(`(^|[^\\p{L}\\p{N}_])${escaped}(?=[^\\p{L}\\p{N}_]|$)`, "iu");
 }
 
@@ -534,7 +534,7 @@ async function runOpencodeTurn(ctx: RunContext): Promise<void> {
 
     const transcript = buildTranscript(messages);
     const stripped = stripMention(userText, mention);
-    // A bare mention ("@openmuse" and nothing else) still summons the agent;
+    // A bare mention ("@hive" and nothing else) still summons the agent;
     // point it at the conversation it just received.
     const promptText =
       stripped || "(summoned by mention with no additional text — see the conversation above)";
@@ -574,7 +574,7 @@ async function runOpencodeTurn(ctx: RunContext): Promise<void> {
             type: "text",
             synthetic: true,
             text:
-              `[openmuse context] channel=${binding.channelId} thread=${input.threadId} name=${binding.name}\n` +
+              `[hive context] channel=${binding.channelId} thread=${input.threadId} name=${binding.name}\n` +
               `You were summoned by mention and have not participated until now. ` +
               `The full visible conversation (everyone talking) follows so you can catch up:\n${transcript}`,
           },

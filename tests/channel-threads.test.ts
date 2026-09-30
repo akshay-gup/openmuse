@@ -34,7 +34,7 @@ async function read<T>(path: string, body?: unknown, status = 200, method?: stri
 }
 
 before(async () => {
-  directory = await mkdtemp(join(tmpdir(), "openmuse-channel-threads-"));
+  directory = await mkdtemp(join(tmpdir(), "hive-channel-threads-"));
   db = await createStore({ dataDir: join(directory, "db") });
   const config: Config = {
     mode: "sample",
@@ -183,7 +183,7 @@ test("renaming rejects blank names and unknown threads", async () => {
 
 test("LocalDiskThreadStore round-trips bindings on the local filesystem", async () => {
   const { LocalDiskThreadStore } = await import("../apps/server/src/engine/threads.ts");
-  const base = await mkdtemp(join(tmpdir(), "openmuse-local-threads-"));
+  const base = await mkdtemp(join(tmpdir(), "hive-local-threads-"));
   try {
     const store = new LocalDiskThreadStore(base);
     const binding: ChannelThread = {

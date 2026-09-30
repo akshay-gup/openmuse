@@ -12,7 +12,7 @@ import {
 
 let directory = "";
 before(async () => {
-  directory = await mkdtemp(join(tmpdir(), "openmuse-perms-"));
+  directory = await mkdtemp(join(tmpdir(), "hive-perms-"));
 });
 after(async () => {
   await rm(directory, { recursive: true, force: true });

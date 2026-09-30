@@ -25,8 +25,8 @@ function workerCommand(): { command: string; args: string[] } {
 const key = (owner: string, channelId: string) => `${owner}\n${channelId}`;
 
 /**
- * Runs in the main (orchestrator) process when OPENMUSE_MANAGE_CHANNELS=true.
- * Spawns one worker-entry child per active channel with OPENMUSE_CHANNEL set,
+ * Runs in the main (orchestrator) process when HIVE_MANAGE_CHANNELS=true.
+ * Spawns one worker-entry child per active channel with HIVE_CHANNEL set,
  * and reaps workers whose channels went idle or were archived.
  */
 export class ChannelManager {
@@ -67,9 +67,9 @@ export class ChannelManager {
     const proc = spawn(command, args, {
       env: {
         ...process.env,
-        OPENMUSE_CHANNEL: channel.id,
+        HIVE_CHANNEL: channel.id,
         // The child is a leaf worker: it must never manage channels itself.
-        OPENMUSE_MANAGE_CHANNELS: "",
+        HIVE_MANAGE_CHANNELS: "",
       },
       stdio: "ignore",
     });

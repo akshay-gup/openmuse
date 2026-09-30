@@ -38,7 +38,7 @@ test("collector prefers snapshots and preserves message order", () => {
 
 test("collector ignores synthetic parts and non-assistant deltas", () => {
   const collector = new TaskTextCollector();
-  collector.handle(partUpdated("ctx", "[openmuse context] hidden", true));
+  collector.handle(partUpdated("ctx", "[hive context] hidden", true));
   collector.handle(delta("user-msg", "user words"));
   collector.handle(partUpdated("m1", "visible"));
   assert.equal(collector.text(), "visible");

@@ -18,7 +18,7 @@ if (existsSync(".env")) {
   process.loadEnvFile(".env");
   if (shadowed.length)
     console.warn(
-      `[OpenMuse] Using ${shadowed.join(", ")} from the environment instead of .env. ` +
+      `[Hive] Using ${shadowed.join(", ")} from the environment instead of .env. ` +
         (shadowed.length === 1
           ? "Unset it to use the .env value."
           : "Unset them to use the .env values."),
@@ -49,7 +49,7 @@ export interface Config {
   opencodeServerUrl?: string;
   /** OPENCODE_SERVER_PASSWORD; enables Basic auth against `opencode serve`. */
   opencodeServerPassword?: string;
-  /** Mention token that summons the agent in chat (AGENT_MENTION, default `@openmuse`). */
+  /** Mention token that summons the agent in chat (AGENT_MENTION, default `@hive`). */
   agentMention?: string;
   intelligenceApiKey?: string;
   googleClientId?: string;
@@ -71,7 +71,7 @@ export interface Config {
 export const defaultJevModel = "jev-1.13.0";
 
 export const intelligenceKeyRequiredMessage =
-  "OpenMuse requires CPK_INTELLIGENCE_API_KEY. " +
+  "Hive requires CPK_INTELLIGENCE_API_KEY. " +
   "Run `npx copilotkit@latest login` and `npx copilotkit@latest project select`, " +
   "then set the generated server-only key. " +
   "See https://docs.copilotkit.ai/intelligence/connect-your-runtime";
@@ -128,10 +128,10 @@ export function readConfig(): Config {
     port,
     host: process.env.HOST ?? "127.0.0.1",
     publicUrl,
-    dataDir: resolve(process.env.DATA_DIR ?? ".openmuse"),
+    dataDir: resolve(process.env.DATA_DIR ?? ".hive"),
     databaseUrl: process.env.DATABASE_URL,
     webDir: process.env.WEB_DIR?.trim() || undefined,
-    accessKey: process.env.OPENMUSE_ACCESS_KEY,
+    accessKey: process.env.HIVE_ACCESS_KEY,
     encryptionKey: process.env.TOKEN_ENCRYPTION_KEY,
     model: process.env.MODEL,
     jevMode,
@@ -150,9 +150,9 @@ export function readConfig(): Config {
     workerUrl: browserWorkerUrl(process.env.BROWSER_WORKER_URL),
     workerToken: process.env.WORKER_TOKEN,
     taskWorkerEnabled: process.env.TASK_WORKER_ENABLED !== "false",
-    workerChannelId: process.env.OPENMUSE_CHANNEL?.trim() || undefined,
-    manageChannels: process.env.OPENMUSE_MANAGE_CHANNELS === "true",
-    channelWorkerIdleMinutes: Number(process.env.OPENMUSE_CHANNEL_IDLE_MINUTES ?? 30),
+    workerChannelId: process.env.HIVE_CHANNEL?.trim() || undefined,
+    manageChannels: process.env.HIVE_MANAGE_CHANNELS === "true",
+    channelWorkerIdleMinutes: Number(process.env.HIVE_CHANNEL_IDLE_MINUTES ?? 30),
     allowedOrigins: (
       process.env.ALLOWED_ORIGINS ?? "http://localhost:8081,http://127.0.0.1:8081"
     ).split(","),
@@ -162,7 +162,7 @@ export function readConfig(): Config {
     (!config.accessKey || config.accessKey.length < 24 || !config.encryptionKey)
   )
     throw new Error(
-      "Live mode requires OPENMUSE_ACCESS_KEY (24+ characters) and TOKEN_ENCRYPTION_KEY (32-byte base64)",
+      "Live mode requires HIVE_ACCESS_KEY (24+ characters) and TOKEN_ENCRYPTION_KEY (32-byte base64)",
     );
   if (mode === "sample" && !["127.0.0.1", "localhost", "::1"].includes(config.host))
     throw new Error("Sample workspace is local-only. HOST must be a loopback address.");

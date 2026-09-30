@@ -172,7 +172,7 @@ function buildTaskPrompt(
     })
     .join("\n");
   return [
-    `You are ${identity?.name ?? "OpenMuse"}, a ${identity?.tone ?? "thoughtful"} personal agent executing a delegated task.`,
+    `You are ${identity?.name ?? "Hive"}, a ${identity?.tone ?? "thoughtful"} personal agent executing a delegated task.`,
     ``,
     `## Task`,
     `Title: ${task.title}`,
@@ -337,7 +337,7 @@ export async function runOpencodeTask(
           {
             type: "text",
             synthetic: true,
-            text: `[openmuse task context] task=${task.id} channel=${channelId}${task.threadId ? ` thread=${task.threadId}` : ""}`,
+            text: `[hive task context] task=${task.id} channel=${channelId}${task.threadId ? ` thread=${task.threadId}` : ""}`,
           },
           { type: "text", text: buildTaskPrompt(identity, memories, task, originNote) },
         ],

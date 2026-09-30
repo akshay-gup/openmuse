@@ -903,7 +903,7 @@ export function DelegateSheet({ threadId }: { threadId?: string }) {
   return (
     <Sheet
       title="Hand over an outcome"
-      subtitle="OpenMuse saves a plan and keeps working on the server."
+      subtitle="Hive saves a plan and keeps working on the server."
       onClose={close}
     >
       <View style={[s.row, { flexWrap: "wrap", gap: 8, marginBottom: 20 }]}>
@@ -1107,12 +1107,7 @@ function IdeaCard({ idea }: { idea: Idea }) {
         <View style={{ gap: 15, marginTop: 18, paddingLeft: 48 }}>
           <EvidenceList items={idea.evidence} />
           {editing && (
-            <Field
-              label="What should OpenMuse do?"
-              value={prompt}
-              onChangeText={setPrompt}
-              multiline
-            />
+            <Field label="What should Hive do?" value={prompt} onChangeText={setPrompt} multiline />
           )}
           <ErrorNotice error={error} />
           <View style={[s.row, { gap: 8, flexWrap: "wrap" }]}>
@@ -1515,7 +1510,7 @@ function MonitorForm({ onDone }: { onDone: () => void }) {
       <Text style={[s.small, { marginBottom: 14 }]}>
         {sample
           ? "Changes to this built-in page stay in your workspace."
-          : "OpenMuse checks this public page on the server and saves meaningful changes in Notifications."}
+          : "Hive checks this public page on the server and saves meaningful changes in Notifications."}
       </Text>
       <ErrorNotice error={error} />
       <Button
@@ -1667,7 +1662,7 @@ export function AppsScreen() {
   const { data, mutate } = useAgentWorkspace();
   const [query, setQuery] = useState("");
   const [settings, setSettings] = useState(false);
-  const [name, setName] = useState(data?.identity.name || "OpenMuse");
+  const [name, setName] = useState(data?.identity.name || "Hive");
   const [tone, setTone] = useState(data?.identity.tone || "warm");
   const [avatar, setAvatar] = useState(data?.identity.avatar || "sky");
   const [showChatUpdates, setShowChatUpdates] = useState(data?.identity.showChatUpdates !== false);

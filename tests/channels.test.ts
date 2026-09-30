@@ -28,7 +28,7 @@ async function read<T>(path: string, body?: unknown, status = 200): Promise<T> {
 }
 
 before(async () => {
-  directory = await mkdtemp(join(tmpdir(), "openmuse-channels-"));
+  directory = await mkdtemp(join(tmpdir(), "hive-channels-"));
   db = await createStore({ dataDir: join(directory, "db") });
   const config: Config = {
     mode: "sample",

@@ -96,7 +96,7 @@ export async function createApp(
       return c.json({ error: error.message }, 422);
     if (error instanceof SyntaxError) return c.json({ error: "Invalid request data" }, 400);
     // Provider and document errors are useful, but raw stack traces and token-bearing responses are not.
-    console.error(`[OpenMuse] ${error.name}`);
+    console.error(`[Hive] ${error.name}`);
     return c.json(
       {
         error:
@@ -133,14 +133,12 @@ export async function createApp(
   });
   app.get("/api/google/callback", async (c) => {
     if (c.req.query("error"))
-      return c.html("<h1>Google connection cancelled</h1><p>You can return to OpenMuse.</p>", 400);
+      return c.html("<h1>Google connection cancelled</h1><p>You can return to Hive.</p>", 400);
     const state = c.req.query("state"),
       code = c.req.query("code");
     if (!state || !code) throw new AppError("Google callback is incomplete");
     await google.callback(state, code);
-    return c.html(
-      "<h1>Google is connected</h1><p>Return to OpenMuse and refresh your workspace.</p>",
-    );
+    return c.html("<h1>Google is connected</h1><p>Return to Hive and refresh your workspace.</p>");
   });
   app.use("/api/*", async (c, next) => {
     const signedRoute =
@@ -384,7 +382,7 @@ export async function createApp(
     const webRoot = webRootDir(config);
     return webRoot
       ? serveWebFile(c, webRoot, "index.html")
-      : c.json({ name: "OpenMuse", health: "/api/health" });
+      : c.json({ name: "Hive", health: "/api/health" });
   });
   {
     // Same-origin web UI: unknown non-API routes fall back to the app shell.

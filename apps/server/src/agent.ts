@@ -65,7 +65,7 @@ export function makeRuntime(
     intelligence,
     identifyUser: async (request) => ({
       id: await auth.owner(request.headers.get("authorization") ?? undefined),
-      name: "OpenMuse user",
+      name: "Hive user",
     }),
     generateThreadNames: false,
   });
