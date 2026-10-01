@@ -55,3 +55,10 @@ echo "Your Hive sign-in key (save this):"
 get HIVE_ACCESS_KEY
 echo
 echo "Still to fill in: MODEL + provider key$([ -n "$PUBLIC_URL" ] || echo ", and PUBLIC_API_URL")."
+
+# Restore the documented ownership so the services can read it.
+# (Skipped for non-root runs or custom paths without the hive user.)
+if [ "$(id -u)" -eq 0 ] && id hive >/dev/null 2>&1; then
+  chown root:hive "$ENV_FILE"
+  chmod 640 "$ENV_FILE"
+fi

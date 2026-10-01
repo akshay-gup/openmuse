@@ -38,11 +38,11 @@ sudo cp ~/.opencode/bin/opencode /usr/local/bin/opencode
 opencode --version   # want 1.18.x
 
 # 4. Env file — internal secrets are generated on the spot, not asked for
+sudo mkdir -p /opt/hive/bin
 sudo cp deploy/setup-env.sh /opt/hive/bin/ && sudo chmod +x /opt/hive/bin/setup-env.sh
 sudo /opt/hive/bin/setup-env.sh   # prints your sign-in key; save it
+# (sets root:hive / 640 itself; safe to rerun — existing values are kept)
 # then edit /etc/hive/hive.env: set MODEL + provider key, and PUBLIC_API_URL
-sudo chown root:hive /etc/hive/hive.env
-sudo chmod 640 /etc/hive/hive.env
 
 # 5. Units — opencode first, then the API
 sudo cp deploy/hive-opencode.service deploy/hive-api.service /etc/systemd/system/
