@@ -74,6 +74,38 @@ Updating later: pull/rebuild in `/opt/hive`, then
 `sudo systemctl restart hive-api` (leave `hive-opencode` running —
 sessions survive API restarts).
 
+## Shared storage: GCS and/or Google Drive as a filesystem
+
+`/mnt/hive-shared` is the convention: `gcs/` for a Cloud Storage bucket
+(via gcsfuse), `drive/` for Google Drive (via rclone). Configure either, both,
+or neither — the mount service skips what's empty. Intended for worker file
+sharing across boxes, not for `DATA_DIR` (concurrent writes from two boxes to
+the same thread files will conflict).
+
+```sh
+# Install (Debian/Ubuntu):
+# gcsfuse: https://cloud.google.com/storage/docs/gcsfuse-install
+# rclone: curl https://rclone.org/install.sh | sudo bash
+
+# GCS: service account JSON with storage.objectAdmin on the bucket
+sudo cp service-account.json /etc/hive/gcs-service-account.json
+sudo chmod 600 /etc/hive/gcs-service-account.json
+
+# Drive: create the remote once, then copy its config
+sudo -u hive rclone config   # new remote "drive" -> Google Drive
+sudo cp ~hive/.config/rclone/rclone.conf /etc/hive/rclone.conf
+sudo chmod 600 /etc/hive/rclone.conf
+
+# Wire it up:
+sudo cp deploy/mount-shared.sh /opt/hive/bin/ && sudo chmod +x /opt/hive/bin/mount-shared.sh
+sudo cp deploy/mounts.env.example /etc/hive/mounts.env   # then fill in GCS_BUCKET and/or RCLONE_DRIVE_REMOTE
+sudo cp deploy/hive-mounts.service /etc/systemd/system/
+sudo systemctl daemon-reload && sudo systemctl enable --now hive-mounts
+```
+
+`hive-mounts.service` runs before `hive-api`/`hive-opencode`, so the mounts are
+up before workers start.
+
 ## Public URL via Cloudflare Tunnel (free, recommended)
 
 One-time setup (~5 min):

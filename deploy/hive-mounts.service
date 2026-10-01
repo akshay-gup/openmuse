@@ -1,0 +1,17 @@
+[Unit]
+Description=Hive shared storage mounts (gcsfuse / rclone)
+After=network-online.target
+Wants=network-online.target
+Before=hive-api.service hive-opencode.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+EnvironmentFile=/etc/hive/mounts.env
+Environment=GOOGLE_APPLICATION_CREDENTIALS=/etc/hive/gcs-service-account.json
+ExecStart=/opt/hive/bin/mount-shared.sh
+ExecStop=-/bin/umount /mnt/hive-shared/gcs
+ExecStop=-/bin/umount /mnt/hive-shared/drive
+
+[Install]
+WantedBy=multi-user.target
