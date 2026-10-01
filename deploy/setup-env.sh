@@ -6,11 +6,19 @@
 set -euo pipefail
 
 ENV_FILE="${1:-/etc/hive/hive.env}"
+PUBLIC_URL="${2:-}"
 mkdir -p "$(dirname "$ENV_FILE")"
 touch "$ENV_FILE"
 chmod 600 "$ENV_FILE"
 
 get() { grep "^$1=" "$ENV_FILE" | cut -d= -f2-; }
+setvar() { # setvar VAR value — replace if present, else append
+  if grep -q "^$1=" "$ENV_FILE"; then
+    sed -i "s|^$1=.*|$1=$2|" "$ENV_FILE"
+  else
+    printf '%s=%s\n' "$1" "$2" >> "$ENV_FILE"
+  fi
+}
 gen() { # gen VAR 'command that prints the value'
   if [ -z "$(get "$1")" ]; then
     printf '%s=%s\n' "$1" "$(eval "$2")" >> "$ENV_FILE"
@@ -26,7 +34,6 @@ if [ -z "$(get WORKSPACE_MODE)" ]; then
 WORKSPACE_MODE=live
 HOST=127.0.0.1
 PORT=8787
-PUBLIC_API_URL=https://hive.example.com
 AGENT_BACKEND=opencode
 OPENCODE_SERVER_URL=http://127.0.0.1:4096
 AGENT_MENTION=@hive
@@ -36,9 +43,15 @@ AGENT_MENTION=@hive
 EOF
 fi
 
+if [ -n "$PUBLIC_URL" ]; then
+  setvar PUBLIC_API_URL "$PUBLIC_URL"
+elif [ -z "$(get PUBLIC_API_URL)" ]; then
+  setvar PUBLIC_API_URL "https://hive.example.com"
+fi
+
 echo "hive.env ready at $ENV_FILE"
 echo
 echo "Your Hive sign-in key (save this):"
 get HIVE_ACCESS_KEY
 echo
-echo "Still to fill in: MODEL + provider key, and PUBLIC_API_URL."
+echo "Still to fill in: MODEL + provider key$([ -n "$PUBLIC_URL" ] || echo ", and PUBLIC_API_URL")."

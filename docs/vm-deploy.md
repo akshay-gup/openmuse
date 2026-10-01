@@ -94,9 +94,18 @@ Then set `PUBLIC_API_URL=https://hive-1.example.com` in `/etc/hive/hive.env`
 (OAuth callbacks need https) and restart `hive-api`. Keep `HOST=127.0.0.1` —
 the tunnel is the only door in.
 
-Throwaway alternative with no account at all:
-`cloudflared tunnel --url http://127.0.0.1:8787` hands you a random
-`https://<random>.trycloudflare.com` instantly.
+Throwaway alternative with no account at all: run
+`cloudflared tunnel --url http://127.0.0.1:8787`, copy the
+`https://<random>.trycloudflare.com` URL it prints, then hand it to the setup
+script and restart the API:
+
+```sh
+sudo /opt/hive/bin/setup-env.sh /etc/hive/hive.env https://<random>.trycloudflare.com
+sudo systemctl restart hive-api
+```
+
+(The named-tunnel path above passes the stable hostname the same way:
+`setup-env.sh /etc/hive/hive.env https://hive-1.example.com`.)
 
 ## Quick launch without public DNS (Tailscale)
 
