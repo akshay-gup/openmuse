@@ -60,3 +60,38 @@ test("workspace reports richThreads off without an Intelligence key", async () =
   const body = await response.json();
   assert.equal(body.runtime.richThreads, false);
 });
+
+test("keyless channel threads persist conversations per thread id", async () => {
+  const threadId = "11111111-2222-4333-8444-555555555555";
+  const threadMessages = [{ id: "m1", role: "user", content: "hello channel" }];
+  const mainMessages = [{ id: "m2", role: "user", content: "hello main" }];
+  const putThread = await app.request(`/api/conversation?threadId=${threadId}`, {
+    method: "PUT",
+    headers: headers(),
+    body: JSON.stringify({ messages: threadMessages }),
+  });
+  assert.equal(putThread.status, 200);
+  const putMain = await app.request("/api/conversation", {
+    method: "PUT",
+    headers: headers(),
+    body: JSON.stringify({ messages: mainMessages }),
+  });
+  assert.equal(putMain.status, 200);
+
+  const threadBody = await (
+    await app.request(`/api/conversation?threadId=${threadId}`, { headers: headers() })
+  ).json();
+  assert.deepEqual(threadBody.messages, threadMessages);
+
+  // The main chat keeps the legacy "default" record, isolated from threads.
+  const mainBody = await (await app.request("/api/conversation", { headers: headers() })).json();
+  assert.deepEqual(mainBody.messages, mainMessages);
+
+  // An unknown thread id hydrates empty rather than leaking another record.
+  const otherBody = await (
+    await app.request("/api/conversation?threadId=22222222-3333-4444-8555-666666666666", {
+      headers: headers(),
+    })
+  ).json();
+  assert.deepEqual(otherBody.messages, []);
+});

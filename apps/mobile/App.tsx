@@ -418,7 +418,36 @@ function WorkspaceShell({
                   ))}
                 </>
               ) : (
-                <ChatScreen prompt={prompt} active={section === "chat"} />
+                <>
+                  {visited
+                    .filter((thread) => thread.id !== "local")
+                    .map((thread) => (
+                      <View
+                        key={thread.id}
+                        style={{
+                          display: selection.id === thread.id ? "flex" : "none",
+                          flex: 1,
+                        }}
+                      >
+                        <ChatScreen
+                          thread={thread}
+                          active={section === "chat" && selection.id === thread.id}
+                          prompt={selection.id === thread.id ? prompt : undefined}
+                        />
+                      </View>
+                    ))}
+                  <View
+                    style={{
+                      display: selection.id === "local" ? "flex" : "none",
+                      flex: 1,
+                    }}
+                  >
+                    <ChatScreen
+                      prompt={selection.id === "local" ? prompt : undefined}
+                      active={section === "chat" && selection.id === "local"}
+                    />
+                  </View>
+                </>
               )}
             </View>
           </View>

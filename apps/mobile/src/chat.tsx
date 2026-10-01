@@ -34,7 +34,7 @@ import { JevInteractionContext, JevToolCard } from "./jev-tool-card";
 import { MailToolCard } from "./mail-tool-card";
 import { PendingApprovals } from "./opencode-permissions";
 import { FileThreadCard, TaskThreadCard } from "./thread-artifacts";
-import { type Selection, useMuseThread } from "./threads";
+import { resolveThreadId, type Selection, useMuseThread } from "./threads";
 import { Button, Card, CheckRow, colors, ErrorNotice, s } from "./ui";
 import { useWorkspace } from "./workspace";
 
@@ -193,8 +193,14 @@ export function ChatScreen({
   const { data: agentWorkspace, refresh: refreshAgent } = useAgentWorkspace();
   const { enabled: richThreads, mainId, claimPrompt } = useMuseThread();
   const selection = thread || { id: "local", existing: false };
-  const threadId = richThreads ? selection.id : "local-main";
+  const threadId = resolveThreadId(richThreads, selection);
   const agentId = `hive-${threadId}`;
+  // Keyless persistence: the main chat keeps the legacy /api/conversation
+  // record; channel threads persist under their own thread id.
+  const conversationPath =
+    threadId === "local-main"
+      ? "/api/conversation"
+      : `/api/conversation?threadId=${encodeURIComponent(threadId)}`;
   const { agent, isReady } = useAgent({ agentId, runtimeAgentId: "default", threadId });
   const { copilotkit } = useCopilotKit();
   const renderToolCall = useRenderToolCall();
@@ -239,7 +245,7 @@ export function ChatScreen({
               (onError) => copilotkit.subscribe({ onError }),
             );
         } else {
-          const { messages } = await api.request<{ messages: Message[] }>("/api/conversation");
+          const { messages } = await api.request<{ messages: Message[] }>(conversationPath);
           if (active) agent.setMessages(messages);
         }
         if (active) setLoaded(true);
@@ -258,11 +264,21 @@ export function ChatScreen({
       replay.unsubscribe();
       if (richThreads) void agent.detachActiveRun().catch(() => {});
     };
-  }, [agent, agentId, api, copilotkit, isReady, historyAttempt, richThreads, selection.existing]);
+  }, [
+    agent,
+    agentId,
+    api,
+    conversationPath,
+    copilotkit,
+    isReady,
+    historyAttempt,
+    richThreads,
+    selection.existing,
+  ]);
   const saveHistory = useCallback(async () => {
-    if (!richThreads) await api.request("/api/conversation", { messages: agent.messages }, "PUT");
+    if (!richThreads) await api.request(conversationPath, { messages: agent.messages }, "PUT");
     setSaveError("");
-  }, [agent, api, richThreads]);
+  }, [agent, api, conversationPath, richThreads]);
   const run = useCallback(
     async (message?: QueuedMessage) => {
       if (runLock.current || agent.isRunning || !isReady || !loaded)
@@ -425,8 +441,10 @@ export function ChatScreen({
             </Button>
           </>
         )}
-        {richThreads && <ChannelThreadBanner threadId={threadId} mainId={mainId} />}
-        {richThreads && <PendingApprovals threadId={threadId} />}
+        {(richThreads || selection.id !== "local") && (
+          <ChannelThreadBanner threadId={threadId} mainId={mainId} />
+        )}
+        {(richThreads || selection.id !== "local") && <PendingApprovals threadId={threadId} />}
         {!visible.length ? (
           <View
             style={{

@@ -10,8 +10,12 @@ import {
 import { createContext, type ReactNode, useContext, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Text, View } from "react-native";
 import { ChannelsSection } from "./channels";
+import type { Selection } from "./thread-ids";
 import { Button, colors, ErrorNotice, LinkRow, Sheet, s } from "./ui";
 import { useWorkspace } from "./workspace";
+
+export { resolveThreadId } from "./thread-ids";
+export type { Selection };
 
 function newThreadId() {
   const bytes = crypto.getRandomValues(new Uint8Array(16));
@@ -20,7 +24,6 @@ function newThreadId() {
   const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
-export type Selection = { id: string; existing: boolean };
 const ThreadContext = createContext<{
   enabled: boolean;
   selection: Selection;
@@ -147,7 +150,7 @@ export function ThreadsSheet({ onClose }: { onClose: () => void }) {
               title="Main chat"
               detail="Saved in this workspace"
               onPress={() => {
-                navigate("chat");
+                select({ id: "local", existing: false });
                 onClose();
               }}
             />

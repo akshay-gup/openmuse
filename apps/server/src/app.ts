@@ -257,14 +257,16 @@ export async function createApp(
     if (!main) throw new AppError("Main conversation could not be loaded", 503);
     return c.json({ threadId: main.threadId, existing: true });
   });
-  app.get("/api/conversation", async (c) =>
-    c.json((await db.get(c.get("owner"), "conversations", "default")) ?? { messages: [] }),
-  );
+  app.get("/api/conversation", async (c) => {
+    const id = conversationKey(c.req.query("threadId"));
+    return c.json((await db.get(c.get("owner"), "conversations", id)) ?? { messages: [] });
+  });
   app.put("/api/conversation", async (c) => {
     const body = await c.req.json();
     const messages = z.array(z.unknown()).max(1000).parse(body.messages);
     for (const message of messages) MessageSchema.parse(message);
-    await db.put(c.get("owner"), "conversations", { id: "default", messages });
+    const id = conversationKey(c.req.query("threadId"));
+    await db.put(c.get("owner"), "conversations", { id, messages });
     return c.json({ ok: true });
   });
   app.post("/api/files", async (c) => {
@@ -402,6 +404,16 @@ export async function createApp(
  * `apps/mobile/dist/web` (resolved from the process working directory).
  * Absent directory = headless API for native/mobile clients.
  */
+/**
+ * Conversation storage key for the keyless chat. The main chat keeps the
+ * legacy "default" key; channel threads persist under their thread id so each
+ * thread keeps its own history.
+ */
+function conversationKey(threadId: string | undefined): string {
+  const id = (threadId ?? "").trim().slice(0, 128);
+  return id ? id : "default";
+}
+
 function webRootDir(config: Config): string | undefined {
   const dir = resolve(config.webDir ?? "apps/mobile/dist/web");
   return existsSync(join(dir, "index.html")) ? dir : undefined;
