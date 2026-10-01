@@ -26,6 +26,7 @@
  */
 import { Hono } from "hono";
 import { z } from "zod";
+import { ORCHESTRATOR_CHANNEL_ID } from "../../../../packages/domain/src/agent.ts";
 import type { Config } from "../config.ts";
 import type { AgentService } from "../engine/service.ts";
 import type { AskedPermissionProps, PermissionTracker } from "./approvals.ts";
@@ -465,6 +466,18 @@ async function runOpencodeTurn(ctx: RunContext): Promise<void> {
   const { deps, owner, input, send, signal } = ctx;
   const mention = normalizeMention(deps.config.agentMention);
 
+  // The main chat thread id originates on the client and is bound lazily:
+  // without CopilotKit Intelligence there is no hosted thread record, so the
+  // first run binds it to the orchestrator channel instead of failing. This
+  // runs before the mention gate so plain chat also leaves a bound thread.
+  await deps.service.ensureOrchestratorChannel(owner);
+  const binding = await deps.service.ensureThreadBinding(
+    owner,
+    input.threadId,
+    ORCHESTRATOR_CHANNEL_ID,
+    "Main chat",
+  );
+
   // Mention-only triggering: without the mention token in the last user
   // message this is plain chat. Complete the run as a no-op — the message is
   // already persisted by CopilotKit; the agent stays silent and OpenCode is
@@ -517,8 +530,6 @@ async function runOpencodeTurn(ctx: RunContext): Promise<void> {
   signal.addEventListener("abort", onAbort, { once: true });
 
   try {
-    const binding = await deps.service.channelOfThread(owner, input.threadId);
-    if (!binding) throw new Error(`Thread ${input.threadId} not found`);
     const { sessionId, directory } = await ensureThreadSession(
       {
         threads: deps.service.threads,

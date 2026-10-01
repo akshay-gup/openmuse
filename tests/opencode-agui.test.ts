@@ -352,15 +352,16 @@ describe("opencodeShimRoutes", () => {
   });
 
   it("rejects a second concurrent run on the same thread with 409", async () => {
-    // channelOfThread never resolves: the first run stays in-flight. The first
-    // run mentions the agent so it passes the mention gate and blocks there.
+    // The orchestrator-channel ensure never resolves: the first run stays
+    // in-flight. The first run mentions the agent so it passes the mention
+    // gate and blocks there.
     const mentioned = JSON.stringify({
       threadId: "t1",
       runId: "r1",
       messages: [{ role: "user", content: "@hive do work" }],
     });
     const app = opencodeShimRoutes(
-      stubDeps({ channelOfThread: () => new Promise(() => undefined) }),
+      stubDeps({ ensureOrchestratorChannel: () => new Promise(() => undefined) }),
     );
     const first = app.request("/run", {
       method: "POST",
@@ -382,6 +383,39 @@ describe("opencodeShimRoutes", () => {
     });
     assert.notEqual(other.status, 409);
     await first; // resolves with the open stream response; the run stays pending
+  });
+
+  it("lazily binds an unbound run thread to the orchestrator channel", async () => {
+    // Regression: without CopilotKit Intelligence the client runs as
+    // thread "local-main", which has no channel binding. The run must bind
+    // it instead of failing with "Thread local-main not found".
+    const bound: Array<{ threadId: string; channelId: string; name?: string }> = [];
+    const app = opencodeShimRoutes(
+      stubDeps({
+        ensureOrchestratorChannel: async () => ({ id: "orchestrator" }),
+        ensureThreadBinding: async (
+          _owner: unknown,
+          threadId: string,
+          channelId: string,
+          name?: string,
+        ) => {
+          bound.push({ threadId, channelId, name });
+          return { threadId, channelId, name };
+        },
+      }),
+    );
+    const res = await app.request("/run", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ threadId: "local-main", runId: "r1", messages: [] }),
+    });
+    assert.equal(res.status, 200);
+    const text = await res.text();
+    assert.ok(text.includes("RUN_STARTED"));
+    assert.ok(text.includes("RUN_FINISHED"));
+    assert.ok(!text.includes("RUN_ERROR"));
+    assert.ok(!text.includes("not found"));
+    assert.deepEqual(bound, [{ threadId: "local-main", channelId: "orchestrator", name: "Main chat" }]);
   });
 });
 
