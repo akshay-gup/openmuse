@@ -415,7 +415,40 @@ describe("opencodeShimRoutes", () => {
     assert.ok(text.includes("RUN_FINISHED"));
     assert.ok(!text.includes("RUN_ERROR"));
     assert.ok(!text.includes("not found"));
-    assert.deepEqual(bound, [{ threadId: "local-main", channelId: "orchestrator", name: "Main chat" }]);
+    assert.deepEqual(bound, [
+      { threadId: "local-main", channelId: "orchestrator", name: "Main chat" },
+    ]);
+  });
+
+  it("treats channel-scoped runs as chat-only no-ops without binding", async () => {
+    // Channels open directly as chat surfaces; the server must not bind a
+    // `channel:<id>` pseudo-thread to the orchestrator channel.
+    const calls: string[] = [];
+    const app = opencodeShimRoutes(
+      stubDeps({
+        ensureOrchestratorChannel: async () => {
+          calls.push("ensureOrchestratorChannel");
+        },
+        ensureThreadBinding: async () => {
+          calls.push("ensureThreadBinding");
+        },
+      }),
+    );
+    const res = await app.request("/run", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        threadId: "channel:abc123",
+        runId: "r1",
+        messages: [{ role: "user", content: "@hive do work" }],
+      }),
+    });
+    assert.equal(res.status, 200);
+    const text = await res.text();
+    assert.ok(text.includes("RUN_STARTED"));
+    assert.ok(text.includes("RUN_FINISHED"));
+    assert.ok(!text.includes("RUN_ERROR"));
+    assert.deepEqual(calls, []);
   });
 });
 

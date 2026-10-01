@@ -221,7 +221,12 @@ export class AgentService {
    * server-generated; the binding is a JSON file in the channel's workspace
    * dir (`threads/<threadId>.json`). Bindings are append-only, never rebound.
    */
-  async registerThread(owner: string, channelId: string, name?: string): Promise<ChannelThread> {
+  async registerThread(
+    owner: string,
+    channelId: string,
+    name?: string,
+    parentMessageId?: string,
+  ): Promise<ChannelThread> {
     const channel = await this.db.get<Channel>(owner, "channels", channelId);
     if (!channel || channel.status === "archived") throw new AppError("Channel not found", 404);
     const existing = await this.threads.list(owner, channelId);
@@ -230,6 +235,7 @@ export class AgentService {
       channelId,
       name: name?.trim().slice(0, 80) || `Thread ${existing.length + 1}`,
       createdAt: new Date().toISOString(),
+      ...(parentMessageId?.trim() ? { parentMessageId: parentMessageId.trim().slice(0, 120) } : {}),
     };
     await this.threads.write(owner, binding);
     this.threadChannelCache.set(`${owner}/${binding.threadId}`, binding);

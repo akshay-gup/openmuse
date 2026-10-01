@@ -188,6 +188,11 @@ export interface ChannelThread {
   name: string;
   createdAt: string;
   /**
+   * The channel message this thread was forked from (reply or @hive mention).
+   * Threads are auto-created from messages; there is no manual thread creation.
+   */
+  parentMessageId?: string;
+  /**
    * Bound OpenCode session id (`AGENT_BACKEND=opencode`). Persisted before
    * the first prompt so the thread can always find its session.
    */

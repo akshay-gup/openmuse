@@ -91,6 +91,27 @@ test("new threads get server-generated ids and sequential names", async () => {
 });
 
 test("creating a thread on a missing or archived channel 404s", async () => {
+  test("threads forked from a message record their parent message id", async () => {
+    const channel = await read<Channel>("/channels", { name: "Forked threads" }, 201);
+    const reply = await read<ChannelThread>(
+      `/channels/${channel.id}/threads`,
+      { name: "Re: hello", parentMessageId: "user-123" },
+      201,
+    );
+    assert.equal(reply.parentMessageId, "user-123");
+    const plain = await read<ChannelThread>(`/channels/${channel.id}/threads`, {}, 201);
+    assert.equal(plain.parentMessageId, undefined);
+    const threads = await read<ChannelThread[]>(
+      `/channels/${channel.id}/threads`,
+      undefined,
+      200,
+      "GET",
+    );
+    assert.deepEqual(
+      threads.map((t) => t.parentMessageId ?? null),
+      ["user-123", null],
+    );
+  });
   await read("/channels/nope/threads", {}, 404);
   const channel = await read<Channel>("/channels", { name: "Doomed" }, 201);
   await read(`/channels/${channel.id}/threads`, { name: "Last words" }, 201);

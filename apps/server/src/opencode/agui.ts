@@ -466,6 +466,16 @@ async function runOpencodeTurn(ctx: RunContext): Promise<void> {
   const { deps, owner, input, send, signal } = ctx;
   const mention = normalizeMention(deps.config.agentMention);
 
+  // Channel chats are chat-only surfaces: a channel opens directly and its
+  // messages persist client-side. Threads auto-create client-side from
+  // replies and @hive mentions, so a run scoped to a channel id never binds
+  // a thread and never summons the worker.
+  if (input.threadId.startsWith("channel:")) {
+    send({ type: "RUN_STARTED", threadId: input.threadId, runId: input.runId });
+    send({ type: "RUN_FINISHED", threadId: input.threadId, runId: input.runId });
+    return;
+  }
+
   // The main chat thread id originates on the client and is bound lazily:
   // without CopilotKit Intelligence there is no hosted thread record, so the
   // first run binds it to the orchestrator channel instead of failing. This

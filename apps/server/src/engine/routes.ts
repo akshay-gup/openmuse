@@ -66,9 +66,20 @@ export function agentRoutes(service: AgentService): Hono<{ Variables: { owner: s
   app.post("/channels/:id/threads", async (c) => {
     const raw = await c.req.text();
     const body = z
-      .object({ name: z.string().trim().min(1).max(80).optional() })
+      .object({
+        name: z.string().trim().min(1).max(80).optional(),
+        parentMessageId: z.string().trim().min(1).max(120).optional(),
+      })
       .parse(raw ? JSON.parse(raw) : {});
-    return c.json(await service.registerThread(c.get("owner"), c.req.param("id"), body.name), 201);
+    return c.json(
+      await service.registerThread(
+        c.get("owner"),
+        c.req.param("id"),
+        body.name,
+        body.parentMessageId,
+      ),
+      201,
+    );
   });
   app.get("/channels/:id/threads", async (c) =>
     c.json(await service.listChannelThreads(c.get("owner"), c.req.param("id"))),

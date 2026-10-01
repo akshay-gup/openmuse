@@ -20,6 +20,7 @@ import {
   View,
 } from "react-native";
 import { z } from "zod";
+import type { Channel, ChannelThread } from "../../../packages/domain/src/agent";
 import { ArtifactCard } from "./agent-ui";
 import { useAgentWorkspace } from "./agent-workspace";
 import { AssistantResponse } from "./assistant-response";
@@ -39,6 +40,50 @@ import { Button, Card, CheckRow, colors, ErrorNotice, s } from "./ui";
 import { useWorkspace } from "./workspace";
 
 const displayParameters = z.record(z.string(), z.unknown());
+
+/** Client mirror of the server's mention gate (AGENT_MENTION, default @hive). */
+const AGENT_MENTION = "@hive";
+function mentionsAgent(text: string): boolean {
+  const escaped = AGENT_MENTION.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`(^|[^\\p{L}\\p{N}_])${escaped}(?=[^\\p{L}\\p{N}_]|$)`, "iu").test(text);
+}
+
+function threadNameFor(text: string): string {
+  const flat = text.replace(/\s+/g, " ").trim();
+  return flat.length > 60 ? `${flat.slice(0, 60)}…` : flat || "Thread";
+}
+
+/** A channel chat runs under the pseudo-thread id `channel:<channelId>`. */
+function channelIdOf(selection: { id: string }): string | null {
+  return selection.id.startsWith("channel:") ? selection.id.slice("channel:".length) : null;
+}
+
+/** Banner for a channel chat: just the channel name, like a Slack channel header. */
+function ChannelChatBanner({ channelId }: { channelId: string }) {
+  const { api } = useWorkspace();
+  const [name, setName] = useState<string | null>(null);
+  useEffect(() => {
+    let active = true;
+    void api
+      .request<Channel[]>("/api/agent/channels")
+      .then((channels) => {
+        if (active) setName(channels.find((c) => c.id === channelId)?.name ?? null);
+      })
+      .catch(() => {
+        if (active) setName(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, [api, channelId]);
+  return (
+    <View style={[s.row, { gap: 8, alignItems: "center", paddingBottom: 4 }]}>
+      <Text style={[s.text, { fontWeight: "700", fontSize: 17 }]} numberOfLines={1}>
+        # {name ?? "channel"}
+      </Text>
+    </View>
+  );
+}
 // The composer pill shows focus with its border, so the browser's ring inside it is noise.
 // Chrome draws `outline-style: auto` at any width, so only `none` removes it; React Native's
 // types omit that value, but react-native-web passes it through.
@@ -189,11 +234,17 @@ export function ChatScreen({
   thread?: Selection;
   active?: boolean;
 }) {
-  const { api, workspace: w, refresh, navigate } = useWorkspace();
+  const { api, workspace: w, refresh, navigate, ask } = useWorkspace();
   const { data: agentWorkspace, refresh: refreshAgent } = useAgentWorkspace();
-  const { enabled: richThreads, mainId, claimPrompt } = useMuseThread();
+  const { enabled: richThreads, mainId, claimPrompt, select } = useMuseThread();
   const selection = thread || { id: "local", existing: false };
   const threadId = resolveThreadId(richThreads, selection);
+  // A channel opens directly as a chat surface (no thread needed); the server
+  // treats `channel:<id>` runs as chat-only no-ops. Threads auto-create from
+  // replies and @hive mentions.
+  const channelId = channelIdOf(selection);
+  const [channelThreads, setChannelThreads] = useState<ChannelThread[] | null>(null);
+  const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   const agentId = `hive-${threadId}`;
   // Keyless persistence: the main chat keeps the legacy /api/conversation
   // record; channel threads persist under their own thread id.
@@ -329,8 +380,11 @@ export function ChatScreen({
     void queue.flush(runQueued).catch((e) => setError(e instanceof Error ? e.message : String(e)));
   }, [agent, isReady, loaded, queue, runQueued]);
   const enqueue = useCallback(
-    (text: string) => {
-      queue.enqueue({ id: `user-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, text });
+    (text: string, id?: string) => {
+      queue.enqueue({
+        id: id ?? `user-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        text,
+      });
       followLatest.current = true;
       setAwayFromLatest(false);
       flush();
@@ -362,6 +416,60 @@ export function ChatScreen({
   useEffect(() => {
     if (!busy && !agent.isRunning && outbox.pending.length) flush();
   }, [busy, agent.isRunning, outbox.pending.length, flush]);
+  // Threads forked from this channel (replies and @hive mentions), for reply counts.
+  useEffect(() => {
+    if (!channelId) return;
+    let active = true;
+    void api
+      .request<ChannelThread[]>(`/api/agent/channels/${channelId}/threads`)
+      .then((threads) => {
+        if (active) setChannelThreads(threads);
+      })
+      .catch(() => {
+        if (active) setChannelThreads([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, [api, channelId]);
+  /**
+   * Auto-create a thread forked from channel messages: the thread is seeded
+   * with the given context, the first message is delivered via the prompt
+   * mechanism, and the UI navigates to the new thread.
+   */
+  const forkThread = useCallback(
+    async (opts: {
+      name: string;
+      parentMessageId?: string;
+      seed: { id: string; role: "user" | "assistant"; content: string }[];
+      firstText: string;
+    }) => {
+      if (!channelId) return;
+      const binding = await api.request<ChannelThread>(`/api/agent/channels/${channelId}/threads`, {
+        name: opts.name,
+        parentMessageId: opts.parentMessageId,
+      });
+      await api.request(
+        `/api/conversation?threadId=${encodeURIComponent(binding.threadId)}`,
+        { messages: opts.seed },
+        "PUT",
+      );
+      setChannelThreads((threads) => [...(threads ?? []), binding]);
+      ask(opts.firstText);
+      select({ id: binding.threadId, existing: true });
+    },
+    [api, ask, channelId, select],
+  );
+  function projectForSeed(message: Message): {
+    id: string;
+    role: "user" | "assistant";
+    content: string;
+  } | null {
+    if (message.role !== "user" && message.role !== "assistant") return null;
+    const content = textOf(message);
+    if (!content) return null;
+    return { id: message.id, role: message.role, content };
+  }
   useEffect(() => {
     if (active && prompt && isReady && loaded && claimPrompt(prompt.id) && prompt.text.trim())
       enqueue(prompt.text);
@@ -392,18 +500,68 @@ export function ChatScreen({
       queue.resume();
     setShowResults(false);
     const files = w.files.filter((f) => attachments.includes(f.id));
-    enqueue(
+    const fullText =
       text +
-        (files.length
-          ? `\n\nAttached documents: ${files.map((f) => `${f.name} (artifact ID: ${f.id})`).join(", ")}`
-          : ""),
-    );
-    setDraft("");
-    setInputHeight(44);
-    setAttachments([]);
-    setPicking(false);
+      (files.length
+        ? `\n\nAttached documents: ${files.map((f) => `${f.name} (artifact ID: ${f.id})`).join(", ")}`
+        : "");
+    const clearComposer = () => {
+      setDraft("");
+      setInputHeight(44);
+      setAttachments([]);
+      setPicking(false);
+    };
+    // In a channel chat, a reply forks a thread seeded with the parent message.
+    if (channelId && replyingTo) {
+      const parent = replyingTo;
+      const seeded = projectForSeed(parent);
+      setReplyingTo(null);
+      clearComposer();
+      void forkThread({
+        name: threadNameFor(textOf(parent)),
+        parentMessageId: parent.id,
+        seed: seeded ? [seeded] : [],
+        firstText: fullText,
+      }).catch((e) => setError(e instanceof Error ? e.message : String(e)));
+      return;
+    }
+    // In a channel chat, @hive forks a thread for the worker's response. The
+    // mention itself stays in the channel as the thread's parent; the thread
+    // is seeded with recent channel messages so the worker has context.
+    if (channelId && mentionsAgent(fullText)) {
+      const messageId = `user-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const seed: { id: string; role: "user" | "assistant"; content: string }[] = [];
+      for (const message of messages.slice(-10)) {
+        const projected = projectForSeed(message);
+        if (projected) seed.push(projected);
+      }
+      clearComposer();
+      void forkThread({
+        name: threadNameFor(fullText),
+        parentMessageId: messageId,
+        seed,
+        firstText: fullText,
+      }).catch((e) => setError(e instanceof Error ? e.message : String(e)));
+      // The mention persists in the channel through the normal path; the
+      // server treats channel runs as chat-only no-ops.
+      enqueue(fullText, messageId);
+      return;
+    }
+    enqueue(fullText);
+    clearComposer();
   }
   const messages = agent.messages || [];
+  const textOf = useCallback(
+    (message: Message): string => {
+      const user = message.role === "user";
+      return typeof message.content === "string"
+        ? user
+          ? displayJevUserMessage(message.content, messages.slice(0, messages.indexOf(message)))
+          : message.content
+        : "";
+    },
+    [messages],
+  );
   const latestPanelId = latestJevPanelId(messages, threadId);
   const latestUserIndex = messages.reduce(
     (last, message, index) => (message.role === "user" ? index : last),
@@ -441,8 +599,12 @@ export function ChatScreen({
             </Button>
           </>
         )}
-        {(richThreads || selection.id !== "local") && (
-          <ChannelThreadBanner threadId={threadId} mainId={mainId} />
+        {channelId ? (
+          <ChannelChatBanner channelId={channelId} />
+        ) : (
+          (richThreads || selection.id !== "local") && (
+            <ChannelThreadBanner threadId={threadId} mainId={mainId} />
+          )
         )}
         {(richThreads || selection.id !== "local") && <PendingApprovals threadId={threadId} />}
         {!visible.length ? (
@@ -492,16 +654,12 @@ export function ChatScreen({
         ) : (
           visible.map((message) => {
             const user = message.role === "user";
-            const text =
-              typeof message.content === "string"
-                ? user
-                  ? displayJevUserMessage(
-                      message.content,
-                      messages.slice(0, messages.indexOf(message)),
-                    )
-                  : message.content
-                : "";
+            const text = textOf(message);
             const toolCalls = "toolCalls" in message ? message.toolCalls || [] : [];
+            const replies = channelId
+              ? (channelThreads ?? []).filter((t) => t.parentMessageId === message.id)
+              : [];
+            const latestReply = replies[replies.length - 1];
             return (
               <View
                 key={message.id}
@@ -513,24 +671,44 @@ export function ChatScreen({
                 }}
               >
                 {!!text && (
-                  <View
-                    style={{
-                      paddingHorizontal: 16,
-                      paddingVertical: 13,
-                      borderRadius: 22,
-                      borderBottomRightRadius: user ? 7 : 22,
-                      borderBottomLeftRadius: user ? 22 : 7,
-                      backgroundColor: user ? colors.blue : "#EEEEF0",
+                  <Pressable
+                    onLongPress={() => {
+                      if (channelId && text) setReplyingTo(message);
                     }}
+                    delayLongPress={350}
+                    accessibilityLabel={channelId ? "Long press to reply" : undefined}
                   >
-                    {user ? (
-                      <Text selectable style={[s.text, { fontSize: 16, lineHeight: 24 }]}>
-                        {text}
-                      </Text>
-                    ) : (
-                      <AssistantResponse content={text} />
-                    )}
-                  </View>
+                    <View
+                      style={{
+                        paddingHorizontal: 16,
+                        paddingVertical: 13,
+                        borderRadius: 22,
+                        borderBottomRightRadius: user ? 7 : 22,
+                        borderBottomLeftRadius: user ? 22 : 7,
+                        backgroundColor: user ? colors.blue : "#EEEEF0",
+                      }}
+                    >
+                      {user ? (
+                        <Text selectable style={[s.text, { fontSize: 16, lineHeight: 24 }]}>
+                          {text}
+                        </Text>
+                      ) : (
+                        <AssistantResponse content={text} />
+                      )}
+                    </View>
+                  </Pressable>
+                )}
+                {!!latestReply && (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`Open thread with ${replies.length} ${replies.length === 1 ? "reply" : "replies"}`}
+                    onPress={() => select({ id: latestReply.threadId, existing: true })}
+                    style={{ alignSelf: user ? "flex-end" : "flex-start", paddingVertical: 2 }}
+                  >
+                    <Text style={[s.small, { color: colors.blueDark }]}>
+                      {replies.length} {replies.length === 1 ? "reply" : "replies"} →
+                    </Text>
+                  </Pressable>
                 )}
                 <JevInteractionContext.Provider
                   value={{
@@ -771,6 +949,35 @@ export function ChatScreen({
               Done
             </Button>
           </Card>
+        )}
+        {replyingTo && (
+          <View
+            style={[
+              s.row,
+              {
+                gap: 8,
+                alignItems: "center",
+                backgroundColor: "#F4F4F6",
+                borderRadius: 16,
+                paddingHorizontal: 12,
+                paddingVertical: 9,
+                marginBottom: 8,
+              },
+            ]}
+          >
+            <Text style={[s.small, { color: colors.blueDark }]}>Replying to</Text>
+            <Text numberOfLines={1} style={[s.muted, { flex: 1 }]}>
+              {threadNameFor(textOf(replyingTo))}
+            </Text>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Cancel reply"
+              onPress={() => setReplyingTo(null)}
+              style={{ padding: 6 }}
+            >
+              <X size={14} color={colors.muted} />
+            </Pressable>
+          </View>
         )}
         <View
           style={{

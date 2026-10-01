@@ -1,7 +1,7 @@
 import {
+  Bot,
   CalendarDays,
   FileText,
-  MessageCircle,
   Monitor,
   Plus,
   RefreshCw,
@@ -135,8 +135,8 @@ export function ThreadsSheet({ onClose }: { onClose: () => void }) {
           </>
         ) : enabled ? (
           <LinkRow
-            icon={MessageCircle}
-            title="Main chat"
+            icon={Bot}
+            title="Orchestrator"
             detail="Chat with the orchestrator"
             onPress={() => {
               select({ id: mainId, existing: true });
@@ -146,8 +146,8 @@ export function ThreadsSheet({ onClose }: { onClose: () => void }) {
         ) : (
           <>
             <LinkRow
-              icon={MessageCircle}
-              title="Main chat"
+              icon={Bot}
+              title="Orchestrator"
               detail="Saved in this workspace"
               onPress={() => {
                 select({ id: "local", existing: false });
@@ -169,7 +169,9 @@ export function ThreadsSheet({ onClose }: { onClose: () => void }) {
           detail="A plan, document, or spending summary"
           onPress={() => {
             onClose();
-            open({ type: "delegate", threadId: enabled ? selection.id : undefined });
+            const threadId =
+              enabled && !selection.id.startsWith("channel:") ? selection.id : undefined;
+            open({ type: "delegate", threadId });
           }}
         />
         <LinkRow

@@ -1,17 +1,8 @@
-import {
-  ChevronDown,
-  ChevronRight,
-  Hash,
-  MessageCircle,
-  Monitor,
-  Plus,
-  RefreshCw,
-} from "lucide-react-native";
+import { Bot, Hash, Monitor, Plus, RefreshCw } from "lucide-react-native";
 import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
 import { type Channel, ORCHESTRATOR_CHANNEL_ID } from "../../../packages/domain/src/agent";
 import { useAgentWorkspace } from "./agent-workspace";
-import { ChannelThreads } from "./channels";
 import { useMuseThread } from "./threads";
 import { Button, colors, ErrorNotice, Field, s } from "./ui";
 import { useWorkspace } from "./workspace";
@@ -22,7 +13,7 @@ function SidebarRow({
   active,
   onPress,
 }: {
-  icon: typeof MessageCircle;
+  icon: typeof Bot;
   label: string;
   active?: boolean;
   onPress: () => void;
@@ -52,9 +43,10 @@ function SidebarRow({
 
 /**
  * Persistent Slack-style conversation sidebar, rendered on desktop widths.
- * Main chat plus expandable channels with their threads; selecting a thread
- * navigates to chat (the ThreadsProvider's select already does). The menu
- * sheet remains the navigation on narrow screens.
+ * The orchestrator is a single Slackbot-like tab (no threads); channels open
+ * directly as chat surfaces — no thread needed. Threads auto-create from
+ * replies and @hive mentions. The menu sheet remains the navigation on
+ * narrow screens.
  */
 export function Sidebar() {
   const { api, open } = useWorkspace();
@@ -63,7 +55,6 @@ export function Sidebar() {
   const [channels, setChannels] = useState<Channel[] | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
-  const [expanded, setExpanded] = useState<string | null>(ORCHESTRATOR_CHANNEL_ID);
   const [activeChannelId, setActiveChannelId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState("");
@@ -86,21 +77,25 @@ export function Sidebar() {
 
   const isMainActive = enabled ? selection.id === mainId : selection.id === "local";
   const mainSelection = enabled ? { id: mainId, existing: true } : { id: "local", existing: false };
+  const delegateThreadId =
+    enabled && !selection.id.startsWith("channel:") ? selection.id : undefined;
 
-  // Keep the selected thread's channel expanded and highlighted.
+  // Highlight the channel of the selected chat: either the channel chat
+  // itself or the channel a forked thread belongs to.
   useEffect(() => {
     let active = true;
-    const tid = selection.id;
     if (isMainActive) {
       setActiveChannelId(null);
       return;
     }
+    if (selection.id.startsWith("channel:")) {
+      setActiveChannelId(selection.id.slice("channel:".length));
+      return;
+    }
     void api
-      .request<{ channelId: string }>(`/api/agent/threads/${tid}/channel`)
+      .request<{ channelId: string }>(`/api/agent/threads/${selection.id}/channel`)
       .then((binding) => {
-        if (!active) return;
-        setActiveChannelId(binding.channelId);
-        setExpanded(binding.channelId);
+        if (active) setActiveChannelId(binding.channelId);
       })
       .catch(() => {
         if (active) setActiveChannelId(null);
@@ -120,7 +115,8 @@ export function Sidebar() {
       setName("");
       setCreating(false);
       await load();
-      setExpanded(created.id);
+      // A new channel is usable immediately: open it as a chat.
+      select({ id: `channel:${created.id}`, existing: true });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -128,11 +124,9 @@ export function Sidebar() {
     }
   }
 
-  const sorted = [...(channels ?? [])].sort((a, b) => {
-    if (a.id === ORCHESTRATOR_CHANNEL_ID) return -1;
-    if (b.id === ORCHESTRATOR_CHANNEL_ID) return 1;
-    return a.name.localeCompare(b.name);
-  });
+  const userChannels = (channels ?? [])
+    .filter((channel) => channel.id !== ORCHESTRATOR_CHANNEL_ID)
+    .sort((a, b) => a.name.localeCompare(b.name));
 
   return (
     <View
@@ -154,8 +148,8 @@ export function Sidebar() {
           {data?.identity.name || "Hive"}
         </Text>
         <SidebarRow
-          icon={MessageCircle}
-          label="Main chat"
+          icon={Bot}
+          label="Orchestrator"
           active={isMainActive}
           onPress={() => select(mainSelection)}
         />
@@ -180,48 +174,32 @@ export function Sidebar() {
         {loading && !channels ? (
           <ActivityIndicator color={colors.blueDark} style={{ marginTop: 8 }} />
         ) : (
-          sorted.map((channel) => {
-            const isOpen = expanded === channel.id;
+          userChannels.map((channel) => {
             const isActive = !isMainActive && activeChannelId === channel.id;
             return (
-              <View key={channel.id}>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={`${isOpen ? "Collapse" : "Expand"} channel: ${channel.name}`}
-                  onPress={() => setExpanded(isOpen ? null : channel.id)}
-                  style={{
-                    flexDirection: "row",
-                    gap: 8,
-                    alignItems: "center",
-                    paddingVertical: 8,
-                    paddingHorizontal: 8,
-                    borderRadius: 8,
-                    backgroundColor: isActive ? "#E8EDF0" : "transparent",
-                  }}
+              <Pressable
+                key={channel.id}
+                accessibilityRole="button"
+                accessibilityLabel={`Open channel: ${channel.name}`}
+                onPress={() => select({ id: `channel:${channel.id}`, existing: true })}
+                style={{
+                  flexDirection: "row",
+                  gap: 8,
+                  alignItems: "center",
+                  paddingVertical: 8,
+                  paddingHorizontal: 8,
+                  borderRadius: 8,
+                  backgroundColor: isActive ? "#E8EDF0" : "transparent",
+                }}
+              >
+                <Hash size={15} color={isActive ? colors.text : colors.muted} />
+                <Text
+                  style={[s.text, { flex: 1, fontWeight: isActive ? "600" : "400" }]}
+                  numberOfLines={1}
                 >
-                  {isOpen ? (
-                    <ChevronDown size={14} color={colors.muted} />
-                  ) : (
-                    <ChevronRight size={14} color={colors.muted} />
-                  )}
-                  <Hash size={15} color={colors.muted} />
-                  <Text
-                    style={[s.text, { flex: 1, fontWeight: isActive ? "600" : "400" }]}
-                    numberOfLines={1}
-                  >
-                    {channel.name}
-                  </Text>
-                </Pressable>
-                {isOpen && (
-                  <View style={{ paddingLeft: 14, paddingBottom: 4 }}>
-                    <ChannelThreads
-                      channel={channel}
-                      onClose={() => {}}
-                      activeThreadId={isMainActive ? undefined : selection.id}
-                    />
-                  </View>
-                )}
-              </View>
+                  {channel.name}
+                </Text>
+              </Pressable>
             );
           })
         )}
@@ -261,7 +239,7 @@ export function Sidebar() {
         <SidebarRow
           icon={Plus}
           label="Delegate task"
-          onPress={() => open({ type: "delegate", threadId: enabled ? selection.id : undefined })}
+          onPress={() => open({ type: "delegate", threadId: delegateThreadId })}
         />
         <SidebarRow
           icon={Monitor}
