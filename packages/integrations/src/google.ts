@@ -12,6 +12,7 @@ import {
 
 const GMAIL = "https://gmail.googleapis.com/gmail/v1/users/me";
 const CALENDAR = "https://www.googleapis.com/calendar/v3";
+const DRIVE = "https://www.googleapis.com/drive/v3";
 export const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
 export const MAX_TOTAL_ATTACHMENT_BYTES = 20 * 1024 * 1024;
 const MAX_JSON_BYTES = Math.ceil((MAX_ATTACHMENT_BYTES * 4) / 3) + 1024 * 1024;
@@ -51,6 +52,13 @@ export interface CalendarListEntry {
   name: string;
   timeZone: string;
   accessRole: string;
+}
+export interface DriveFile {
+  id: string;
+  name: string;
+  mimeType: string;
+  modifiedTime?: string;
+  size?: number;
 }
 export interface ListEventsOptions {
   calendarId?: string;
@@ -109,6 +117,29 @@ export interface MailAttachment {
   mimeType: string;
   bytes: Uint8Array;
 }
+const driveFileSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().default("(Untitled file)"),
+  mimeType: z.string().default("application/octet-stream"),
+  modifiedTime: z.string().optional(),
+  size: z.string().optional(),
+});
+function toDriveFile(file: z.infer<typeof driveFileSchema>): DriveFile {
+  const size = file.size === undefined ? undefined : Number(file.size);
+  return {
+    id: file.id,
+    name: file.name,
+    mimeType: file.mimeType,
+    modifiedTime: file.modifiedTime,
+    ...(size !== undefined && Number.isSafeInteger(size) && size >= 0 ? { size } : {}),
+  };
+}
+/** Google Workspace mimeTypes are exported to a plain-text equivalent for download. */
+const DRIVE_EXPORT_MIME_TYPES: Record<string, string> = {
+  "application/vnd.google-apps.document": "text/plain",
+  "application/vnd.google-apps.spreadsheet": "text/csv",
+  "application/vnd.google-apps.presentation": "text/plain",
+};
 
 function idPath(id: string): string {
   if (!/^[A-Za-z0-9_-]+$/.test(id)) throw new Error("Invalid Google resource ID");
@@ -505,6 +536,111 @@ export class GoogleClient {
       }
     } while (pageToken);
     return entries;
+  }
+
+  /** The latest 100 Drive files, newest first. Permission/read failures propagate visibly. */
+  async listDriveFiles(query?: string): Promise<DriveFile[]> {
+    const files: DriveFile[] = [];
+    const tokens = new Set<string>();
+    let pageToken: string | undefined;
+    do {
+      const params = new URLSearchParams({
+        pageSize: "100",
+        fields: "files(id,name,mimeType,modifiedTime,size),nextPageToken",
+        orderBy: "modifiedTime desc",
+        q: query?.trim() ? query.trim() : "trashed = false",
+      });
+      if (pageToken) params.set("pageToken", pageToken);
+      const result = z
+        .object({
+          files: z.array(driveFileSchema).default([]),
+          nextPageToken: z.string().min(1).optional(),
+        })
+        .parse(await this.request(`${DRIVE}/files?${params}`));
+      files.push(...result.files.map(toDriveFile));
+      pageToken = result.nextPageToken;
+      if (pageToken) {
+        if (tokens.has(pageToken) || tokens.size >= 10)
+          throw new Error("Google Drive file list exceeded the pagination limit");
+        tokens.add(pageToken);
+      }
+    } while (pageToken);
+    return files.slice(0, 100);
+  }
+
+  async getDriveFile(fileId: string): Promise<DriveFile> {
+    const params = new URLSearchParams({ fields: "id,name,mimeType,modifiedTime,size" });
+    const file = driveFileSchema.parse(
+      await this.request(`${DRIVE}/files/${idPath(fileId)}?${params}`),
+    );
+    if (file.id !== fileId) throw new Error("Google returned a different Drive file");
+    return toDriveFile(file);
+  }
+
+  /**
+   * Download a Drive file, capped at 10 MiB. Google Workspace documents are
+   * exported to a plain-text equivalent (docs/slides to text/plain, sheets to
+   * text/csv). Returns the bytes and their effective MIME type.
+   */
+  async downloadDriveFile(
+    fileId: string,
+    mimeType: string,
+  ): Promise<{ bytes: Uint8Array; mimeType: string }> {
+    const exportMimeType = DRIVE_EXPORT_MIME_TYPES[mimeType];
+    const params = new URLSearchParams(
+      exportMimeType ? { mimeType: exportMimeType } : { alt: "media" },
+    );
+    const url = exportMimeType
+      ? `${DRIVE}/files/${idPath(fileId)}/export?${params}`
+      : `${DRIVE}/files/${idPath(fileId)}?${params}`;
+    return { bytes: await this.downloadBytes(url), mimeType: exportMimeType ?? mimeType };
+  }
+
+  private async downloadBytes(url: string): Promise<Uint8Array> {
+    const token = await this.getAccessToken();
+    if (!token || /[\r\n]/.test(token))
+      throw new Error("Google access token is missing or invalid; reconnect Google");
+    let response: Response;
+    try {
+      response = await this.fetcher(url, {
+        headers: { Authorization: `Bearer ${token}` },
+        signal: AbortSignal.timeout(30000),
+        redirect: "error",
+      });
+    } catch {
+      throw new Error("Could not reach Google; check the connection and try again");
+    }
+    if (!response.ok) {
+      let detail = response.statusText || "Request failed";
+      try {
+        const result = z
+          .object({ error: z.object({ message: z.string() }) })
+          .safeParse(await readJson(response));
+        if (result.success) detail = result.data.error.message.slice(0, 500);
+      } catch {
+        /* Preserve the definite HTTP rejection even if its body is not JSON. */
+      }
+      throw new GoogleApiError(response.status, detail);
+    }
+    if (!response.body) throw new Error("Google returned an empty response");
+    const reader = response.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let length = 0;
+    try {
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        length += value.length;
+        if (length > MAX_ATTACHMENT_BYTES) {
+          await reader.cancel();
+          throw new Error("Drive file exceeds the 10 MiB download limit");
+        }
+        chunks.push(value);
+      }
+    } finally {
+      reader.releaseLock();
+    }
+    return Buffer.concat(chunks);
   }
 
   private async readSingleEvent(

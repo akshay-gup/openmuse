@@ -758,3 +758,119 @@ test("single-event validation is repeated at execution and read failures never d
   await assert.rejects(failing.deleteEvent("primary", "event-1"), GoogleApiError);
   assert.equal(writes, 0);
 });
+
+test("Drive file listing follows pagination, maps metadata, and guards page loops", async () => {
+  const seen: URL[] = [];
+  const client = clientWith((request) => {
+    const url = new URL(request.url);
+    assert.equal(url.pathname, "/drive/v3/files");
+    seen.push(url);
+    return url.searchParams.has("pageToken")
+      ? json({
+          files: [
+            {
+              id: "file2",
+              name: "Budget",
+              mimeType: "application/vnd.google-apps.spreadsheet",
+              modifiedTime: "2026-09-29T10:00:00.000Z",
+              size: "2048",
+            },
+          ],
+        })
+      : json({
+          nextPageToken: "next1",
+          files: [
+            {
+              id: "file1",
+              name: "Notes",
+              mimeType: "text/plain",
+              modifiedTime: "2026-09-30T10:00:00.000Z",
+              size: "512",
+            },
+          ],
+        });
+  });
+  assert.deepEqual(await client.listDriveFiles(), [
+    {
+      id: "file1",
+      name: "Notes",
+      mimeType: "text/plain",
+      modifiedTime: "2026-09-30T10:00:00.000Z",
+      size: 512,
+    },
+    {
+      id: "file2",
+      name: "Budget",
+      mimeType: "application/vnd.google-apps.spreadsheet",
+      modifiedTime: "2026-09-29T10:00:00.000Z",
+      size: 2048,
+    },
+  ]);
+  assert.equal(seen[0].searchParams.get("q"), "trashed = false");
+  assert.equal(seen[0].searchParams.get("pageSize"), "100");
+  const queried = clientWith((request) => {
+    assert.equal(new URL(request.url).searchParams.get("q"), "name contains 'report'");
+    return json({ files: [] });
+  });
+  await queried.listDriveFiles("name contains 'report'");
+  const looping = clientWith(() => json({ nextPageToken: "stuck", files: [] }));
+  await assert.rejects(looping.listDriveFiles(), /pagination/i);
+});
+
+test("Drive file reads verify identity before returning metadata", async () => {
+  const client = clientWith((request) => {
+    assert.equal(new URL(request.url).pathname, "/drive/v3/files/file1");
+    return json({
+      id: "file1",
+      name: "Notes",
+      mimeType: "text/plain",
+      modifiedTime: "2026-09-30T10:00:00.000Z",
+    });
+  });
+  assert.deepEqual(await client.getDriveFile("file1"), {
+    id: "file1",
+    name: "Notes",
+    mimeType: "text/plain",
+    modifiedTime: "2026-09-30T10:00:00.000Z",
+  });
+  const mismatched = clientWith(() => json({ id: "other", name: "X", mimeType: "text/plain" }));
+  await assert.rejects(mismatched.getDriveFile("file1"), /different Drive file/i);
+  await assert.rejects(client.getDriveFile("../escape"), /Invalid Google resource ID/);
+});
+
+test("Drive downloads fetch binary media and export Workspace documents", async () => {
+  const paths: string[] = [];
+  const binary = Buffer.from([0, 255, 127, 1, 2]);
+  const client = clientWith((request) => {
+    const url = new URL(request.url);
+    paths.push(`${url.pathname}?${url.searchParams.toString()}`);
+    assert.equal(request.headers.get("authorization"), "Bearer synthetic-access-token");
+    return new Response(binary);
+  });
+  const pdf = await client.downloadDriveFile("pdf1", "application/pdf");
+  assert.deepEqual(Buffer.from(pdf.bytes), binary);
+  assert.equal(pdf.mimeType, "application/pdf");
+  assert.ok(paths[0].endsWith("/drive/v3/files/pdf1?alt=media"), paths[0]);
+  const doc = await client.downloadDriveFile("doc1", "application/vnd.google-apps.document");
+  assert.equal(doc.mimeType, "text/plain");
+  assert.ok(paths[1].includes("/drive/v3/files/doc1/export"), paths[1]);
+  assert.ok(paths[1].includes("mimeType=text%2Fplain"), paths[1]);
+  const sheet = await client.downloadDriveFile("sheet1", "application/vnd.google-apps.spreadsheet");
+  assert.equal(sheet.mimeType, "text/csv");
+  assert.ok(paths[2].includes("mimeType=text%2Fcsv"), paths[2]);
+});
+
+test("Drive downloads enforce the size cap and surface API errors", async () => {
+  const huge = clientWith(() => new Response(Buffer.alloc(MAX_ATTACHMENT_BYTES + 1)));
+  await assert.rejects(huge.downloadDriveFile("big1", "application/pdf"), /10 MiB|limit/i);
+  const denied = clientWith(() => json({ error: { message: "Insufficient Permission" } }, 403));
+  const error = await denied.downloadDriveFile("nope", "application/pdf").catch((e) => e);
+  assert.ok(error instanceof GoogleApiError && error.status === 403);
+  const unreachable = new GoogleClient({
+    getAccessToken: async () => "synthetic-access-token",
+    fetch: async () => {
+      throw new Error("boom");
+    },
+  });
+  await assert.rejects(unreachable.downloadDriveFile("x", "application/pdf"), /Could not reach/);
+});

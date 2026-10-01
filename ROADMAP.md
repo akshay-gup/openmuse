@@ -36,9 +36,6 @@ API + web UI, OpenCode as the agent backend, threads as durable agent sessions.
       provider keys on the VM); `opencode serve` systemd unit definition.
 - [ ] Shared-computer arbitration between channel workers on the one box
       (today workers share the filesystem with no scoping).
-- [ ] Shared storage mounts (gcsfuse/rclone) plumbed into the worker
-      workspace convention (`/mnt/hive-shared` deploy support landed;
-      product-level wiring still open).
 - [ ] Orchestrator queue and new-tab routing for delegated tasks; delegated
       status (queued/working/done) visible in the originating channel.
 - [ ] Multi-tenant membership semantics — awaiting decisions:

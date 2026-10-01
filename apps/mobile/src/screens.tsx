@@ -11,6 +11,7 @@ import {
   Clock3,
   FileText,
   Globe2,
+  HardDrive,
   Inbox,
   Link2,
   Mail,
@@ -1211,6 +1212,8 @@ export function ConnectionsScreen({ query = "" }: { query?: string }) {
   }
   const google = w.connections.find((c) => c.id === "google");
   const connected = google?.status === "connected" || google?.status === "sample";
+  const driveGranted =
+    google?.capabilities?.some((capability) => capability.includes("/auth/drive")) ?? false;
   const rows = [
     { id: "gmail", name: "Gmail", icon: Mail, color: "#EA5B4D", connected, group: "google" },
     {
@@ -1219,6 +1222,14 @@ export function ConnectionsScreen({ query = "" }: { query?: string }) {
       icon: CalendarDays,
       color: "#4285F4",
       connected,
+      group: "google",
+    },
+    {
+      id: "drive",
+      name: "Google Drive",
+      icon: HardDrive,
+      color: "#34A853",
+      connected: connected && driveGranted,
       group: "google",
     },
     {
@@ -1315,8 +1326,8 @@ export function ConnectionsScreen({ query = "" }: { query?: string }) {
           {selected === "google" ? (
             <View style={{ gap: 18 }}>
               <Text style={s.muted}>
-                Bring Gmail and Google Calendar into your conversations. Choose read access, then
-                enable sending and editing when you need it.
+                Bring Gmail, Google Calendar, and Google Drive into your conversations. Choose read
+                access, then enable sending and editing when you need it.
               </Text>
               <View style={[s.row, { gap: 7, flexWrap: "wrap" }]}>
                 {google?.capabilities.map((cap) => (
@@ -1401,6 +1412,8 @@ function capabilityLabel(value: string) {
     "calendar.calendarlist.readonly": "Read calendar list",
     "calendar.events": "Manage calendar events",
     "calendar.readonly": "Read calendars",
+    "drive.readonly": "Read Google Drive",
+    "drive.file": "Manage Drive files",
   };
   return names[scope] || scope;
 }

@@ -206,6 +206,13 @@ export async function createApp(
   app.get("/api/mail/threads/:id", async (c) =>
     c.json(await workspace.thread(c.get("owner"), c.req.param("id"))),
   );
+  app.get("/api/drive/files", async (c) => {
+    const query = z.object({ q: z.string().max(500).optional() }).parse(c.req.query());
+    return c.json(await workspace.listDriveFiles(c.get("owner"), query.q));
+  });
+  app.get("/api/drive/files/:id", async (c) =>
+    c.json(await workspace.getDriveFile(c.get("owner"), c.req.param("id"))),
+  );
   app.post("/api/actions", async (c) => {
     const input = proposalSchema.parse(await c.req.json());
     if (input.kind === "email.send")

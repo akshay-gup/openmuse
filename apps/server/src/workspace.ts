@@ -9,7 +9,7 @@ import type {
   ProposalInput,
   Workspace,
 } from "../../../packages/domain/src/index.ts";
-import { GoogleClient } from "../../../packages/integrations/src/google.ts";
+import { type DriveFile, GoogleClient } from "../../../packages/integrations/src/google.ts";
 import { createSamplePdf } from "../../../packages/integrations/src/pdf.ts";
 import type { ActionService } from "./actions.ts";
 import { agentConfigured } from "./agent.ts";
@@ -64,6 +64,34 @@ export class WorkspaceService {
         },
       ];
     return this.google(owner, connection.id).listCalendars();
+  }
+  /** A Drive client for the owner, or null when Drive is not connected/granted. */
+  private async driveClient(owner: string): Promise<GoogleClient | null> {
+    const connection = await this.connection(owner);
+    if (!connection || this.config.mode !== "live") return null;
+    const tokens = await this.googleAuth.tokens(owner);
+    if (!tokens?.scopes.some((scope) => scope.includes("/auth/drive"))) return null;
+    return this.google(owner, connection.id);
+  }
+  async listDriveFiles(owner: string, query?: string): Promise<DriveFile[]> {
+    const client = await this.driveClient(owner);
+    if (!client) return [];
+    return client.listDriveFiles(query);
+  }
+  async getDriveFile(owner: string, fileId: string): Promise<DriveFile> {
+    const client = await this.driveClient(owner);
+    if (!client) throw new AppError("Google Drive is not connected", 409);
+    return client.getDriveFile(fileId);
+  }
+  async downloadDriveFile(
+    owner: string,
+    fileId: string,
+  ): Promise<{ file: DriveFile; bytes: Uint8Array; mimeType: string }> {
+    const client = await this.driveClient(owner);
+    if (!client) throw new AppError("Google Drive is not connected", 409);
+    const file = await client.getDriveFile(fileId);
+    const content = await client.downloadDriveFile(file.id, file.mimeType);
+    return { file, bytes: content.bytes, mimeType: content.mimeType };
   }
   async events(
     owner: string,
