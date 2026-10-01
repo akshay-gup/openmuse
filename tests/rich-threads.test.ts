@@ -36,7 +36,7 @@ after(async () => {
   await rm(directory, { recursive: true, force: true });
 });
 
-test("main chat is provisioned for the authenticated owner before the first run", async (t) => {
+test("main chat is provisioned locally without any Intelligence network call", async (t) => {
   const calls: Parameters<CopilotKitIntelligence["getOrCreateThread"]>[0][] = [];
   t.mock.method(
     CopilotKitIntelligence.prototype,
@@ -50,24 +50,7 @@ test("main chat is provisioned for the authenticated owner before the first run"
   const reopened = await (await app.request("/api/main-thread", { headers: headers() })).json();
   assert.equal(first.existing, true);
   assert.equal(reopened.threadId, first.threadId);
-  assert.ok(
-    calls.every(
-      (call) =>
-        call.userId === "local-user" &&
-        call.agentId === "default" &&
-        call.threadId === first.threadId,
-    ),
-  );
-  assert.equal(calls.length, 2);
-});
-
-test("a failed main-thread connection remains an error and does not create another id", async (t) => {
-  const before = await db.get("local-user", "conversation-settings", "main");
-  t.mock.method(CopilotKitIntelligence.prototype, "getOrCreateThread", async () => {
-    throw new Error("Platform unavailable");
-  });
-  assert.equal((await app.request("/api/main-thread", { headers: headers() })).status, 502);
-  assert.deepEqual(await db.get("local-user", "conversation-settings", "main"), before);
+  assert.equal(calls.length, 0);
 });
 
 test("Rich Threads lists through CopilotKit, scopes by authenticated owner and preserves pagination", async (t) => {

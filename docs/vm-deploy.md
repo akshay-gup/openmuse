@@ -45,7 +45,6 @@ PORT=8787
 PUBLIC_API_URL=https://hive.example.com
 HIVE_ACCESS_KEY=<24+ random chars>
 TOKEN_ENCRYPTION_KEY=<32 random bytes, base64>
-CPK_INTELLIGENCE_API_KEY=<copilotkit project key>
 AGENT_BACKEND=opencode
 MODEL=openai/gpt-5
 OPENAI_API_KEY=<provider key for MODEL>
@@ -153,7 +152,6 @@ Environment:
 | `WEB_DIR` | no | overrides the served web UI dir (default `apps/mobile/dist/web`); unset/absent = headless API |
 | `HIVE_ACCESS_KEY` | yes | 24+ random characters; this is the sign-in key |
 | `TOKEN_ENCRYPTION_KEY` | yes | 32 random bytes, base64-encoded |
-| `CPK_INTELLIGENCE_API_KEY` | yes | `npx copilotkit@latest login`, then `npx copilotkit@latest project select` |
 | `MODEL` | yes | e.g. `openai/gpt-5`; plus the matching provider key (`OPENAI_API_KEY`, …) |
 | `AGENT_BACKEND` | no | `opencode` routes chat through the OpenCode agent layer below |
 | `OPENCODE_SERVER_URL` | no | `http://127.0.0.1:4096` default; the systemd-managed `opencode serve` (never spawned by the API) |

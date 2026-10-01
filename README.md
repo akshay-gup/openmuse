@@ -57,7 +57,7 @@ Chat threads are plain conversation until you mention `@hive` — then the agent
 | **Finance** | Import transaction CSV to create a spending summary with categories, transactions, and a savings-goal action. |
 | **Gmail & Calendar** | Google OAuth adapters, complete mail threads, drafts/attachments, calendar discovery, and reviewed event creation/update/deletion. Live credentials required. |
 | **Personal context** | Editable name, tone, avatar, and memories. Background-update preferences and durable in-app notifications. |
-| **Rich Threads** | CopilotKit Intelligence persistence in every mode, with thread renaming and replay. A server-only project key is required. |
+| **Rich Threads** | Local thread persistence on disk; optional CopilotKit Intelligence sync for thread listing, rename, archive, and replay. |
 
 The [feature inventory](docs/FEATURES.md) describes implemented capabilities and planned extensions. Health/bank/social connectors, device push, voice, generated executable tools, and automatic reservations/payments are on the [roadmap](ROADMAP.md).
 
@@ -90,9 +90,6 @@ git clone https://github.com/CopilotKit/OpenMuse.git hive
 cd hive
 pnpm install --frozen-lockfile
 cp .env.example .env
-npx copilotkit@latest login
-npx copilotkit@latest project select
-# Set CPK_INTELLIGENCE_API_KEY in .env to the generated server-only project key.
 pnpm dev
 ```
 
@@ -131,7 +128,7 @@ Key variables for the VM (see the deploy doc for the full table):
 | `AGENT_MENTION` | Mention token that summons the agent in chat (default `@hive`) |
 | `DATA_DIR` | Local storage root (default `.hive`); database, files, and `channels/<id>/threads/*.json` |
 | `WEB_DIR` | Overrides the served web UI dir; unset/absent = headless API for native clients |
-| `CPK_INTELLIGENCE_API_KEY` | Server-only CopilotKit Intelligence project key (required in every mode) |
+| `CPK_INTELLIGENCE_API_KEY` | Optional: enables hosted CopilotKit Rich Threads; unset = fully local thread storage |
 | `HIVE_ACCESS_KEY` / `TOKEN_ENCRYPTION_KEY` | Sign-in key and at-rest encryption secret for live mode |
 
 ## Configure the agent and Google
@@ -141,10 +138,9 @@ Copy the commented settings in [.env.example](.env.example) into your private `.
 1. Set `AGENT_BACKEND=opencode`, `MODEL=provider/model-id`, and the matching provider key (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or `GOOGLE_API_KEY`). Provider keys stay on the server.
 2. Run `opencode serve` as a systemd unit (see [docs/vm-deploy.md](docs/vm-deploy.md)); point `OPENCODE_SERVER_URL` at it and set `OPENCODE_SERVER_PASSWORD` if it requires auth. The API healthchecks the server and asserts a compatible version on boot — it never spawns the server itself.
 3. Optionally set `AGENT_MENTION` (default `@hive`): only a message containing it as a standalone token summons the agent in chat.
-4. Create or select a CopilotKit Intelligence project with `npx copilotkit@latest login` and `npx copilotkit@latest project select`. Keep the generated `CPK_INTELLIGENCE_API_KEY` on the server.
-5. For personal mail/calendar, set `WORKSPACE_MODE=live`, a random `HIVE_ACCESS_KEY` of at least 24 characters, and `TOKEN_ENCRYPTION_KEY` containing 32 random bytes encoded as base64. Restart the API.
-6. Configure a Google OAuth web client with Gmail and Calendar APIs enabled. Set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`; register `${PUBLIC_API_URL}/api/google/callback` as its redirect URI. Configure consent/test-user access in your Google project.
-7. Open **Apps → Gmail** (or **Google Calendar**), connect read access, and grant write access when needed. Every send or calendar change still requires its own stored review. Changing/disconnecting the account invalidates pending connection-bound work.
+4. For personal mail/calendar, set `WORKSPACE_MODE=live`, a random `HIVE_ACCESS_KEY` of at least 24 characters, and `TOKEN_ENCRYPTION_KEY` containing 32 random bytes encoded as base64. Restart the API.
+5. Configure a Google OAuth web client with Gmail and Calendar APIs enabled. Set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`; register `${PUBLIC_API_URL}/api/google/callback` as its redirect URI. Configure consent/test-user access in your Google project.
+6. Open **Apps → Gmail** (or **Google Calendar**), connect read access, and grant write access when needed. Every send or calendar change still requires its own stored review. Changing/disconnecting the account invalidates pending connection-bound work.
 
 `AGENT_BACKEND=model` (model-direct) and `AGENT_BACKEND=agui` (external AG-UI agent at `AGENT_URL`) remain as alternatives; `sample` keeps local fictional data on loopback.
 
@@ -173,9 +169,9 @@ For a separate task worker, configure the same `DATABASE_URL`, secrets and share
 
 No hidden retry occurs after an uncertain external write. Review its provider outcome before creating a replacement. Pausing/cancelling prevents subsequent task steps; an already approved in-flight provider request may finish.
 
-## CopilotKit Rich Threads
+## CopilotKit Rich Threads (optional)
 
-Every deployment requires `CPK_INTELLIGENCE_API_KEY` on the API server for CopilotKit Intelligence conversation persistence and replay. Create or select a project with `npx copilotkit@latest login` and `npx copilotkit@latest project select`, set the generated server-only key, and restart the API. The native menu uses `useThreads`; rich tool results link back to saved tasks, documents, and browser sessions.
+`CPK_INTELLIGENCE_API_KEY` is optional. When set (via `npx copilotkit@latest login` and `npx copilotkit@latest project select`), thread listing, rename, and archive sync through CopilotKit Intelligence. When unset, the server runs fully local: threads persist on disk under `DATA_DIR`, and the client falls back to local conversation history.
 
 Intelligence is a separate service and is not included in this repository's MIT license. No project key is shipped. [Configuration and validation boundaries](docs/RICH-THREADS.md).
 

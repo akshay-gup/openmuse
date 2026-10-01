@@ -30,7 +30,7 @@ export function makeRuntime(
   config: Config,
   service: AgentService,
   auth: Auth,
-  intelligence: CopilotKitIntelligence,
+  intelligence?: CopilotKitIntelligence,
 ) {
   // Built on first use, then shared so live mode reuses one TypeSafe client across requests.
   let jevAdapter: JevAdapter | undefined;
@@ -60,14 +60,19 @@ export function makeRuntime(
       );
     })(),
   });
-  const runtime = new CopilotRuntime({
-    agents,
-    intelligence,
-    identifyUser: async (request) => ({
-      id: await auth.owner(request.headers.get("authorization") ?? undefined),
-      name: "Hive user",
-    }),
-    generateThreadNames: false,
-  });
+  // Without an Intelligence key the runtime runs in SSE mode: no hosted thread
+  // persistence, no identifyUser (auth is enforced by the Hono middleware and
+  // the agents factory resolves the owner from the request headers).
+  const runtime = intelligence
+    ? new CopilotRuntime({
+        agents,
+        intelligence,
+        identifyUser: async (request) => ({
+          id: await auth.owner(request.headers.get("authorization") ?? undefined),
+          name: "Hive user",
+        }),
+        generateThreadNames: false,
+      })
+    : new CopilotRuntime({ agents });
   return createCopilotHonoHandler({ runtime, basePath: "/api/copilotkit" });
 }
