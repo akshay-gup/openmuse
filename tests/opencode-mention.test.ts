@@ -226,8 +226,14 @@ describe("opencodeShimRoutes mention gating", () => {
       .map((chunk) => (JSON.parse(chunk.slice("data: ".length)) as { type: string }).type);
 
   it("completes a mention-less run as a no-op without touching OpenCode", async () => {
-    // service has no channelOfThread: any OpenCode touch would throw -> RUN_ERROR.
-    const app = opencodeShimRoutes(stubDeps({}));
+    // The lazy orchestrator bind runs before the mention gate, but it only
+    // touches the thread store — OpenCode itself is never reached.
+    const app = opencodeShimRoutes(
+      stubDeps({
+        ensureOrchestratorChannel: async () => ({ id: "orchestrator" }),
+        ensureThreadBinding: async () => ({ threadId: "t1", channelId: "orchestrator" }),
+      }),
+    );
     const res = await app.request("/run", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -246,7 +252,12 @@ describe("opencodeShimRoutes mention gating", () => {
   });
 
   it("releases the in-flight slot after a no-op run", async () => {
-    const app = opencodeShimRoutes(stubDeps({}));
+    const app = opencodeShimRoutes(
+      stubDeps({
+        ensureOrchestratorChannel: async () => ({ id: "orchestrator" }),
+        ensureThreadBinding: async () => ({ threadId: "t1", channelId: "orchestrator" }),
+      }),
+    );
     const body = (runId: string) =>
       JSON.stringify({ threadId: "t1", runId, messages: [{ role: "user", content: "chat" }] });
     const first = await app.request("/run", {
