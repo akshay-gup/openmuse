@@ -41,11 +41,13 @@ function taskState(status: TaskStatus): { label: string; color: string } {
 function ThreadRow({
   binding,
   archived,
+  active,
   onOpen,
   onRenamed,
 }: {
   binding: ChannelThread;
   archived?: boolean;
+  active?: boolean;
   onOpen: () => void;
   onRenamed: (binding: ChannelThread) => void;
 }) {
@@ -123,10 +125,21 @@ function ThreadRow({
         accessibilityRole="button"
         accessibilityLabel={`Open thread: ${binding.name}`}
         onPress={onOpen}
-        style={[s.row, { flex: 1, gap: 8, paddingVertical: 6, alignItems: "center" }]}
+        style={[
+          s.row,
+          {
+            flex: 1,
+            gap: 8,
+            paddingVertical: 6,
+            paddingHorizontal: 8,
+            borderRadius: 8,
+            alignItems: "center",
+            backgroundColor: active ? "#E8EDF0" : "transparent",
+          },
+        ]}
       >
         <MessagesSquare size={16} color={colors.muted} />
-        <Text style={[s.text, { flex: 1 }]} numberOfLines={1}>
+        <Text style={[s.text, { flex: 1, fontWeight: active ? "600" : "400" }]} numberOfLines={1}>
           {binding.name}
         </Text>
         {archived && <Text style={s.small}>archived</Text>}
@@ -147,7 +160,15 @@ function ThreadRow({
   );
 }
 
-function ChannelThreads({ channel, onClose }: { channel: Channel; onClose: () => void }) {
+export function ChannelThreads({
+  channel,
+  onClose,
+  activeThreadId,
+}: {
+  channel: Channel;
+  onClose: () => void;
+  activeThreadId?: string;
+}) {
   const { api, navigate } = useWorkspace();
   const { select } = useMuseThread();
   const [bindings, setBindings] = useState<ChannelThread[] | null>(null);
@@ -214,6 +235,7 @@ function ChannelThreads({ channel, onClose }: { channel: Channel; onClose: () =>
               key={binding.threadId}
               binding={binding}
               archived={thread?.archived}
+              active={binding.threadId === activeThreadId}
               onOpen={() => openThread(binding)}
               onRenamed={(renamed) =>
                 setBindings((list) =>
