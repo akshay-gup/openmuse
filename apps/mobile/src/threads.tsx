@@ -131,20 +131,15 @@ export function ThreadsSheet({ onClose }: { onClose: () => void }) {
             )}
           </>
         ) : enabled ? (
-          <>
-            <LinkRow
-              icon={MessageCircle}
-              title="Main chat"
-              detail="Chat with the orchestrator"
-              onPress={() => {
-                select({ id: mainId, existing: true });
-                onClose();
-              }}
-            />
-            <View style={{ marginTop: 12 }}>
-              <ChannelsSection onClose={onClose} />
-            </View>
-          </>
+          <LinkRow
+            icon={MessageCircle}
+            title="Main chat"
+            detail="Chat with the orchestrator"
+            onPress={() => {
+              select({ id: mainId, existing: true });
+              onClose();
+            }}
+          />
         ) : (
           <>
             <LinkRow
@@ -161,6 +156,9 @@ export function ThreadsSheet({ onClose }: { onClose: () => void }) {
             </Text>
           </>
         )}
+        <View style={{ marginTop: 12 }}>
+          <ChannelsSection onClose={onClose} />
+        </View>
         <View style={s.divider} />
         <LinkRow
           icon={Plus}
