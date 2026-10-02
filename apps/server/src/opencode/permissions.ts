@@ -11,6 +11,18 @@ import type { PermissionRuleset } from "@opencode-ai/sdk/v2/client";
 export type { PermissionRuleset };
 
 /**
+ * Permission mode, mirroring the OpenCode TUI's auto-approve toggle
+ * (command palette: "Enable/Disable auto-approve permissions").
+ * - "ask": every tool asks unless a rule says otherwise (default)
+ * - "auto": run without asking; explicit "deny" rules are still enforced
+ */
+export type PermissionMode = "ask" | "auto";
+
+export function isPermissionMode(raw: unknown): raw is PermissionMode {
+  return raw === "ask" || raw === "auto";
+}
+
+/**
  * Parse opencode-style rule strings into a PermissionRuleset.
  * Accepted formats: "tool:action" or "tool:pattern:action".
  * Lifted from Kimaki's parsePermissionRules (MIT).
@@ -42,14 +54,16 @@ export function parsePermissionRules(raw: unknown): PermissionRuleset {
 }
 
 /**
- * The default-ask base: every tool asks unless a later rule says otherwise.
- * The native `deny` rules for non-interactive tools (question/plan_*) are
- * preserved — without them the wildcard ask would resurrect them as
- * ask-then-TTL-reject instead of an immediate deny.
+ * The session base ruleset. In "ask" mode every tool asks unless a later
+ * rule says otherwise; in "auto" mode (TUI auto-approve) everything is
+ * allowed unless explicitly denied. The native `deny` rules for
+ * non-interactive tools (question/plan_*) are preserved in both modes —
+ * without them the wildcard would resurrect them as ask-then-TTL-reject
+ * instead of an immediate deny.
  */
-export function defaultSessionRuleset(): PermissionRuleset {
+export function defaultSessionRuleset(mode: PermissionMode = "ask"): PermissionRuleset {
   return [
-    { permission: "*", pattern: "*", action: "ask" },
+    { permission: "*", pattern: "*", action: mode === "auto" ? "allow" : "ask" },
     { permission: "question", pattern: "*", action: "deny" },
     { permission: "plan_enter", pattern: "*", action: "deny" },
     { permission: "plan_exit", pattern: "*", action: "deny" },
@@ -57,12 +71,15 @@ export function defaultSessionRuleset(): PermissionRuleset {
 }
 
 /**
- * Full session ruleset: default-ask base first, user rules last so they win
+ * Full session ruleset: mode base first, user rules last so they win
  * via findLast. Directory ALLOWs never go here — they belong in the server
  * config so a project opencode.json can still deny/ask specific folders.
  */
-export function buildSessionRuleset(userRules: PermissionRuleset): PermissionRuleset {
-  return [...defaultSessionRuleset(), ...userRules];
+export function buildSessionRuleset(
+  userRules: PermissionRuleset,
+  mode: PermissionMode = "ask",
+): PermissionRuleset {
+  return [...defaultSessionRuleset(mode), ...userRules];
 }
 
 /**

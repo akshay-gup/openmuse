@@ -122,90 +122,59 @@ export function PendingApprovals({ threadId }: { threadId: string }) {
   );
 }
 
-/**
- * Multiline opencode-style permission rule editor. `loadUrl` returns
- * `{ rules: string[], channelRules?: string[] }`; `saveUrl` accepts
- * `{ rules: string[] }`.
- */
-type RuleAction = "allow" | "ask" | "deny";
-const ACTIONS: { id: RuleAction; label: string }[] = [
-  { id: "allow", label: "Allow" },
-  { id: "ask", label: "Ask" },
-  { id: "deny", label: "Deny" },
-];
-/** Tools the agent can ask about, as named in OpenCode's TUI. */
-const PERMISSION_TOOLS: { id: string; label: string }[] = [
-  { id: "*", label: "Everything else" },
-  { id: "bash", label: "Run commands" },
-  { id: "edit", label: "Edit files" },
-  { id: "write", label: "Create files" },
-  { id: "read", label: "Read files" },
-  { id: "glob", label: "Find files" },
-  { id: "grep", label: "Search files" },
-  { id: "list", label: "List directories" },
-  { id: "webfetch", label: "Fetch URLs" },
-  { id: "websearch", label: "Search the web" },
-  { id: "todowrite", label: "Manage to-dos" },
+/** Permission mode, mirroring the OpenCode TUI's auto-approve toggle. */
+type PermissionMode = "ask" | "auto";
+type ThreadMode = PermissionMode | null;
+
+const MODES: { id: PermissionMode; label: string; detail: string }[] = [
+  { id: "ask", label: "Ask", detail: "Approve each action" },
+  { id: "auto", label: "Auto-approve", detail: "Run without asking" },
 ];
 
-/** Parse "tool:action" or "tool:pattern:action" strings into tool → action. */
-function parseRules(rules: string[]): Record<string, RuleAction> {
-  const out: Record<string, RuleAction> = {};
-  for (const entry of rules) {
-    const parts = entry.split(":").map((s) => s.trim());
-    if (parts.length < 2) continue;
-    const tool = parts[0];
-    const action = parts[parts.length - 1].toLowerCase();
-    if (!tool || (action !== "allow" && action !== "ask" && action !== "deny")) continue;
-    out[tool] = action;
-  }
-  return out;
-}
-
 /**
- * TUI-style permission selector: per-tool Allow / Ask / Deny, no patterns.
- * `loadUrl` returns `{ rules: string[], channelRules?: string[] }`;
- * `saveUrl` accepts `{ rules: string[] }` ("tool:action" strings).
+ * TUI-style permission mode selector (the TUI's auto-approve toggle).
+ * `loadUrl` returns `{ mode }` (threads: `{ mode, channelMode }`);
+ * `saveUrl` accepts `{ mode }`. Threads may inherit the channel mode.
  */
-export function PermissionRulesEditor({
+export function PermissionModeSelector({
   loadUrl,
   saveUrl,
   title,
+  allowInherit = false,
 }: {
   loadUrl: string;
   saveUrl: string;
   title: string;
+  allowInherit?: boolean;
 }) {
   const { api } = useWorkspace();
-  const [choices, setChoices] = useState<Record<string, RuleAction> | null>(null);
-  const [channelRules, setChannelRules] = useState<string[] | null>(null);
+  const [mode, setMode] = useState<ThreadMode | undefined>(undefined);
+  const [channelMode, setChannelMode] = useState<PermissionMode | null>(null);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
   const load = useCallback(async () => {
     setError("");
     try {
-      const data = await api.request<{ rules: string[]; channelRules?: string[] }>(loadUrl);
-      setChoices(parseRules(data.rules));
-      setChannelRules(data.channelRules ?? null);
+      const data = await api.request<{ mode: ThreadMode; channelMode?: PermissionMode }>(loadUrl);
+      setMode(data.mode ?? null);
+      setChannelMode(data.channelMode ?? null);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
   }, [api, loadUrl]);
 
   useEffect(() => {
-    setChoices(null);
+    setMode(undefined);
     void load();
   }, [load]);
 
-  async function save() {
-    if (!choices) return;
+  async function save(next: ThreadMode) {
     setSaving(true);
     setError("");
     try {
-      const rules = PERMISSION_TOOLS.map((tool) => `${tool.id}:${choices[tool.id] ?? "ask"}`);
-      const data = await api.request<{ rules: string[] }>(saveUrl, { rules }, "PUT");
-      setChoices(parseRules(data.rules));
+      const data = await api.request<{ mode: ThreadMode }>(saveUrl, { mode: next }, "PUT");
+      setMode(data.mode ?? null);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -213,66 +182,74 @@ export function PermissionRulesEditor({
     }
   }
 
-  if (choices === null)
+  if (mode === undefined)
     return error ? <ErrorNotice error={error} /> : <ActivityIndicator color={colors.blueDark} />;
+  const inheritDetail = channelMode
+    ? `Channel: ${channelMode === "auto" ? "Auto-approve" : "Ask"}`
+    : "Channel default";
+  const options: { id: ThreadMode; label: string; detail: string }[] = allowInherit
+    ? [{ id: null, label: "Inherit", detail: inheritDetail }, ...MODES]
+    : MODES;
   return (
     <View style={{ gap: 10 }}>
       <Text style={s.small}>{title}</Text>
-      {!!channelRules?.length && (
-        <Text style={[s.small, { color: colors.muted }]}>
-          Channel rules (inherited): {channelRules.join(" · ")}
-        </Text>
-      )}
-      {PERMISSION_TOOLS.map((tool) => {
-        const active = choices[tool.id] ?? "ask";
+      {options.map((option) => {
+        const active = mode === option.id;
         return (
-          <View key={tool.id} style={[s.row, { gap: 8, alignItems: "center" }]}>
-            <Text style={[s.text, { flex: 1, fontSize: 14 }]} numberOfLines={1}>
-              {tool.label}
+          <Pressable
+            key={option.label}
+            accessibilityRole="radio"
+            accessibilityState={{ checked: active }}
+            onPress={() => void save(option.id as ThreadMode)}
+            style={[
+              s.row,
+              {
+                gap: 8,
+                alignItems: "center",
+                paddingVertical: 8,
+                paddingHorizontal: 12,
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: active ? colors.blueDark : colors.line,
+                backgroundColor: active ? "#EFF6FF" : "transparent",
+              },
+            ]}
+          >
+            <Text style={[s.text, { flex: 1, fontSize: 14, fontWeight: active ? "600" : "400" }]}>
+              {option.label}
             </Text>
-            <View style={[s.row, { gap: 6 }]}>
-              {ACTIONS.map((action) => (
-                <Button
-                  key={action.id}
-                  small
-                  primary={active === action.id}
-                  onPress={() => setChoices({ ...choices, [tool.id]: action.id })}
-                >
-                  {action.label}
-                </Button>
-              ))}
-            </View>
-          </View>
+            <Text style={s.small}>{option.detail}</Text>
+          </Pressable>
         );
       })}
+      {!allowInherit && (
+        <Text style={[s.small, { color: colors.muted }]}>Explicit deny rules still apply.</Text>
+      )}
       <ErrorNotice error={error} />
-      <View style={[s.row, { gap: 8 }]}>
-        <Button small primary busy={saving} onPress={() => void save()}>
-          Save rules
-        </Button>
-      </View>
+      {saving && <ActivityIndicator color={colors.blueDark} />}
     </View>
   );
 }
 
-/** Channel-level permission rules, shown in the expanded channel view. */
+/** Channel permission mode, shown in the expanded channel view. */
 export function ChannelPermissionRules({ channelId }: { channelId: string }) {
   return (
-    <PermissionRulesEditor
-      title="Permission rules for this channel (default: ask everything)"
-      loadUrl={`/api/agent/opencode/channels/${channelId}/permissions`}
-      saveUrl={`/api/agent/opencode/channels/${channelId}/permissions`}
+    <PermissionModeSelector
+      title="Ask me before acting, or auto-approve everything (explicit deny rules still apply)"
+      loadUrl={`/api/agent/opencode/channels/${channelId}/permissions/mode`}
+      saveUrl={`/api/agent/opencode/channels/${channelId}/permissions/mode`}
     />
   );
 }
 
-/** Per-thread rule overrides, shown in the thread banner. */
+/** Per-thread mode override, shown in the thread banner. */
 export function ThreadPermissionRules({ threadId }: { threadId: string }) {
   return (
-    <PermissionRulesEditor
-      title="Thread overrides (win over channel rules)"
-      loadUrl={`/api/agent/opencode/threads/${threadId}/permissions/rules`}
-      saveUrl={`/api/agent/opencode/threads/${threadId}/permissions/rules`}
+    <PermissionModeSelector
+      title="Thread override (wins over the channel mode)"
+      loadUrl={`/api/agent/opencode/threads/${threadId}/permissions/mode`}
+      saveUrl={`/api/agent/opencode/threads/${threadId}/permissions/mode`}
+      allowInherit
     />
   );
 }
@@ -304,8 +281,8 @@ export function PermissionsSettings() {
     <Card style={{ gap: 12 }}>
       <SectionHeading title="Permissions" />
       <Text style={s.muted}>
-        What the agent may do on its own in each channel. Default is ask everything; thread
-        overrides win over channel rules.
+        Ask: approve each action. Auto-approve: run without asking (explicit deny rules still
+        apply). Thread overrides win over the channel mode.
       </Text>
       <ErrorNotice error={error} />
       {channels === null ? (

@@ -14,7 +14,7 @@ import type { Config } from "../config.ts";
 import { channelWorkspaceDir, type ThreadBindingStore } from "../engine/threads.ts";
 import { AppError } from "../errors.ts";
 import type { OpencodeClientPool } from "./client.ts";
-import { buildSessionRuleset, type PermissionRuleset } from "./permissions.ts";
+import { buildSessionRuleset, type PermissionMode, type PermissionRuleset } from "./permissions.ts";
 
 export interface OpencodeSessionRef {
   sessionId: string;
@@ -32,6 +32,11 @@ export interface SessionContext {
    * (pure default-ask).
    */
   userRules?: (binding: ChannelThread) => PermissionRuleset | Promise<PermissionRuleset>;
+  /**
+   * User-configured permission mode for the channel/thread ("ask" |
+   * "auto", mirroring the TUI's auto-approve toggle). Defaults to "ask".
+   */
+  permissionMode?: (binding: ChannelThread) => PermissionMode | Promise<PermissionMode>;
 }
 
 /** The session's working directory: the channel's workspace dir. */
@@ -65,10 +70,11 @@ export async function rotateThreadSession(
   await mkdir(directory, { recursive: true });
   const client = ctx.clients.forDirectory(directory);
   const userRules = (await ctx.userRules?.(binding)) ?? [];
+  const mode = (await ctx.permissionMode?.(binding)) ?? "ask";
   const created = await client.session.create({
     title: binding.name,
     directory,
-    permission: buildSessionRuleset(userRules),
+    permission: buildSessionRuleset(userRules, mode),
   });
   if (created.error || !created.data) {
     throw new AppError(
