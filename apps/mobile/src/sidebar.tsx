@@ -1,10 +1,24 @@
-import { Bot, Hash, Monitor, Plus, RefreshCw } from "lucide-react-native";
+import {
+  Bot,
+  CalendarDays,
+  FileText,
+  Hash,
+  Lightbulb,
+  Monitor,
+  PanelsTopLeft,
+  Plus,
+  RefreshCw,
+  Shapes,
+  SquareCheck,
+  X,
+} from "lucide-react-native";
 import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
+import type { Section } from "../../../packages/domain/src";
 import { type Channel, ORCHESTRATOR_CHANNEL_ID } from "../../../packages/domain/src/agent";
 import { useAgentWorkspace } from "./agent-workspace";
 import { useMuseThread } from "./threads";
-import { Button, colors, ErrorNotice, Field, s } from "./ui";
+import { Button, colors, ErrorNotice, Field, IconButton, Mascot, s } from "./ui";
 import { useWorkspace } from "./workspace";
 
 function SidebarRow({
@@ -48,8 +62,14 @@ function SidebarRow({
  * replies and @hive mentions. The menu sheet remains the navigation on
  * narrow screens.
  */
-export function Sidebar() {
-  const { api, open } = useWorkspace();
+export function Sidebar({
+  compact = false,
+  onNavigate,
+}: {
+  compact?: boolean;
+  onNavigate?: () => void;
+}) {
+  const { api, open, section, navigate, workspace } = useWorkspace();
   const { enabled, selection, select, mainId } = useMuseThread();
   const { data } = useAgentWorkspace();
   const [channels, setChannels] = useState<Channel[] | null>(null);
@@ -117,6 +137,7 @@ export function Sidebar() {
       await load();
       // A new channel is usable immediately: open it as a chat.
       select({ id: `channel:${created.id}`, existing: true });
+      onNavigate?.();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -124,6 +145,22 @@ export function Sidebar() {
     }
   }
 
+  function go(destination: Section) {
+    navigate(destination);
+    onNavigate?.();
+  }
+  function conversation(next: { id: string; existing: boolean }) {
+    select(next);
+    onNavigate?.();
+  }
+  const workspaceLinks: { id: Section; label: string; icon: typeof Bot }[] = [
+    { id: "activity", label: "Activity", icon: PanelsTopLeft },
+    { id: "ideas", label: "Ideas", icon: Lightbulb },
+    { id: "goals", label: "Goals", icon: SquareCheck },
+    { id: "apps", label: "Apps", icon: Shapes },
+    { id: "calendar", label: "Calendar", icon: CalendarDays },
+    { id: "files", label: "Files", icon: FileText },
+  ];
   const userChannels = (channels ?? [])
     .filter((channel) => channel.id !== ORCHESTRATOR_CHANNEL_ID && channel.status !== "archived")
     .sort((a, b) => a.name.localeCompare(b.name));
@@ -131,27 +168,44 @@ export function Sidebar() {
   return (
     <View
       style={{
-        width: 280,
+        width: compact ? "100%" : 260,
+        flex: compact ? 1 : undefined,
         borderRightWidth: 1,
         borderRightColor: colors.line,
         backgroundColor: "#FAFBFC",
       }}
     >
+      <View
+        style={[
+          s.row,
+          {
+            paddingHorizontal: 18,
+            height: 76,
+            gap: 10,
+            borderBottomWidth: 1,
+            borderBottomColor: colors.line,
+          },
+        ]}
+      >
+        <Mascot size={34} variant={data?.identity.avatar} />
+        <View style={{ flex: 1 }}>
+          <Text style={s.heading}>{data?.identity.name || "Hive"}</Text>
+          <Text style={s.small}>Your workspace</Text>
+        </View>
+        {compact && <IconButton icon={X} label="Close navigation" onPress={() => onNavigate?.()} />}
+      </View>
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingHorizontal: 10, paddingVertical: 18, gap: 2 }}
+        contentContainerStyle={{ paddingHorizontal: 12, paddingVertical: 18, gap: 2 }}
       >
-        <Text
-          style={[s.small, { fontWeight: "700", paddingHorizontal: 8, marginBottom: 6 }]}
-          numberOfLines={1}
-        >
-          {data?.identity.name || "Hive"}
+        <Text style={[s.small, { fontWeight: "700", paddingHorizontal: 8, marginBottom: 8 }]}>
+          Direct messages
         </Text>
         <SidebarRow
           icon={Bot}
-          label="Orchestrator"
-          active={isMainActive}
-          onPress={() => select(mainSelection)}
+          label={data?.identity.name || "Hive"}
+          active={section === "chat" && isMainActive}
+          onPress={() => conversation(mainSelection)}
         />
         <View
           style={[
@@ -175,13 +229,13 @@ export function Sidebar() {
           <ActivityIndicator color={colors.blueDark} style={{ marginTop: 8 }} />
         ) : (
           userChannels.map((channel) => {
-            const isActive = !isMainActive && activeChannelId === channel.id;
+            const isActive = section === "chat" && !isMainActive && activeChannelId === channel.id;
             return (
               <Pressable
                 key={channel.id}
                 accessibilityRole="button"
                 accessibilityLabel={`Open channel: ${channel.name}`}
-                onPress={() => select({ id: `channel:${channel.id}`, existing: true })}
+                onPress={() => conversation({ id: `channel:${channel.id}`, existing: true })}
                 style={{
                   flexDirection: "row",
                   gap: 8,
@@ -235,18 +289,61 @@ export function Sidebar() {
             <Text style={s.small}>New channel</Text>
           </Pressable>
         )}
-        <View style={[s.divider, { marginVertical: 10 }]} />
+        <View style={[s.divider, { marginVertical: 16 }]} />
+        <Text style={[s.small, { fontWeight: "700", paddingHorizontal: 8, marginBottom: 8 }]}>
+          Workspace
+        </Text>
+        {workspaceLinks.map((item) => (
+          <SidebarRow
+            key={item.id}
+            icon={item.icon}
+            label={item.label}
+            active={section === item.id}
+            onPress={() => go(item.id)}
+          />
+        ))}
+        <View style={[s.divider, { marginVertical: 16 }]} />
         <SidebarRow
           icon={Plus}
           label="Delegate task"
-          onPress={() => open({ type: "delegate", threadId: delegateThreadId })}
+          onPress={() => {
+            onNavigate?.();
+            open({ type: "delegate", threadId: delegateThreadId });
+          }}
         />
         <SidebarRow
           icon={Monitor}
           label="Agent computer"
-          onPress={() => open({ type: "computer" })}
+          onPress={() => {
+            onNavigate?.();
+            open({ type: "computer" });
+          }}
         />
       </ScrollView>
+      <View
+        style={[s.row, { borderTopWidth: 1, borderTopColor: colors.line, padding: 18, gap: 10 }]}
+      >
+        <View
+          style={{
+            width: 30,
+            height: 30,
+            borderRadius: 9,
+            backgroundColor: colors.lavender,
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <Text style={[s.text, { fontWeight: "600" }]}>
+            {(workspace.profile.name || "You").slice(0, 1).toUpperCase()}
+          </Text>
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={[s.text, { fontSize: 13 }]} numberOfLines={1}>
+            {workspace.profile.name || "You"}
+          </Text>
+          <Text style={s.small}>Signed in</Text>
+        </View>
+      </View>
     </View>
   );
 }

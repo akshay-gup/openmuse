@@ -16,6 +16,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   AppState,
+  Modal,
   Pressable,
   ScrollView,
   Text,
@@ -33,13 +34,13 @@ import {
 } from "./src/agent-ui";
 import { AgentWorkspaceProvider, useAgentWorkspace } from "./src/agent-workspace";
 import { API_URL, createSession, MuseApi } from "./src/api";
-import { ChatScreen, WorkspaceTools } from "./src/chat";
+import { ChannelChatBanner, ChatScreen, WorkspaceTools } from "./src/chat";
 import { ComputerEntry } from "./src/computer";
 import { ComputerDraftProvider } from "./src/computer-drafts";
 import { Details } from "./src/details";
 import { BrowserScreen, CalendarScreen, FilesScreen, MailScreen } from "./src/screens";
 import { Sidebar } from "./src/sidebar";
-import { ThreadsProvider, ThreadsSheet, useMuseThread } from "./src/threads";
+import { ThreadsProvider, useMuseThread } from "./src/threads";
 import { Button, Card, colors, ErrorNotice, Field, IconButton, Mascot, s } from "./src/ui";
 import { type Detail, useWorkspace, WorkspaceContext } from "./src/workspace";
 
@@ -255,6 +256,7 @@ function WorkspaceShell({
   const [threadsOpen, setThreadsOpen] = useState(false);
   const { width } = useWindowDimensions();
   const desktop = width >= 900;
+  const channelChat = section === "chat" && selection.id.startsWith("channel:");
   const pending =
     (data?.notifications.filter((n) => !n.read).length || 0) +
     workspace.actions.filter((a) => a.status === "awaiting_review").length;
@@ -297,55 +299,54 @@ function WorkspaceShell({
         <View style={{ flex: 1, flexDirection: desktop ? "row" : "column" }}>
           {desktop && <Sidebar />}
           <View style={{ flex: 1, minWidth: 0, alignItems: "center" }}>
-            <View style={{ flex: 1, width: "100%", maxWidth: selection.id.startsWith("channel:") ? 1240 : 760 }}>
+            <View style={{ flex: 1, width: "100%", maxWidth: "100%" }}>
               <View
                 style={{
-                  height: desktop ? 146 : 122,
-                  paddingTop: desktop ? 14 : 2,
-                  marginHorizontal: 20,
+                  height: 76,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 12,
+                  paddingHorizontal: desktop ? 24 : 14,
+                  borderBottomWidth: 1,
+                  borderBottomColor: colors.line,
                 }}
               >
                 {!desktop && (
-                  <View style={{ position: "absolute", left: 0, top: 16 }}>
-                    <IconButton
-                      icon={Menu}
-                      label="Open conversations and menu"
-                      onPress={() => setThreadsOpen(true)}
-                    />
-                  </View>
+                  <IconButton
+                    icon={Menu}
+                    label="Open workspace navigation"
+                    onPress={() => setThreadsOpen(true)}
+                  />
                 )}
-                <View pointerEvents="box-none" style={{ alignItems: "center", gap: 1 }}>
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={`Open ${agentName} activity and approvals`}
-                    onPress={() => navigate("activity")}
-                    style={({ pressed }) => ({
-                      alignItems: "center",
-                      maxWidth: "70%",
-                      opacity: pressed ? 0.65 : 1,
-                    })}
-                  >
-                    <Mascot size={desktop ? 58 : 49} variant={data?.identity.avatar} />
-                    <Text
-                      style={{
-                        fontSize: 16,
-                        fontWeight: "600",
-                        color: colors.text,
-                        letterSpacing: -0.4,
-                      }}
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  {channelChat ? (
+                    <ChannelChatBanner channelId={selection.id.slice("channel:".length)} />
+                  ) : section === "chat" ? (
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={`Open ${agentName} activity and approvals`}
+                      onPress={() => navigate("activity")}
+                      style={[s.row, { gap: 10 }]}
                     >
-                      {agentName}
-                    </Text>
-                    <Text
-                      numberOfLines={1}
-                      style={{ fontSize: 11, color: colors.muted, marginBottom: 6 }}
-                    >
-                      {status}
-                    </Text>
-                  </Pressable>
-                  {section === "chat" && <ComputerEntry />}
+                      <Mascot size={38} variant={data?.identity.avatar} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={[s.heading, { fontSize: 17 }]}>{agentName}</Text>
+                        <Text style={s.small} numberOfLines={1}>
+                          {status}
+                        </Text>
+                      </View>
+                    </Pressable>
+                  ) : (
+                    <View>
+                      <Text style={[s.heading, { fontSize: 18 }]}>{title?.title}</Text>
+                      <Text style={s.small} numberOfLines={1}>
+                        {title?.subtitle}
+                      </Text>
+                    </View>
+                  )}
                 </View>
-                <View style={{ position: "absolute", right: 0, top: 16 }}>
+                {desktop && section === "chat" && !channelChat && <ComputerEntry />}
+                <View>
                   <IconButton
                     icon={Bell}
                     label={`Notifications, ${pending} unread or pending`}
@@ -373,8 +374,12 @@ function WorkspaceShell({
                     key={section}
                     showsVerticalScrollIndicator={false}
                     contentContainerStyle={{
-                      paddingHorizontal: desktop ? 42 : 22,
+                      paddingHorizontal: desktop ? 32 : 22,
+                      paddingTop: 24,
                       paddingBottom: 28,
+                      width: "100%",
+                      maxWidth: 1040,
+                      alignSelf: "center",
                     }}
                     keyboardShouldPersistTaps="handled"
                   >
@@ -387,9 +392,6 @@ function WorkspaceShell({
                         Back to Apps
                       </Button>
                     )}
-                    <Text style={[s.title, { fontSize: 25, marginBottom: 22 }]}>
-                      {title?.title}
-                    </Text>
                     <ErrorNotice error={error} />
                     <Screen />
                   </ScrollView>
@@ -398,10 +400,12 @@ function WorkspaceShell({
                   style={{
                     display: section === "chat" ? "flex" : "none",
                     flex: 1,
-                    paddingHorizontal: desktop ? 42 : 17,
+                    paddingHorizontal: channelChat ? 0 : desktop ? 32 : 17,
+                    paddingTop: channelChat ? 0 : 14,
+                    paddingBottom: desktop ? 18 : 0,
                   }}
                 >
-                  <AgentStatus />
+                  {!channelChat && <AgentStatus />}
                   {richThreads ? (
                     <>
                       <ErrorNotice error={threadsError} />
@@ -464,6 +468,7 @@ function WorkspaceShell({
               </View>
               <View
                 style={{
+                  display: desktop ? "none" : "flex",
                   paddingHorizontal: 22,
                   paddingTop: 10,
                   paddingBottom: desktop ? 22 : 7,
@@ -517,7 +522,13 @@ function WorkspaceShell({
         {!!toast && (
           <View
             pointerEvents="box-none"
-            style={{ position: "absolute", bottom: 94, left: 20, right: 20, alignItems: "center" }}
+            style={{
+              position: "absolute",
+              bottom: desktop ? 28 : 94,
+              left: 20,
+              right: 20,
+              alignItems: "center",
+            }}
           >
             <View
               style={[
@@ -543,7 +554,24 @@ function WorkspaceShell({
             </View>
           </View>
         )}
-        {threadsOpen && <ThreadsSheet onClose={() => setThreadsOpen(false)} />}
+        <Modal
+          visible={threadsOpen && !desktop}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setThreadsOpen(false)}
+        >
+          <View style={{ flex: 1, flexDirection: "row", backgroundColor: "rgba(17,25,28,0.24)" }}>
+            <SafeAreaView style={{ width: 310, maxWidth: "86%", backgroundColor: "#FAFBFC" }}>
+              <Sidebar compact onNavigate={() => setThreadsOpen(false)} />
+            </SafeAreaView>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Close workspace navigation"
+              onPress={() => setThreadsOpen(false)}
+              style={{ flex: 1 }}
+            />
+          </View>
+        </Modal>
         {detail && (
           <Details
             key={

@@ -53,6 +53,10 @@ function mentionsAgent(text: string): boolean {
   return new RegExp(`(^|[^\\p{L}\\p{N}_])${escaped}(?=[^\\p{L}\\p{N}_]|$)`, "iu").test(text);
 }
 
+function messageTimestamp(message: Message): number | undefined {
+  const match = /^(?:user|choice)-(\d{13})(?:-|$)/.exec(message.id);
+  return match ? Number(match[1]) : undefined;
+}
 function threadNameFor(text: string): string {
   const flat = text.replace(/\s+/g, " ").trim();
   return flat.length > 60 ? `${flat.slice(0, 60)}…` : flat || "Thread";
@@ -64,7 +68,7 @@ function channelIdOf(selection: { id: string }): string | null {
 }
 
 /** Banner for a channel chat: just the channel name, like a Slack channel header. */
-function ChannelChatBanner({ channelId }: { channelId: string }) {
+export function ChannelChatBanner({ channelId }: { channelId: string }) {
   const { api } = useWorkspace();
   const [name, setName] = useState<string | null>(null);
   useEffect(() => {
@@ -82,10 +86,11 @@ function ChannelChatBanner({ channelId }: { channelId: string }) {
     };
   }, [api, channelId]);
   return (
-    <View style={[s.row, { gap: 8, alignItems: "center", paddingBottom: 4 }]}>
-      <Text style={[s.text, { fontWeight: "700", fontSize: 17 }]} numberOfLines={1}>
+    <View style={{ gap: 2 }}>
+      <Text style={[s.heading, { fontSize: 18 }]} numberOfLines={1}>
         # {name ?? "channel"}
       </Text>
+      <Text style={s.small}>Messages and threads</Text>
     </View>
   );
 }
@@ -259,9 +264,22 @@ export function ChatScreen({
   const [channelThreads, setChannelThreads] = useState<ChannelThread[] | null>(null);
   const { width } = useWindowDimensions();
   const [replyPanel, setReplyPanel] = useState<{
-    binding: ChannelThread; parent: Message; prompt?: { id: number; text: string; messageId?: string };
+    binding: ChannelThread;
+    parent: Message;
+    prompt?: { id: number; text: string; messageId?: string };
   } | null>(null);
   const [panelOpen, setPanelOpen] = useState(false);
+  useEffect(() => {
+    if (Platform.OS !== "web" || !active || !panelOpen) return;
+    const dismiss = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setPanelOpen(false);
+        setThreadsAttempt((n) => n + 1);
+      }
+    };
+    document.addEventListener("keydown", dismiss);
+    return () => document.removeEventListener("keydown", dismiss);
+  }, [active, panelOpen]);
   const [openingReply, setOpeningReply] = useState(false);
   const openingReplyRef = useRef(false);
   const [replyCounts, setReplyCounts] = useState<Record<string, number>>({});
@@ -450,14 +468,21 @@ export function ChatScreen({
       .request<ChannelThread[]>(`/api/agent/channels/${channelId}/threads`)
       .then(async (threads) => {
         if (active) setChannelThreads(threads);
-        const counts = await Promise.all(threads.map(async (binding) => {
-          try {
-            const conversation = await api.request<{ messages: Message[] }>(
-              `/api/conversation?threadId=${encodeURIComponent(binding.threadId)}`,
-            );
-            return [binding.threadId, countThreadReplies(conversation.messages, binding.parentMessageId)] as const;
-          } catch { return [binding.threadId, 0] as const; }
-        }));
+        const counts = await Promise.all(
+          threads.map(async (binding) => {
+            try {
+              const conversation = await api.request<{ messages: Message[] }>(
+                `/api/conversation?threadId=${encodeURIComponent(binding.threadId)}`,
+              );
+              return [
+                binding.threadId,
+                countThreadReplies(conversation.messages, binding.parentMessageId),
+              ] as const;
+            } catch {
+              return [binding.threadId, 0] as const;
+            }
+          }),
+        );
         if (active) setReplyCounts(Object.fromEntries(counts));
       })
       .catch(() => {
@@ -492,8 +517,12 @@ export function ChatScreen({
         "PUT",
       );
       setChannelThreads((threads) => [...(threads ?? []), binding]);
-      setReplyPanel({ binding, parent: opts.parent,
-        prompt: opts.firstText ? { id: Date.now(), text: opts.firstText, messageId: opts.parent.id } : undefined,
+      setReplyPanel({
+        binding,
+        parent: opts.parent,
+        prompt: opts.firstText
+          ? { id: Date.now(), text: opts.firstText, messageId: opts.parent.id }
+          : undefined,
       });
       setPanelOpen(true);
     },
@@ -522,13 +551,24 @@ export function ChatScreen({
         setPanelOpen(true);
       } else {
         const seeded = projectForSeed(parent);
-        await forkThread({ name: threadNameFor(textOf(parent)), parentMessageId: parent.id,
-          parent, seed: seeded ? [seeded] : [] });
+        await forkThread({
+          name: threadNameFor(textOf(parent)),
+          parentMessageId: parent.id,
+          parent,
+          seed: seeded ? [seeded] : [],
+        });
       }
-    } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
-    finally { openingReplyRef.current = false; setOpeningReply(false); }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      openingReplyRef.current = false;
+      setOpeningReply(false);
+    }
   }
-  function closeReplies() { setPanelOpen(false); refreshReplies(); }
+  function closeReplies() {
+    setPanelOpen(false);
+    refreshReplies();
+  }
   useEffect(() => {
     if (active && prompt && isReady && loaded && claimPrompt(prompt.id) && prompt.text.trim())
       enqueue(prompt.text, prompt.messageId);
@@ -618,542 +658,670 @@ export function ChatScreen({
       ? messages[latestUserIndex].content
       : null;
   const parentIndex = threadParent ? messages.findIndex((m) => m.id === threadParent.id) : -1;
-  const visible = messages.filter((m, index) =>
-    (m.role === "user" || m.role === "assistant") && index > parentIndex,
+  const visible = messages.filter(
+    (m, index) => (m.role === "user" || m.role === "assistant") && index > parentIndex,
   );
   const replying = busy || agent.isRunning;
   return (
     <View style={{ flex: 1, flexDirection: "row", minHeight: 0 }}>
-      <View style={{ flex: 1, minWidth: 0 }}>
-      <ScrollView
-        ref={list}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ gap: 13, paddingTop: 15, paddingBottom: 20, flexGrow: 1 }}
-        onScroll={({ nativeEvent: { contentOffset, contentSize, layoutMeasurement } }) => {
-          const nearEnd = contentSize.height - contentOffset.y - layoutMeasurement.height < 100;
-          followLatest.current = nearEnd;
-          setAwayFromLatest(visible.length > 0 && !nearEnd);
+      <View
+        style={{
+          flex: 1,
+          minWidth: 0,
+          paddingHorizontal: channelId ? (width >= 900 ? 24 : 16) : 0,
+          paddingBottom: channelId ? 16 : 0,
         }}
-        scrollEventThrottle={100}
-        onContentSizeChange={() => {
-          if (active && visible.length > 0 && followLatest.current)
-            list.current?.scrollToEnd({ animated: false });
-        }}
-        keyboardShouldPersistTaps="handled"
       >
-        {!!historyError && (
-          <>
-            <ErrorNotice error={historyError} />
-            <Button onPress={() => setHistoryAttempt((attempt) => attempt + 1)}>
-              Retry loading conversation
-            </Button>
-          </>
-        )}
-        {channelId ? (
-          <ChannelChatBanner channelId={channelId} />
-        ) : (
-          !threadParent && (richThreads || selection.id !== "local") && (
+        <ScrollView
+          ref={list}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{
+            gap: channelId || threadParent ? 2 : 13,
+            paddingTop: 15,
+            paddingBottom: 20,
+            flexGrow: 1,
+          }}
+          onScroll={({ nativeEvent: { contentOffset, contentSize, layoutMeasurement } }) => {
+            const nearEnd = contentSize.height - contentOffset.y - layoutMeasurement.height < 100;
+            followLatest.current = nearEnd;
+            setAwayFromLatest(visible.length > 0 && !nearEnd);
+          }}
+          scrollEventThrottle={100}
+          onContentSizeChange={() => {
+            if (active && visible.length > 0 && followLatest.current)
+              list.current?.scrollToEnd({ animated: false });
+          }}
+          keyboardShouldPersistTaps="handled"
+        >
+          {!!historyError && (
+            <>
+              <ErrorNotice error={historyError} />
+              <Button onPress={() => setHistoryAttempt((attempt) => attempt + 1)}>
+                Retry loading conversation
+              </Button>
+            </>
+          )}
+          {!channelId && !threadParent && (richThreads || selection.id !== "local") && (
             <ChannelThreadBanner threadId={threadId} mainId={mainId} />
-          )
-        )}
-        {(richThreads || selection.id !== "local") && <PendingApprovals threadId={threadId} />}
-        {!visible.length && !threadParent ? (
-          <View
-            style={{
-              flexGrow: 1,
-              flexShrink: 0,
-              justifyContent: "center",
-              alignItems: "center",
-              paddingVertical: 34,
-              gap: 15,
-            }}
-          >
-            <Text
+          )}
+          {(richThreads || selection.id !== "local") && <PendingApprovals threadId={threadId} />}
+          {!visible.length && !threadParent ? (
+            <View
               style={{
-                fontSize: 28,
-                letterSpacing: -1,
-                color: colors.text,
-                textAlign: "center",
-                maxWidth: 350,
+                flexGrow: 1,
+                flexShrink: 0,
+                justifyContent: "center",
+                alignItems: "center",
+                paddingVertical: 34,
+                gap: 15,
               }}
             >
-              {channelId ? "Start the conversation" : "A little help. A lot more room for life."}
-            </Text>
-            <Text style={[s.muted, { maxWidth: 320, textAlign: "center", lineHeight: 23 }]}>
-              {channelId ? "Post a message to the channel. Use Reply in thread to keep each discussion together." : "Tell me what’s on your mind. I can make a plan, work with your apps, and use my computer to help."}
-            </Text>
-            <View style={{ display: channelId ? "none" : "flex", width: "100%", maxWidth: 360, marginTop: 14, gap: 8 }}>
-              {[
-                {
-                  text: "Find cool things on Hacker News",
-                  action: () => enqueue("Check out Hacker News for cool stuff"),
-                },
-                {
-                  text: "Summarize copilotkit.ai",
-                  action: () => enqueue("Summarize copilotkit.ai"),
-                },
-                { text: "Keep an eye on a website", action: () => navigate("goals") },
-              ].map((item) => (
-                <Button key={item.text} onPress={item.action}>
-                  {item.text}
-                </Button>
-              ))}
-            </View>
-          </View>
-        ) : (
-          visible.map((message) => {
-            const user = message.role === "user";
-            const text = textOf(message);
-            const toolCalls = "toolCalls" in message ? message.toolCalls || [] : [];
-            const replies = channelId
-              ? (channelThreads ?? []).filter((t) => t.parentMessageId === message.id)
-              : [];
-            const latestReply = replies[replies.length - 1];
-            return (
-              <View
-                key={message.id}
+              <Text
                 style={{
-                  alignSelf: channelId || threadParent ? "stretch" : user ? "flex-end" : "flex-start",
-                  maxWidth: channelId || threadParent ? "100%" : user ? "85%" : "95%",
-                  width: channelId || threadParent ? "100%" : toolCalls.length ? "95%" : undefined,
+                  fontSize: 28,
+                  letterSpacing: -1,
+                  color: colors.text,
+                  textAlign: "center",
+                  maxWidth: 350,
+                }}
+              >
+                {channelId ? "Start the conversation" : "Message Hive"}
+              </Text>
+              <Text style={[s.muted, { maxWidth: 320, textAlign: "center", lineHeight: 23 }]}>
+                {channelId
+                  ? "Post a message to the channel. Use Reply in thread to keep each discussion together."
+                  : "Ask a question, share a task, or work with your connected apps."}
+              </Text>
+              <View
+                style={{
+                  display: channelId ? "none" : "flex",
+                  width: "100%",
+                  maxWidth: 360,
+                  marginTop: 14,
                   gap: 8,
                 }}
               >
-                {!!text && (channelId || threadParent ? (
-                  <ChannelMessage
-                    text={text} author={user ? w.profile.name || "You" : "Hive"}
-                    assistant={!user} selected={panelOpen && replyPanel?.parent.id === message.id}
-                    onReply={channelId ? () => void openReply(message) : undefined}
-                    replyDisabled={openingReply || !loaded || channelThreads === null}
-                    replyCount={replies.reduce((sum, binding) => sum + (replyCounts[binding.threadId] ?? 0), 0)}
-                    hasThread={!!latestReply} onNotify={notify}
-                  />
-                ) : (
-                  <View style={{ paddingHorizontal: 16, paddingVertical: 13, borderRadius: 22,
-                    borderBottomRightRadius: user ? 7 : 22, borderBottomLeftRadius: user ? 22 : 7,
-                    backgroundColor: user ? colors.blue : "#EEEEF0" }}>
-                    {user ? <Text selectable style={[s.text, { fontSize: 16, lineHeight: 24 }]}>{text}</Text>
-                      : <AssistantResponse content={text} />}
-                  </View>
+                {[
+                  {
+                    text: "Plan my day",
+                    action: () => enqueue("@hive Help me plan my day"),
+                  },
+                  {
+                    text: "Draft a message",
+                    action: () => enqueue("@hive Help me draft a message"),
+                  },
+                  { text: "Connect an app", action: () => navigate("apps") },
+                ].map((item) => (
+                  <Button key={item.text} onPress={item.action}>
+                    {item.text}
+                  </Button>
                 ))}
-                <JevInteractionContext.Provider
-                  value={{
-                    threadId,
-                    busy:
-                      busy ||
-                      agent.isRunning ||
-                      !loaded ||
-                      !isReady ||
-                      !!outbox.pending.length ||
-                      outbox.paused ||
-                      !!saveError,
-                    latestPanelId,
-                    latestUserText,
-                    send: sendChoice,
-                    retry: (text) => sendChoice(text, true),
-                    canRetry:
-                      loaded &&
-                      isReady &&
-                      !busy &&
-                      !agent.isRunning &&
-                      !outbox.running &&
-                      !outbox.pending.length &&
-                      !saveError,
-                    confirmedSelection: (panelId) => confirmedJevSelection(messages, panelId),
+              </View>
+            </View>
+          ) : (
+            visible.map((message, index) => {
+              const user = message.role === "user";
+              const text = textOf(message);
+              const toolCalls = "toolCalls" in message ? message.toolCalls || [] : [];
+              const replies = channelId
+                ? (channelThreads ?? []).filter((t) => t.parentMessageId === message.id)
+                : [];
+              const latestReply = replies[replies.length - 1];
+              const timestamp = messageTimestamp(message);
+              const previousTimestamp = visible
+                .slice(0, index)
+                .reverse()
+                .map(messageTimestamp)
+                .find((time) => time !== undefined);
+              const newDay =
+                timestamp &&
+                (!previousTimestamp ||
+                  new Date(timestamp).toDateString() !==
+                    new Date(previousTimestamp).toDateString());
+              const grouped =
+                !newDay &&
+                index > 0 &&
+                visible[index - 1].role === message.role &&
+                (!timestamp || !previousTimestamp || timestamp - previousTimestamp < 5 * 60000);
+              return (
+                <View
+                  key={message.id}
+                  style={{
+                    alignSelf:
+                      channelId || threadParent ? "stretch" : user ? "flex-end" : "flex-start",
+                    maxWidth: channelId || threadParent ? "100%" : user ? "85%" : "95%",
+                    width:
+                      channelId || threadParent ? "100%" : toolCalls.length ? "95%" : undefined,
+                    gap: 8,
                   }}
                 >
-                  <BrowserRunContext
+                  {channelId && newDay && (
+                    <View style={[s.row, { gap: 12, paddingVertical: 12 }]}>
+                      <View style={{ flex: 1, height: 1, backgroundColor: colors.line }} />
+                      <Text style={[s.small, { fontWeight: "600" }]}>
+                        {new Date(timestamp).toLocaleDateString(undefined, {
+                          month: "long",
+                          day: "numeric",
+                        })}
+                      </Text>
+                      <View style={{ flex: 1, height: 1, backgroundColor: colors.line }} />
+                    </View>
+                  )}
+                  {!!text &&
+                    (channelId || threadParent ? (
+                      <ChannelMessage
+                        text={text}
+                        author={user ? w.profile.name || "You" : "Hive"}
+                        assistant={!user}
+                        grouped={grouped}
+                        timestamp={timestamp}
+                        selected={panelOpen && replyPanel?.parent.id === message.id}
+                        onReply={channelId ? () => void openReply(message) : undefined}
+                        replyDisabled={openingReply || !loaded || channelThreads === null}
+                        replyCount={replies.reduce(
+                          (sum, binding) => sum + (replyCounts[binding.threadId] ?? 0),
+                          0,
+                        )}
+                        hasThread={!!latestReply}
+                        onNotify={notify}
+                      />
+                    ) : (
+                      <View
+                        style={{
+                          paddingHorizontal: 16,
+                          paddingVertical: 13,
+                          borderRadius: 22,
+                          borderBottomRightRadius: user ? 7 : 22,
+                          borderBottomLeftRadius: user ? 22 : 7,
+                          backgroundColor: user ? colors.blue : "#EEEEF0",
+                        }}
+                      >
+                        {user ? (
+                          <Text selectable style={[s.text, { fontSize: 16, lineHeight: 24 }]}>
+                            {text}
+                          </Text>
+                        ) : (
+                          <AssistantResponse content={text} />
+                        )}
+                      </View>
+                    ))}
+                  <JevInteractionContext.Provider
                     value={{
-                      running: busy || agent.isRunning,
-                      active:
-                        (busy || agent.isRunning) && messages.indexOf(message) > latestUserIndex,
+                      threadId,
+                      busy:
+                        busy ||
+                        agent.isRunning ||
+                        !loaded ||
+                        !isReady ||
+                        !!outbox.pending.length ||
+                        outbox.paused ||
+                        !!saveError,
+                      latestPanelId,
+                      latestUserText,
+                      send: sendChoice,
+                      retry: (text) => sendChoice(text, true),
+                      canRetry:
+                        loaded &&
+                        isReady &&
+                        !busy &&
+                        !agent.isRunning &&
+                        !outbox.running &&
+                        !outbox.pending.length &&
+                        !saveError,
+                      confirmedSelection: (panelId) => confirmedJevSelection(messages, panelId),
                     }}
                   >
-                    {toolCalls.map((toolCall) => {
-                      const toolMessage = messages.find(
-                        (candidate): candidate is ToolMessage =>
-                          candidate.role === "tool" && candidate.toolCallId === toolCall.id,
-                      );
-                      return (
-                        <View key={toolCall.id}>{renderToolCall({ toolCall, toolMessage })}</View>
-                      );
-                    })}
-                  </BrowserRunContext>
-                </JevInteractionContext.Provider>
-              </View>
-            );
-          })
-        )}
-        {!richThreads && !channelId && !threadParent && (
-          <>
-            {(w.files.some((file) => file.parentId) ||
-              w.browsers.some((browser) => browser.status === "active") ||
-              !!agentWorkspace?.artifacts.length) && (
-              <Button
-                small
-                style={{ alignSelf: "flex-start", marginTop: 6 }}
-                onPress={() => setShowResults(!showResults)}
-              >
-                {showResults ? "Hide recent results" : "Recent results"}
-              </Button>
-            )}
-            {showResults && (
-              <>
-                {w.files
-                  .filter((file) => file.parentId)
-                  .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-                  .slice(0, 1)
-                  .map((file) => (
-                    <FileThreadCard key={file.id} file={file} />
-                  ))}
-                {w.browsers
-                  .filter((browser) => browser.status === "active")
-                  .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-                  .slice(0, 1)
-                  .map((browser) => (
-                    <BrowserThreadCard key={browser.id} browser={browser} />
-                  ))}
-                {[...(agentWorkspace?.artifacts || [])]
-                  .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-                  .filter(
-                    (artifact, index, items) =>
-                      items.findIndex((item) => item.kind === artifact.kind) === index,
-                  )
-                  .slice(0, 2)
-                  .reverse()
-                  .map((artifact) => (
-                    <ArtifactCard key={artifact.id} artifact={artifact} />
-                  ))}
-              </>
-            )}
-          </>
-        )}
-        {!channelId && !threadParent && (!richThreads || selection.id === mainId) && <BackgroundUpdates />}
-        {(busy || agent.isRunning) && (
-          <View
-            accessibilityLabel="Agent is working"
-            style={[
-              s.row,
-              {
-                alignSelf: "flex-start",
-                gap: 7,
-                paddingHorizontal: 19,
-                paddingVertical: 18,
-                backgroundColor: "#EEEEF0",
-                borderRadius: 28,
-              },
-            ]}
-          >
-            {[0.4, 0.75, 0.5].map((opacity) => (
-              <View
-                key={opacity}
-                style={{
-                  width: 8,
-                  height: 8,
-                  borderRadius: 4,
-                  backgroundColor: colors.muted,
-                  opacity,
-                }}
-              />
-            ))}
-          </View>
-        )}
-        <ErrorNotice error={error} />
-        {!!error && (
-          <Button
-            style={{ alignSelf: "flex-start" }}
-            icon={RotateCcw}
-            disabled={busy || agent.isRunning || !loaded || !isReady}
-            onPress={() => {
-              void run()
-                .then(() => {
-                  if (!queue.getSnapshot().paused) flush();
-                })
-                .catch((e) => setError(e instanceof Error ? e.message : String(e)));
-            }}
-          >
-            Retry response
-          </Button>
-        )}
-      </ScrollView>
-      {awayFromLatest && (
-        <Button
-          small
-          icon={ArrowDown}
-          style={{ alignSelf: "center", marginBottom: 10 }}
-          onPress={() => {
-            followLatest.current = true;
-            setAwayFromLatest(false);
-            list.current?.scrollToEnd({ animated: true });
-          }}
-        >
-          Latest messages
-        </Button>
-      )}
-      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined}>
-        <ErrorNotice error={saveError} />
-        {!!saveError && (
-          <Button
-            small
-            disabled={busy}
-            onPress={() => {
-              void saveHistory().catch((e) => setSaveError(String(e)));
-            }}
-          >
-            Retry saving conversation
-          </Button>
-        )}
-        {!!outbox.pending.length && (
-          <View style={{ padding: 12, gap: 6 }}>
-            <Text style={s.small}>
-              {outbox.paused ? "Messages on hold" : "Up next"} · Keep the app open until sent
-            </Text>
-            {outbox.pending.map((message) => (
-              <View key={message.id} style={[s.row, { gap: 8 }]}>
-                <Text numberOfLines={2} style={[s.muted, { flex: 1 }]}>
-                  {displayJevUserMessage(message.text, messages)}
-                </Text>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={`Remove queued message: ${displayJevUserMessage(message.text, messages)}`}
-                  hitSlop={10}
-                  onPress={() => {
-                    queue.remove(message.id);
-                    choiceCompletions.current
-                      .get(message.id)
-                      ?.reject(new Error("Choice removed from queue."));
-                    choiceCompletions.current.delete(message.id);
-                  }}
-                  style={{ padding: 8 }}
-                >
-                  <X size={16} color={colors.muted} />
-                </Pressable>
-              </View>
-            ))}
-            {outbox.paused && (
-              <Button
-                small
-                disabled={busy || !!saveError}
-                onPress={() => {
-                  queue.resume();
-                  flush();
-                }}
-              >
-                Send queued messages
-              </Button>
-            )}
-          </View>
-        )}
-        {picking && (
-          <Card style={{ marginBottom: 12, padding: 15 }}>
-            <Text style={s.heading}>Add a document</Text>
-            <ScrollView style={{ maxHeight: 230 }} keyboardShouldPersistTaps="handled">
-              {w.files.length ? (
-                w.files.map((f) => (
-                  <CheckRow
-                    key={f.id}
-                    checked={attachments.includes(f.id)}
-                    label={f.name}
-                    onPress={() =>
-                      setAttachments(
-                        attachments.includes(f.id)
-                          ? attachments.filter((id) => id !== f.id)
-                          : [...attachments, f.id],
-                      )
-                    }
-                  />
-                ))
-              ) : (
-                <Text style={s.muted}>Import a PDF in Files to use it in a conversation.</Text>
-              )}
-            </ScrollView>
-            <Button
-              small
-              onPress={() => setPicking(false)}
-              style={{ alignSelf: "flex-end", marginTop: 8 }}
-            >
-              Done
-            </Button>
-          </Card>
-        )}
-        <View
-          style={{
-            backgroundColor: "#FFF",
-            borderRadius: 32,
-            borderWidth: 1,
-            borderColor: focused ? "#C7E4F9" : "#EEF0F2",
-            padding: 8,
-            shadowColor: "#18384B",
-            shadowOpacity: focused ? 0.1 : 0.06,
-            shadowRadius: 20,
-            shadowOffset: { width: 0, height: 4 },
-            elevation: 4,
-          }}
-        >
-          {attachments.length > 0 && (
-            <View style={[s.row, { gap: 6, flexWrap: "wrap", padding: 9 }]}>
-              {w.files
-                .filter((f) => attachments.includes(f.id))
-                .map((f) => (
-                  <Pressable
-                    key={f.id}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Remove attachment: ${f.name}`}
-                    onPress={() => setAttachments((ids) => ids.filter((id) => id !== f.id))}
-                    style={[
-                      s.row,
-                      {
-                        gap: 7,
-                        maxWidth: "100%",
-                        backgroundColor: colors.sky,
-                        borderRadius: 16,
-                        paddingHorizontal: 11,
-                        paddingVertical: 8,
-                      },
-                    ]}
-                  >
-                    <FileText size={14} color={colors.blueDark} />
-                    <Text
-                      numberOfLines={1}
-                      style={{ flexShrink: 1, fontSize: 12, color: colors.text }}
+                    <BrowserRunContext
+                      value={{
+                        running: busy || agent.isRunning,
+                        active:
+                          (busy || agent.isRunning) && messages.indexOf(message) > latestUserIndex,
+                      }}
                     >
-                      {f.name}
-                    </Text>
-                    <X size={13} color={colors.muted} />
-                  </Pressable>
-                ))}
+                      {toolCalls.map((toolCall) => {
+                        const toolMessage = messages.find(
+                          (candidate): candidate is ToolMessage =>
+                            candidate.role === "tool" && candidate.toolCallId === toolCall.id,
+                        );
+                        return (
+                          <View key={toolCall.id}>{renderToolCall({ toolCall, toolMessage })}</View>
+                        );
+                      })}
+                    </BrowserRunContext>
+                  </JevInteractionContext.Provider>
+                </View>
+              );
+            })
+          )}
+          {!richThreads && !channelId && !threadParent && (
+            <>
+              {(w.files.some((file) => file.parentId) ||
+                w.browsers.some((browser) => browser.status === "active") ||
+                !!agentWorkspace?.artifacts.length) && (
+                <Button
+                  small
+                  style={{ alignSelf: "flex-start", marginTop: 6 }}
+                  onPress={() => setShowResults(!showResults)}
+                >
+                  {showResults ? "Hide recent results" : "Recent results"}
+                </Button>
+              )}
+              {showResults && (
+                <>
+                  {w.files
+                    .filter((file) => file.parentId)
+                    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+                    .slice(0, 1)
+                    .map((file) => (
+                      <FileThreadCard key={file.id} file={file} />
+                    ))}
+                  {w.browsers
+                    .filter((browser) => browser.status === "active")
+                    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+                    .slice(0, 1)
+                    .map((browser) => (
+                      <BrowserThreadCard key={browser.id} browser={browser} />
+                    ))}
+                  {[...(agentWorkspace?.artifacts || [])]
+                    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+                    .filter(
+                      (artifact, index, items) =>
+                        items.findIndex((item) => item.kind === artifact.kind) === index,
+                    )
+                    .slice(0, 2)
+                    .reverse()
+                    .map((artifact) => (
+                      <ArtifactCard key={artifact.id} artifact={artifact} />
+                    ))}
+                </>
+              )}
+            </>
+          )}
+          {!channelId && !threadParent && (!richThreads || selection.id === mainId) && (
+            <BackgroundUpdates />
+          )}
+          {(busy || agent.isRunning) && (
+            <View
+              accessibilityLabel="Agent is working"
+              style={[
+                s.row,
+                {
+                  alignSelf: "flex-start",
+                  gap: 7,
+                  paddingHorizontal: 19,
+                  paddingVertical: 18,
+                  backgroundColor: "#EEEEF0",
+                  borderRadius: 28,
+                },
+              ]}
+            >
+              {[0.4, 0.75, 0.5].map((opacity) => (
+                <View
+                  key={opacity}
+                  style={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: 4,
+                    backgroundColor: colors.muted,
+                    opacity,
+                  }}
+                />
+              ))}
             </View>
           )}
-          <View style={[s.row, { gap: 7, alignItems: "flex-end" }]}>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Attach a document"
-              accessibilityState={{ expanded: picking }}
-              onPress={() => setPicking(!picking)}
-              style={({ pressed }) => ({
-                width: 44,
-                height: 44,
-                alignItems: "center",
-                justifyContent: "center",
-                borderRadius: 24,
-                backgroundColor: picking || pressed ? colors.sky : "transparent",
-              })}
-            >
-              <Text style={{ color: colors.text, fontSize: 29, fontWeight: "300", lineHeight: 32 }}>
-                +
-              </Text>
-            </Pressable>
-            <TextInput
-              accessibilityLabel={threadParent ? "Reply in thread" : channelId ? "Message channel" : "Message Hive"}
-              value={draft}
-              onChangeText={(text) => { setDraft(text); onDraftChange?.(text); }}
-              onContentSizeChange={(event) =>
-                setInputHeight(Math.max(44, Math.min(140, event.nativeEvent.contentSize.height)))
-              }
-              placeholder={
-                !isReady
-                  ? "Connecting…"
-                  : !loaded
-                    ? historyError
-                      ? "Conversation unavailable"
-                      : "Loading conversation…"
-                    : threadParent ? "Reply in thread…" : channelId ? "Message channel…" : "Message…"
-              }
-              placeholderTextColor="#949B9F"
-              selectionColor={colors.blueDark}
-              onFocus={() => setFocused(true)}
-              onBlur={() => setFocused(false)}
-              style={{
-                flex: 1,
-                color: colors.text,
-                height: inputHeight,
-                minHeight: 44,
-                maxHeight: 140,
-                fontSize: 17,
-                lineHeight: 24,
-                paddingHorizontal: 2,
-                paddingTop: 10,
-                paddingBottom: 10,
-                ...noFocusRing,
+          <ErrorNotice error={error} />
+          {!!error && (
+            <Button
+              style={{ alignSelf: "flex-start" }}
+              icon={RotateCcw}
+              disabled={busy || agent.isRunning || !loaded || !isReady}
+              onPress={() => {
+                void run()
+                  .then(() => {
+                    if (!queue.getSnapshot().paused) flush();
+                  })
+                  .catch((e) => setError(e instanceof Error ? e.message : String(e)));
               }}
-              multiline
-              editable
-              onKeyPress={
-                Platform.OS === "web"
-                  ? (event) => {
-                      if (
-                        event.nativeEvent.key === "Enter" &&
-                        !("shiftKey" in event.nativeEvent && event.nativeEvent.shiftKey)
-                      ) {
-                        event.preventDefault();
-                        send();
-                      }
-                    }
-                  : undefined
-              }
-            />
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={replying ? "Stop reply" : "Send message"}
-              disabled={!replying && (!draft.trim() || !loaded || !isReady)}
-              onPress={replying ? () => void stop() : send}
-              style={({ pressed }) => ({
-                width: 44,
-                height: 44,
-                borderRadius: 24,
-                backgroundColor: replying || draft.trim() ? colors.blue : "#F3F5F6",
-                alignItems: "center",
-                justifyContent: "center",
-                transform: [{ scale: pressed ? 0.94 : 1 }],
-              })}
             >
-              {replying ? (
-                <Square size={18} fill={colors.text} strokeWidth={0} />
-              ) : (
-                <ArrowUp
-                  size={25}
-                  strokeWidth={1.8}
-                  color={draft.trim() ? colors.text : "#9CB5C5"}
-                />
+              Retry response
+            </Button>
+          )}
+        </ScrollView>
+        {awayFromLatest && (
+          <Button
+            small
+            icon={ArrowDown}
+            style={{ alignSelf: "center", marginBottom: 10 }}
+            onPress={() => {
+              followLatest.current = true;
+              setAwayFromLatest(false);
+              list.current?.scrollToEnd({ animated: true });
+            }}
+          >
+            Latest messages
+          </Button>
+        )}
+        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined}>
+          <ErrorNotice error={saveError} />
+          {!!saveError && (
+            <Button
+              small
+              disabled={busy}
+              onPress={() => {
+                void saveHistory().catch((e) => setSaveError(String(e)));
+              }}
+            >
+              Retry saving conversation
+            </Button>
+          )}
+          {!!outbox.pending.length && (
+            <View style={{ padding: 12, gap: 6 }}>
+              <Text style={s.small}>
+                {outbox.paused ? "Messages on hold" : "Up next"} · Keep the app open until sent
+              </Text>
+              {outbox.pending.map((message) => (
+                <View key={message.id} style={[s.row, { gap: 8 }]}>
+                  <Text numberOfLines={2} style={[s.muted, { flex: 1 }]}>
+                    {displayJevUserMessage(message.text, messages)}
+                  </Text>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`Remove queued message: ${displayJevUserMessage(message.text, messages)}`}
+                    hitSlop={10}
+                    onPress={() => {
+                      queue.remove(message.id);
+                      choiceCompletions.current
+                        .get(message.id)
+                        ?.reject(new Error("Choice removed from queue."));
+                      choiceCompletions.current.delete(message.id);
+                    }}
+                    style={{ padding: 8 }}
+                  >
+                    <X size={16} color={colors.muted} />
+                  </Pressable>
+                </View>
+              ))}
+              {outbox.paused && (
+                <Button
+                  small
+                  disabled={busy || !!saveError}
+                  onPress={() => {
+                    queue.resume();
+                    flush();
+                  }}
+                >
+                  Send queued messages
+                </Button>
               )}
-            </Pressable>
+            </View>
+          )}
+          {picking && (
+            <Card style={{ marginBottom: 12, padding: 15 }}>
+              <Text style={s.heading}>Add a document</Text>
+              <ScrollView style={{ maxHeight: 230 }} keyboardShouldPersistTaps="handled">
+                {w.files.length ? (
+                  w.files.map((f) => (
+                    <CheckRow
+                      key={f.id}
+                      checked={attachments.includes(f.id)}
+                      label={f.name}
+                      onPress={() =>
+                        setAttachments(
+                          attachments.includes(f.id)
+                            ? attachments.filter((id) => id !== f.id)
+                            : [...attachments, f.id],
+                        )
+                      }
+                    />
+                  ))
+                ) : (
+                  <Text style={s.muted}>Import a PDF in Files to use it in a conversation.</Text>
+                )}
+              </ScrollView>
+              <Button
+                small
+                onPress={() => setPicking(false)}
+                style={{ alignSelf: "flex-end", marginTop: 8 }}
+              >
+                Done
+              </Button>
+            </Card>
+          )}
+          <View
+            style={{
+              backgroundColor: "#FFF",
+              borderRadius: channelId || threadParent ? 18 : 32,
+              borderWidth: 1,
+              borderColor: focused ? "#C7E4F9" : "#EEF0F2",
+              padding: 8,
+              shadowColor: "#18384B",
+              shadowOpacity: focused ? 0.1 : 0.06,
+              shadowRadius: 20,
+              shadowOffset: { width: 0, height: 4 },
+              elevation: 4,
+            }}
+          >
+            {attachments.length > 0 && (
+              <View style={[s.row, { gap: 6, flexWrap: "wrap", padding: 9 }]}>
+                {w.files
+                  .filter((f) => attachments.includes(f.id))
+                  .map((f) => (
+                    <Pressable
+                      key={f.id}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Remove attachment: ${f.name}`}
+                      onPress={() => setAttachments((ids) => ids.filter((id) => id !== f.id))}
+                      style={[
+                        s.row,
+                        {
+                          gap: 7,
+                          maxWidth: "100%",
+                          backgroundColor: colors.sky,
+                          borderRadius: 16,
+                          paddingHorizontal: 11,
+                          paddingVertical: 8,
+                        },
+                      ]}
+                    >
+                      <FileText size={14} color={colors.blueDark} />
+                      <Text
+                        numberOfLines={1}
+                        style={{ flexShrink: 1, fontSize: 12, color: colors.text }}
+                      >
+                        {f.name}
+                      </Text>
+                      <X size={13} color={colors.muted} />
+                    </Pressable>
+                  ))}
+              </View>
+            )}
+            <View style={[s.row, { gap: 7, alignItems: "flex-end" }]}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Attach a document"
+                accessibilityState={{ expanded: picking }}
+                onPress={() => setPicking(!picking)}
+                style={({ pressed }) => ({
+                  width: 44,
+                  height: 44,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  borderRadius: 24,
+                  backgroundColor: picking || pressed ? colors.sky : "transparent",
+                })}
+              >
+                <Text
+                  style={{ color: colors.text, fontSize: 29, fontWeight: "300", lineHeight: 32 }}
+                >
+                  +
+                </Text>
+              </Pressable>
+              <TextInput
+                accessibilityLabel={
+                  threadParent ? "Reply in thread" : channelId ? "Message channel" : "Message Hive"
+                }
+                value={draft}
+                onChangeText={(text) => {
+                  setDraft(text);
+                  onDraftChange?.(text);
+                }}
+                onContentSizeChange={(event) =>
+                  setInputHeight(Math.max(44, Math.min(140, event.nativeEvent.contentSize.height)))
+                }
+                placeholder={
+                  !isReady
+                    ? "Connecting…"
+                    : !loaded
+                      ? historyError
+                        ? "Conversation unavailable"
+                        : "Loading conversation…"
+                      : threadParent
+                        ? "Reply in thread…"
+                        : channelId
+                          ? "Message channel…"
+                          : "Message…"
+                }
+                placeholderTextColor="#949B9F"
+                selectionColor={colors.blueDark}
+                onFocus={() => setFocused(true)}
+                onBlur={() => setFocused(false)}
+                style={{
+                  flex: 1,
+                  color: colors.text,
+                  height: inputHeight,
+                  minHeight: 44,
+                  maxHeight: 140,
+                  fontSize: 17,
+                  lineHeight: 24,
+                  paddingHorizontal: 2,
+                  paddingTop: 10,
+                  paddingBottom: 10,
+                  ...noFocusRing,
+                }}
+                multiline
+                editable
+                onKeyPress={
+                  Platform.OS === "web"
+                    ? (event) => {
+                        if (
+                          event.nativeEvent.key === "Enter" &&
+                          !("shiftKey" in event.nativeEvent && event.nativeEvent.shiftKey)
+                        ) {
+                          event.preventDefault();
+                          send();
+                        }
+                      }
+                    : undefined
+                }
+              />
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={replying ? "Stop reply" : "Send message"}
+                disabled={!replying && (!draft.trim() || !loaded || !isReady)}
+                onPress={replying ? () => void stop() : send}
+                style={({ pressed }) => ({
+                  width: 44,
+                  height: 44,
+                  borderRadius: 24,
+                  backgroundColor: replying || draft.trim() ? colors.blue : "#F3F5F6",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  transform: [{ scale: pressed ? 0.94 : 1 }],
+                })}
+              >
+                {replying ? (
+                  <Square size={18} fill={colors.text} strokeWidth={0} />
+                ) : (
+                  <ArrowUp
+                    size={25}
+                    strokeWidth={1.8}
+                    color={draft.trim() ? colors.text : "#9CB5C5"}
+                  />
+                )}
+              </Pressable>
+            </View>
           </View>
-        </View>
-      </KeyboardAvoidingView>
+          {(channelId || threadParent) && (
+            <Text style={[s.small, { paddingTop: 8, paddingHorizontal: 8 }]}>
+              Mention @hive for an agent reply
+              {Platform.OS === "web" ? " · Shift+Enter for a new line" : ""}
+            </Text>
+          )}
+        </KeyboardAvoidingView>
       </View>
-      {channelId && replyPanel && (width >= 1100 ? (
-        <View style={{ display: panelOpen ? "flex" : "none", width: 390, borderLeftWidth: 1,
-          borderLeftColor: colors.line, marginLeft: 18, paddingLeft: 18 }}>
-          {renderReplyPanel()}
-        </View>
-      ) : (
-        <Modal visible={panelOpen && active} animationType="slide" onRequestClose={closeReplies}>
-          <SafeAreaView style={{ flex: 1, padding: 18, backgroundColor: colors.canvas }}>
+      {channelId &&
+        replyPanel &&
+        (width >= 1100 ? (
+          <View
+            style={{
+              display: panelOpen ? "flex" : "none",
+              width: 390,
+              borderLeftWidth: 1,
+              borderLeftColor: colors.line,
+              paddingHorizontal: 20,
+              paddingBottom: 16,
+            }}
+          >
             {renderReplyPanel()}
-          </SafeAreaView>
-        </Modal>
-      ))}
+          </View>
+        ) : (
+          <Modal visible={panelOpen && active} animationType="slide" onRequestClose={closeReplies}>
+            <SafeAreaView style={{ flex: 1, padding: 18, backgroundColor: colors.canvas }}>
+              {renderReplyPanel()}
+            </SafeAreaView>
+          </Modal>
+        ))}
     </View>
   );
   function renderReplyPanel() {
     if (!replyPanel) return null;
-    return <View style={{ flex: 1, minHeight: 0 }}>
-      <View style={[s.between, { paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.line }]}>
-        <View><Text style={s.heading}>Thread</Text><Text style={s.small}>Replies stay in this thread</Text></View>
-        <Pressable accessibilityRole="button" accessibilityLabel="Close thread" onPress={closeReplies}
-          style={{ padding: 10 }}><X size={20} color={colors.text} /></Pressable>
+    return (
+      <View style={{ flex: 1, minHeight: 0 }}>
+        <View
+          style={[
+            s.between,
+            { paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.line },
+          ]}
+        >
+          <View>
+            <Text style={s.heading}>Thread</Text>
+            <Text style={s.small}>Replying to a channel message</Text>
+          </View>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Close thread"
+            onPress={closeReplies}
+            style={{ padding: 10 }}
+          >
+            <X size={20} color={colors.text} />
+          </Pressable>
+        </View>
+        <ScrollView
+          style={{ maxHeight: 180, flexGrow: 0 }}
+          contentContainerStyle={{ paddingVertical: 14 }}
+        >
+          <ChannelMessage
+            text={textOf(replyPanel.parent)}
+            author={replyPanel.parent.role === "user" ? w.profile.name || "You" : "Hive"}
+            assistant={replyPanel.parent.role === "assistant"}
+            timestamp={messageTimestamp(replyPanel.parent)}
+            onNotify={notify}
+          />
+        </ScrollView>
+        <View style={{ height: 1, backgroundColor: colors.line }} />
+        <ChatScreen
+          key={replyPanel.binding.threadId}
+          thread={{ id: replyPanel.binding.threadId, existing: true }}
+          threadParent={replyPanel.parent}
+          active={active && panelOpen}
+          prompt={replyPanel.prompt}
+          onSaved={refreshReplies}
+          initialDraft={threadDrafts[replyPanel.binding.threadId] ?? ""}
+          onDraftChange={(text) =>
+            setThreadDrafts((drafts) => ({ ...drafts, [replyPanel.binding.threadId]: text }))
+          }
+        />
       </View>
-      <ScrollView style={{ maxHeight: 180, flexGrow: 0 }} contentContainerStyle={{ paddingVertical: 14 }}>
-        <ChannelMessage text={textOf(replyPanel.parent)} author={replyPanel.parent.role === "user" ? w.profile.name || "You" : "Hive"}
-          assistant={replyPanel.parent.role === "assistant"} onNotify={notify} />
-      </ScrollView>
-      <View style={{ height: 1, backgroundColor: colors.line }} />
-      <ChatScreen key={replyPanel.binding.threadId}
-        thread={{ id: replyPanel.binding.threadId, existing: true }}
-        threadParent={replyPanel.parent} active={active && panelOpen}
-        prompt={replyPanel.prompt} onSaved={refreshReplies}
-        initialDraft={threadDrafts[replyPanel.binding.threadId] ?? ""}
-        onDraftChange={(text) => setThreadDrafts((drafts) => ({ ...drafts, [replyPanel.binding.threadId]: text }))} />
-    </View>;
+    );
   }
 }
