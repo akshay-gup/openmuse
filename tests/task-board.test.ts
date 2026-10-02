@@ -7,7 +7,7 @@ import { createApp } from "../apps/server/src/app.ts";
 import type { Config } from "../apps/server/src/config.ts";
 import { createStore, type Store } from "../apps/server/src/db.ts";
 import { TaskWorker } from "../apps/server/src/engine/worker.ts";
-import type { AgentTask } from "../packages/domain/src/agent.ts";
+import type { AgentTask, AgentWorkspace, Project } from "../packages/domain/src/agent.ts";
 import { taskColumn } from "../packages/domain/src/agent.ts";
 
 let db: Store, server: Awaited<ReturnType<typeof createApp>>, directory: string, token: string;
@@ -200,4 +200,47 @@ test("the worker never claims manual tasks", async () => {
   } finally {
     await wdb.close();
   }
+});
+
+test("projects group tasks and survive deletion", async () => {
+  const project = await read<Project>("/projects", { name: "Website" }, 201);
+  assert.equal(project.name, "Website");
+  const issue = await read<AgentTask>(
+    "/tasks",
+    { title: "In project", kind: "manual", projectId: project.id },
+    201,
+  );
+  assert.equal(issue.projectId, project.id);
+  const loose = await read<AgentTask>("/tasks", { title: "No project", kind: "manual" }, 201);
+  assert.equal(loose.projectId, null);
+  await read("/tasks", { title: "Bad project", kind: "manual", projectId: "nope" }, 404);
+  const snapshot = await read<AgentWorkspace>("", undefined, 200, "GET");
+  assert.ok(snapshot.projects.some((p) => p.id === project.id));
+  const renamed = await read<Project>(
+    `/projects/${project.id}`,
+    { name: "Website v2" },
+    200,
+    "PATCH",
+  );
+  assert.equal(renamed.name, "Website v2");
+  const moved = await read<AgentTask>(`/tasks/${issue.id}`, { projectId: null }, 200, "PATCH");
+  assert.equal(moved.projectId, null);
+  await read(`/tasks/${issue.id}`, { projectId: "nope" }, 404, "PATCH");
+  // Deleting a project keeps its tasks, moved to "No project".
+  const doomed = await read<Project>("/projects", { name: "Doomed" }, 201);
+  const member = await read<AgentTask>(
+    "/tasks",
+    { title: "Member", kind: "manual", projectId: doomed.id },
+    201,
+  );
+  const deleted = await read<{ deleted: string }>(
+    `/projects/${doomed.id}`,
+    undefined,
+    200,
+    "DELETE",
+  );
+  assert.equal(deleted.deleted, doomed.id);
+  const after = await read<{ task: AgentTask }>(`/tasks/${member.id}`, undefined, 200, "GET");
+  assert.equal(after.task.projectId, null);
+  await read(`/projects/${doomed.id}`, { name: "x" }, 404, "PATCH");
 });

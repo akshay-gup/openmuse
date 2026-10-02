@@ -11,6 +11,7 @@ import {
   type Channel,
   type ChannelThread,
   createChannelSchema,
+  createProjectSchema,
   createTaskSchema,
   type Evidence,
   type Goal,
@@ -19,8 +20,10 @@ import {
   type Monitor,
   monitorInputSchema,
   ORCHESTRATOR_CHANNEL_ID,
+  type Project,
   type RunEvent,
   type TaskStatus,
+  updateProjectSchema,
   updateTaskSchema,
 } from "../../../../packages/domain/src/agent.ts";
 import type {
@@ -367,10 +370,11 @@ export class AgentService {
   }
   async snapshot(owner: string): Promise<AgentWorkspace> {
     await this.ensure(owner);
-    const [tasks, goals, monitors, ideas, memories, artifacts, notifications, identity] =
+    const [tasks, goals, projects, monitors, ideas, memories, artifacts, notifications, identity] =
       await Promise.all([
         this.db.list<AgentTask>(owner, "tasks"),
         this.db.list<Goal>(owner, "goals"),
+        this.db.list<Project>(owner, "projects"),
         this.db.list<Monitor>(owner, "monitors"),
         this.db.list<Idea>(owner, "ideas"),
         this.db.list<AgentMemory>(owner, "memories"),
@@ -388,6 +392,7 @@ export class AgentService {
     return {
       tasks,
       goals,
+      projects,
       monitors,
       ideas,
       memories,
@@ -431,6 +436,7 @@ export class AgentService {
     const input = createTaskSchema.parse(raw);
     if (input.goalId && !(await this.db.get(owner, "goals", input.goalId)))
       throw new AppError("Goal not found", 404);
+    if (input.projectId) await this.requireProject(owner, input.projectId);
     const channelId = input.channelId ?? ORCHESTRATOR_CHANNEL_ID;
     if (
       channelId !== ORCHESTRATOR_CHANNEL_ID &&
@@ -471,6 +477,7 @@ export class AgentService {
       prompt: input.prompt ?? "",
       kind: input.kind,
       goalId: input.goalId,
+      projectId: input.projectId ?? null,
       priority: input.priority,
       startAt: input.startAt ?? null,
       dueAt: input.dueAt ?? null,
@@ -614,6 +621,10 @@ export class AgentService {
         throw new AppError("Goal not found", 404);
       patch.goalId = input.goalId ?? undefined;
     }
+    if (input.projectId !== undefined) {
+      if (input.projectId) await this.requireProject(owner, input.projectId);
+      patch.projectId = input.projectId;
+    }
     const startAt = input.startAt !== undefined ? input.startAt : (task.startAt ?? null);
     const dueAt = input.dueAt !== undefined ? input.dueAt : (task.dueAt ?? null);
     if (startAt && dueAt && startAt > dueAt)
@@ -755,6 +766,47 @@ export class AgentService {
         if (task.goalId === id && !terminal.has(task.status) && task.status !== "paused")
           await this.control(owner, task.id, "pause");
     return saved;
+  }
+  async createProject(owner: string, raw: unknown): Promise<Project> {
+    const input = createProjectSchema.parse(raw);
+    const project: Project = {
+      id: randomUUID(),
+      name: input.name,
+      description: input.description,
+      createdAt: date(),
+      updatedAt: date(),
+    };
+    return this.db.put(owner, "projects", project);
+  }
+  async updateProject(owner: string, id: string, raw: unknown): Promise<Project> {
+    const input = updateProjectSchema.parse(raw);
+    const project = await this.db.get<Project>(owner, "projects", id);
+    if (!project) throw new AppError("Project not found", 404);
+    return this.db.put(owner, "projects", {
+      ...project,
+      name: input.name ?? project.name,
+      description:
+        input.description !== undefined ? (input.description ?? undefined) : project.description,
+      updatedAt: date(),
+    });
+  }
+  /** Delete a project; its tasks move to "No project". */
+  async deleteProject(owner: string, id: string): Promise<{ deleted: string }> {
+    const project = await this.db.get<Project>(owner, "projects", id);
+    if (!project) throw new AppError("Project not found", 404);
+    await this.db.remove(owner, "projects", id);
+    for (const task of await this.db.list<AgentTask>(owner, "tasks"))
+      if (task.projectId === id)
+        await this.db.put(owner, "tasks", {
+          ...task,
+          projectId: null,
+          updatedAt: date(),
+        });
+    return { deleted: id };
+  }
+  private async requireProject(owner: string, projectId: string) {
+    if (!(await this.db.get<Project>(owner, "projects", projectId)))
+      throw new AppError("Project not found", 404);
   }
   async createMonitor(owner: string, raw: unknown, idempotencyKey?: string) {
     const input = monitorInputSchema.parse(raw);

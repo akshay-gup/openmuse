@@ -40,6 +40,15 @@ export function agentRoutes(service: AgentService): Hono<{ Variables: { owner: s
   app.delete("/tasks/:id", async (c) =>
     c.json(await service.deleteTask(c.get("owner"), c.req.param("id"))),
   );
+  app.post("/projects", async (c) =>
+    c.json(await service.createProject(c.get("owner"), await c.req.json()), 201),
+  );
+  app.patch("/projects/:id", async (c) =>
+    c.json(await service.updateProject(c.get("owner"), c.req.param("id"), await c.req.json())),
+  );
+  app.delete("/projects/:id", async (c) =>
+    c.json(await service.deleteProject(c.get("owner"), c.req.param("id"))),
+  );
   app.post("/tasks/:id/control", async (c) => {
     const { action } = z
       .object({ action: z.enum(["pause", "resume", "cancel", "retry"]) })

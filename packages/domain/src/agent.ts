@@ -49,6 +49,8 @@ export interface AgentTask {
   kind: "agent" | "document" | "monitor" | "finance" | "plan" | "manual";
   status: TaskStatus;
   goalId?: string;
+  /** Project grouping for the board. Unset tasks sit in "No project". */
+  projectId?: string | null;
   /** Manual tasks are human work: no prompt execution, the worker never claims them. */
   priority: TaskPriority;
   /** ISO date (yyyy-mm-dd) for the timeline view. */
@@ -101,6 +103,24 @@ export interface Goal {
   milestones: { id: string; title: string; done: boolean }[];
   createdAt: string;
 }
+/** A project groups tasks on the board. Tasks without one sit in "No project". */
+export interface Project {
+  id: string;
+  name: string;
+  description?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+export const createProjectSchema = z.object({
+  name: z.string().trim().min(1).max(80),
+  description: z.string().trim().max(500).optional(),
+});
+export type CreateProjectInput = z.infer<typeof createProjectSchema>;
+export const updateProjectSchema = z.object({
+  name: z.string().trim().min(1).max(80).optional(),
+  description: z.string().trim().max(500).nullable().optional(),
+});
+export type UpdateProjectInput = z.infer<typeof updateProjectSchema>;
 export interface Monitor {
   id: string;
   taskId: string;
@@ -161,6 +181,7 @@ export interface AgentIdentity {
 export interface AgentWorkspace {
   tasks: AgentTask[];
   goals: Goal[];
+  projects: Project[];
   monitors: Monitor[];
   ideas: Idea[];
   memories: AgentMemory[];
@@ -180,6 +201,7 @@ export const createTaskSchema = z.object({
   prompt: z.string().trim().min(1).max(12000).optional(),
   kind: z.enum(["agent", "document", "monitor", "finance", "plan", "manual"]).default("agent"),
   goalId: z.string().optional(),
+  projectId: z.string().trim().min(1).max(80).optional(),
   channelId: z.string().trim().min(1).max(80).optional(),
   threadId: z.string().trim().min(1).max(120).optional(),
   input: z.record(z.string(), z.unknown()).default({}),
@@ -208,6 +230,7 @@ export const updateTaskSchema = z.object({
     .optional(),
   priority: taskPrioritySchema.optional(),
   goalId: z.string().nullable().optional(),
+  projectId: z.string().trim().min(1).max(80).nullable().optional(),
   startAt: isoDate.nullable().optional(),
   dueAt: isoDate.nullable().optional(),
   blockedBy: z.array(z.string().trim().min(1).max(80)).max(20).optional(),
