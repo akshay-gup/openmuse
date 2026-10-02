@@ -11,6 +11,8 @@ import { ArrowDown, ArrowUp, FileText, RotateCcw, Square, X } from "lucide-react
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import {
   KeyboardAvoidingView,
+  Modal,
+  useWindowDimensions,
   Platform,
   Pressable,
   ScrollView,
@@ -20,12 +22,15 @@ import {
   View,
 } from "react-native";
 import { z } from "zod";
+import { SafeAreaView } from "react-native-safe-area-context";
 import type { Channel, ChannelThread } from "../../../packages/domain/src/agent";
 import { ArtifactCard } from "./agent-ui";
 import { useAgentWorkspace } from "./agent-workspace";
 import { AssistantResponse } from "./assistant-response";
 import { BackgroundUpdates } from "./background-updates";
 import { BrowserRunContext, BrowserToolCard } from "./browser-tool-card";
+import { ChannelMessage } from "./channel-message";
+import { countThreadReplies } from "./thread-replies";
 import { ChannelThreadBanner } from "./channel-thread";
 import { BrowserThreadCard } from "./computer";
 import { ConversationQueue, type QueuedMessage } from "./conversation-queue";
@@ -229,14 +234,22 @@ export function ChatScreen({
   prompt,
   thread,
   active = true,
+  threadParent,
+  onSaved,
+  initialDraft = "",
+  onDraftChange,
 }: {
   prompt?: { id: number; text: string };
   thread?: Selection;
   active?: boolean;
+  threadParent?: Message;
+  onSaved?: () => void;
+  initialDraft?: string;
+  onDraftChange?: (text: string) => void;
 }) {
-  const { api, workspace: w, refresh, navigate, ask } = useWorkspace();
+  const { api, workspace: w, refresh, navigate, notify } = useWorkspace();
   const { data: agentWorkspace, refresh: refreshAgent } = useAgentWorkspace();
-  const { enabled: richThreads, mainId, claimPrompt, select } = useMuseThread();
+  const { enabled: richThreads, mainId, claimPrompt } = useMuseThread();
   const selection = thread || { id: "local", existing: false };
   const threadId = resolveThreadId(richThreads, selection);
   // A channel opens directly as a chat surface (no thread needed); the server
@@ -244,7 +257,16 @@ export function ChatScreen({
   // replies and @hive mentions.
   const channelId = channelIdOf(selection);
   const [channelThreads, setChannelThreads] = useState<ChannelThread[] | null>(null);
-  const [replyingTo, setReplyingTo] = useState<Message | null>(null);
+  const { width } = useWindowDimensions();
+  const [replyPanel, setReplyPanel] = useState<{
+    binding: ChannelThread; parent: Message; prompt?: { id: number; text: string };
+  } | null>(null);
+  const [panelOpen, setPanelOpen] = useState(false);
+  const [openingReply, setOpeningReply] = useState(false);
+  const openingReplyRef = useRef(false);
+  const [replyCounts, setReplyCounts] = useState<Record<string, number>>({});
+  const [threadsAttempt, setThreadsAttempt] = useState(0);
+  const [threadDrafts, setThreadDrafts] = useState<Record<string, string>>({});
   const agentId = `hive-${threadId}`;
   // Keyless persistence: the main chat keeps the legacy /api/conversation
   // record; channel threads persist under their own thread id.
@@ -255,7 +277,7 @@ export function ChatScreen({
   const { agent, isReady } = useAgent({ agentId, runtimeAgentId: "default", threadId });
   const { copilotkit } = useCopilotKit();
   const renderToolCall = useRenderToolCall();
-  const [draft, setDraft] = useState("");
+  const [draft, setDraft] = useState(initialDraft);
   const [focused, setFocused] = useState(false);
   const [inputHeight, setInputHeight] = useState(44);
   const [showResults, setShowResults] = useState(false);
@@ -329,7 +351,8 @@ export function ChatScreen({
   const saveHistory = useCallback(async () => {
     if (!richThreads) await api.request(conversationPath, { messages: agent.messages }, "PUT");
     setSaveError("");
-  }, [agent, api, conversationPath, richThreads]);
+    onSaved?.();
+  }, [agent, api, conversationPath, richThreads, onSaved]);
   const run = useCallback(
     async (message?: QueuedMessage) => {
       if (runLock.current || agent.isRunning || !isReady || !loaded)
@@ -422,8 +445,17 @@ export function ChatScreen({
     let active = true;
     void api
       .request<ChannelThread[]>(`/api/agent/channels/${channelId}/threads`)
-      .then((threads) => {
+      .then(async (threads) => {
         if (active) setChannelThreads(threads);
+        const counts = await Promise.all(threads.map(async (binding) => {
+          try {
+            const conversation = await api.request<{ messages: Message[] }>(
+              `/api/conversation?threadId=${encodeURIComponent(binding.threadId)}`,
+            );
+            return [binding.threadId, countThreadReplies(conversation.messages, binding.parentMessageId)] as const;
+          } catch { return [binding.threadId, 0] as const; }
+        }));
+        if (active) setReplyCounts(Object.fromEntries(counts));
       })
       .catch(() => {
         if (active) setChannelThreads([]);
@@ -431,18 +463,20 @@ export function ChatScreen({
     return () => {
       active = false;
     };
-  }, [api, channelId]);
+  }, [api, channelId, threadsAttempt]);
+  const refreshReplies = useCallback(() => setThreadsAttempt((n) => n + 1), []);
   /**
    * Auto-create a thread forked from channel messages: the thread is seeded
    * with the given context, the first message is delivered via the prompt
-   * mechanism, and the UI navigates to the new thread.
+   * mechanism, and the UI opens it alongside the channel.
    */
   const forkThread = useCallback(
     async (opts: {
       name: string;
       parentMessageId?: string;
       seed: { id: string; role: "user" | "assistant"; content: string }[];
-      firstText: string;
+      firstText?: string;
+      parent: Message;
     }) => {
       if (!channelId) return;
       const binding = await api.request<ChannelThread>(`/api/agent/channels/${channelId}/threads`, {
@@ -455,10 +489,12 @@ export function ChatScreen({
         "PUT",
       );
       setChannelThreads((threads) => [...(threads ?? []), binding]);
-      ask(opts.firstText);
-      select({ id: binding.threadId, existing: true });
+      setReplyPanel({ binding, parent: opts.parent,
+        prompt: opts.firstText ? { id: Date.now(), text: opts.firstText } : undefined,
+      });
+      setPanelOpen(true);
     },
-    [api, ask, channelId, select],
+    [api, channelId],
   );
   function projectForSeed(message: Message): {
     id: string;
@@ -470,6 +506,26 @@ export function ChatScreen({
     if (!content) return null;
     return { id: message.id, role: message.role, content };
   }
+  async function openReply(parent: Message) {
+    if (openingReplyRef.current) return;
+    openingReplyRef.current = true;
+    setOpeningReply(true);
+    setError("");
+    try {
+      const existing = (channelThreads ?? []).find((t) => t.parentMessageId === parent.id);
+      if (existing) {
+        if (replyPanel?.binding.threadId !== existing.threadId)
+          setReplyPanel({ binding: existing, parent });
+        setPanelOpen(true);
+      } else {
+        const seeded = projectForSeed(parent);
+        await forkThread({ name: threadNameFor(textOf(parent)), parentMessageId: parent.id,
+          parent, seed: seeded ? [seeded] : [] });
+      }
+    } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
+    finally { openingReplyRef.current = false; setOpeningReply(false); }
+  }
+  function closeReplies() { setPanelOpen(false); refreshReplies(); }
   useEffect(() => {
     if (active && prompt && isReady && loaded && claimPrompt(prompt.id) && prompt.text.trim())
       enqueue(prompt.text);
@@ -507,24 +563,11 @@ export function ChatScreen({
         : "");
     const clearComposer = () => {
       setDraft("");
+      onDraftChange?.("");
       setInputHeight(44);
       setAttachments([]);
       setPicking(false);
     };
-    // In a channel chat, a reply forks a thread seeded with the parent message.
-    if (channelId && replyingTo) {
-      const parent = replyingTo;
-      const seeded = projectForSeed(parent);
-      setReplyingTo(null);
-      clearComposer();
-      void forkThread({
-        name: threadNameFor(textOf(parent)),
-        parentMessageId: parent.id,
-        seed: seeded ? [seeded] : [],
-        firstText: fullText,
-      }).catch((e) => setError(e instanceof Error ? e.message : String(e)));
-      return;
-    }
     // In a channel chat, @hive forks a thread for the worker's response. The
     // mention itself stays in the channel as the thread's parent; the thread
     // is seeded with recent channel messages so the worker has context.
@@ -539,7 +582,8 @@ export function ChatScreen({
       void forkThread({
         name: threadNameFor(fullText),
         parentMessageId: messageId,
-        seed,
+        seed: [...seed, { id: messageId, role: "user", content: fullText }],
+        parent: { id: messageId, role: "user", content: fullText },
         firstText: fullText,
       }).catch((e) => setError(e instanceof Error ? e.message : String(e)));
       // The mention persists in the channel through the normal path; the
@@ -571,10 +615,14 @@ export function ChatScreen({
     latestUserIndex >= 0 && typeof messages[latestUserIndex]?.content === "string"
       ? messages[latestUserIndex].content
       : null;
-  const visible = messages.filter((m) => m.role === "user" || m.role === "assistant");
+  const parentIndex = threadParent ? messages.findIndex((m) => m.id === threadParent.id) : -1;
+  const visible = messages.filter((m, index) =>
+    (m.role === "user" || m.role === "assistant") && index > parentIndex,
+  );
   const replying = busy || agent.isRunning;
   return (
-    <View style={{ flex: 1 }}>
+    <View style={{ flex: 1, flexDirection: "row", minHeight: 0 }}>
+      <View style={{ flex: 1, minWidth: 0 }}>
       <ScrollView
         ref={list}
         showsVerticalScrollIndicator={false}
@@ -602,12 +650,12 @@ export function ChatScreen({
         {channelId ? (
           <ChannelChatBanner channelId={channelId} />
         ) : (
-          (richThreads || selection.id !== "local") && (
+          !threadParent && (richThreads || selection.id !== "local") && (
             <ChannelThreadBanner threadId={threadId} mainId={mainId} />
           )
         )}
         {(richThreads || selection.id !== "local") && <PendingApprovals threadId={threadId} />}
-        {!visible.length ? (
+        {!visible.length && !threadParent ? (
           <View
             style={{
               flexGrow: 1,
@@ -627,13 +675,12 @@ export function ChatScreen({
                 maxWidth: 350,
               }}
             >
-              A little help. A lot more room for life.
+              {channelId ? "Start the conversation" : "A little help. A lot more room for life."}
             </Text>
             <Text style={[s.muted, { maxWidth: 320, textAlign: "center", lineHeight: 23 }]}>
-              Tell me what’s on your mind. I can make a plan, work with your apps, and use my
-              computer to help.
+              {channelId ? "Post a message to the channel. Use Reply in thread to keep each discussion together." : "Tell me what’s on your mind. I can make a plan, work with your apps, and use my computer to help."}
             </Text>
-            <View style={{ width: "100%", maxWidth: 360, marginTop: 14, gap: 8 }}>
+            <View style={{ display: channelId ? "none" : "flex", width: "100%", maxWidth: 360, marginTop: 14, gap: 8 }}>
               {[
                 {
                   text: "Find cool things on Hacker News",
@@ -664,52 +711,29 @@ export function ChatScreen({
               <View
                 key={message.id}
                 style={{
-                  alignSelf: user ? "flex-end" : "flex-start",
-                  maxWidth: user ? "85%" : "95%",
-                  width: toolCalls.length ? "95%" : undefined,
+                  alignSelf: channelId || threadParent ? "stretch" : user ? "flex-end" : "flex-start",
+                  maxWidth: channelId || threadParent ? "100%" : user ? "85%" : "95%",
+                  width: channelId || threadParent ? "100%" : toolCalls.length ? "95%" : undefined,
                   gap: 8,
                 }}
               >
-                {!!text && (
-                  <Pressable
-                    onLongPress={() => {
-                      if (channelId && text) setReplyingTo(message);
-                    }}
-                    delayLongPress={350}
-                    accessibilityLabel={channelId ? "Long press to reply" : undefined}
-                  >
-                    <View
-                      style={{
-                        paddingHorizontal: 16,
-                        paddingVertical: 13,
-                        borderRadius: 22,
-                        borderBottomRightRadius: user ? 7 : 22,
-                        borderBottomLeftRadius: user ? 22 : 7,
-                        backgroundColor: user ? colors.blue : "#EEEEF0",
-                      }}
-                    >
-                      {user ? (
-                        <Text selectable style={[s.text, { fontSize: 16, lineHeight: 24 }]}>
-                          {text}
-                        </Text>
-                      ) : (
-                        <AssistantResponse content={text} />
-                      )}
-                    </View>
-                  </Pressable>
-                )}
-                {!!latestReply && (
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={`Open thread with ${replies.length} ${replies.length === 1 ? "reply" : "replies"}`}
-                    onPress={() => select({ id: latestReply.threadId, existing: true })}
-                    style={{ alignSelf: user ? "flex-end" : "flex-start", paddingVertical: 2 }}
-                  >
-                    <Text style={[s.small, { color: colors.blueDark }]}>
-                      {replies.length} {replies.length === 1 ? "reply" : "replies"} →
-                    </Text>
-                  </Pressable>
-                )}
+                {!!text && (channelId || threadParent ? (
+                  <ChannelMessage
+                    text={text} author={user ? w.profile.name || "You" : "Hive"}
+                    assistant={!user} selected={panelOpen && replyPanel?.parent.id === message.id}
+                    onReply={channelId ? () => void openReply(message) : undefined}
+                    replyDisabled={openingReply || !loaded || channelThreads === null}
+                    replyCount={replies.reduce((sum, binding) => sum + (replyCounts[binding.threadId] ?? 0), 0)}
+                    hasThread={!!latestReply} onNotify={notify}
+                  />
+                ) : (
+                  <View style={{ paddingHorizontal: 16, paddingVertical: 13, borderRadius: 22,
+                    borderBottomRightRadius: user ? 7 : 22, borderBottomLeftRadius: user ? 22 : 7,
+                    backgroundColor: user ? colors.blue : "#EEEEF0" }}>
+                    {user ? <Text selectable style={[s.text, { fontSize: 16, lineHeight: 24 }]}>{text}</Text>
+                      : <AssistantResponse content={text} />}
+                  </View>
+                ))}
                 <JevInteractionContext.Provider
                   value={{
                     threadId,
@@ -758,7 +782,7 @@ export function ChatScreen({
             );
           })
         )}
-        {!richThreads && (
+        {!richThreads && !channelId && !threadParent && (
           <>
             {(w.files.some((file) => file.parentId) ||
               w.browsers.some((browser) => browser.status === "active") ||
@@ -802,7 +826,7 @@ export function ChatScreen({
             )}
           </>
         )}
-        {(!richThreads || selection.id === mainId) && <BackgroundUpdates />}
+        {!channelId && !threadParent && (!richThreads || selection.id === mainId) && <BackgroundUpdates />}
         {(busy || agent.isRunning) && (
           <View
             accessibilityLabel="Agent is working"
@@ -950,35 +974,6 @@ export function ChatScreen({
             </Button>
           </Card>
         )}
-        {replyingTo && (
-          <View
-            style={[
-              s.row,
-              {
-                gap: 8,
-                alignItems: "center",
-                backgroundColor: "#F4F4F6",
-                borderRadius: 16,
-                paddingHorizontal: 12,
-                paddingVertical: 9,
-                marginBottom: 8,
-              },
-            ]}
-          >
-            <Text style={[s.small, { color: colors.blueDark }]}>Replying to</Text>
-            <Text numberOfLines={1} style={[s.muted, { flex: 1 }]}>
-              {threadNameFor(textOf(replyingTo))}
-            </Text>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Cancel reply"
-              onPress={() => setReplyingTo(null)}
-              style={{ padding: 6 }}
-            >
-              <X size={14} color={colors.muted} />
-            </Pressable>
-          </View>
-        )}
         <View
           style={{
             backgroundColor: "#FFF",
@@ -1047,9 +1042,9 @@ export function ChatScreen({
               </Text>
             </Pressable>
             <TextInput
-              accessibilityLabel="Message Hive"
+              accessibilityLabel={threadParent ? "Reply in thread" : channelId ? "Message channel" : "Message Hive"}
               value={draft}
-              onChangeText={setDraft}
+              onChangeText={(text) => { setDraft(text); onDraftChange?.(text); }}
               onContentSizeChange={(event) =>
                 setInputHeight(Math.max(44, Math.min(140, event.nativeEvent.contentSize.height)))
               }
@@ -1060,7 +1055,7 @@ export function ChatScreen({
                     ? historyError
                       ? "Conversation unavailable"
                       : "Loading conversation…"
-                    : "Message…"
+                    : threadParent ? "Reply in thread…" : channelId ? "Message channel…" : "Message…"
               }
               placeholderTextColor="#949B9F"
               selectionColor={colors.blueDark}
@@ -1123,6 +1118,40 @@ export function ChatScreen({
           </View>
         </View>
       </KeyboardAvoidingView>
+      </View>
+      {channelId && replyPanel && (width >= 1100 ? (
+        <View style={{ display: panelOpen ? "flex" : "none", width: 390, borderLeftWidth: 1,
+          borderLeftColor: colors.line, marginLeft: 18, paddingLeft: 18 }}>
+          {renderReplyPanel()}
+        </View>
+      ) : (
+        <Modal visible={panelOpen && active} animationType="slide" onRequestClose={closeReplies}>
+          <SafeAreaView style={{ flex: 1, padding: 18, backgroundColor: colors.canvas }}>
+            {renderReplyPanel()}
+          </SafeAreaView>
+        </Modal>
+      ))}
     </View>
   );
+  function renderReplyPanel() {
+    if (!replyPanel) return null;
+    return <View style={{ flex: 1, minHeight: 0 }}>
+      <View style={[s.between, { paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.line }]}>
+        <View><Text style={s.heading}>Thread</Text><Text style={s.small}>Replies stay in this thread</Text></View>
+        <Pressable accessibilityRole="button" accessibilityLabel="Close thread" onPress={closeReplies}
+          style={{ padding: 10 }}><X size={20} color={colors.text} /></Pressable>
+      </View>
+      <ScrollView style={{ maxHeight: 180, flexGrow: 0 }} contentContainerStyle={{ paddingVertical: 14 }}>
+        <ChannelMessage text={textOf(replyPanel.parent)} author={replyPanel.parent.role === "user" ? w.profile.name || "You" : "Hive"}
+          assistant={replyPanel.parent.role === "assistant"} onNotify={notify} />
+      </ScrollView>
+      <View style={{ height: 1, backgroundColor: colors.line }} />
+      <ChatScreen key={replyPanel.binding.threadId}
+        thread={{ id: replyPanel.binding.threadId, existing: true }}
+        threadParent={replyPanel.parent} active={active && panelOpen}
+        prompt={replyPanel.prompt} onSaved={refreshReplies}
+        initialDraft={threadDrafts[replyPanel.binding.threadId] ?? ""}
+        onDraftChange={(text) => setThreadDrafts((drafts) => ({ ...drafts, [replyPanel.binding.threadId]: text }))} />
+    </View>;
+  }
 }

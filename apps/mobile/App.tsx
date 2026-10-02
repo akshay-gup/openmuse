@@ -297,7 +297,7 @@ function WorkspaceShell({
         <View style={{ flex: 1, flexDirection: desktop ? "row" : "column" }}>
           {desktop && <Sidebar />}
           <View style={{ flex: 1, minWidth: 0, alignItems: "center" }}>
-            <View style={{ flex: 1, width: "100%", maxWidth: 760 }}>
+            <View style={{ flex: 1, width: "100%", maxWidth: selection.id.startsWith("channel:") ? 1240 : 760 }}>
               <View
                 style={{
                   height: desktop ? 146 : 122,
