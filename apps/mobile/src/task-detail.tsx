@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { Text, View } from "react-native";
+import { ScrollView, Text, View } from "react-native";
 import {
   type AgentTask,
+  type Project,
   type TaskPriority,
   type TaskStatus,
   taskPriorities,
@@ -42,10 +43,12 @@ const datePattern = /^\d{4}-\d{2}-\d{2}$/;
 export function TaskDetail({
   task,
   tasks,
+  projects,
   onClose,
 }: {
   task: AgentTask;
   tasks: AgentTask[];
+  projects: Project[];
   onClose: () => void;
 }) {
   const { api } = useWorkspace();
@@ -170,6 +173,32 @@ export function TaskDetail({
           onChangeText={setLabels}
           placeholder="—"
         />
+        <View style={{ gap: 6 }}>
+          <Text style={s.label}>Project</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            <View style={[s.row, { gap: 8 }]}>
+              <Button
+                small
+                primary={!task.projectId}
+                disabled={busy}
+                onPress={() => void patch({ projectId: null })}
+              >
+                No project
+              </Button>
+              {projects.map((project) => (
+                <Button
+                  key={project.id}
+                  small
+                  primary={task.projectId === project.id}
+                  disabled={busy}
+                  onPress={() => void patch({ projectId: project.id })}
+                >
+                  {project.name}
+                </Button>
+              ))}
+            </View>
+          </ScrollView>
+        </View>
         <Button primary disabled={busy} onPress={saveFields}>
           Save changes
         </Button>

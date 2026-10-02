@@ -38,6 +38,12 @@ import { ActivityScreen, ConnectionsScreen } from "./screens";
 import { TaskBoard } from "./task-board";
 import { TaskCreate } from "./task-create";
 import { TaskDetail as IssueDetail } from "./task-detail";
+import {
+  ProjectCreate,
+  ProjectManage,
+  type ProjectSelection,
+  ProjectSwitcher,
+} from "./task-project";
 import { TaskTimeline } from "./task-timeline";
 import {
   Button,
@@ -187,16 +193,43 @@ export function AgentActivityScreen() {
   const { data } = useAgentWorkspace();
   const [filter, setFilter] = useState("All");
   const [view, setView] = useState<"list" | "board" | "timeline">("list");
+  const [projectFilter, setProjectFilter] = useState<ProjectSelection>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [creatingProject, setCreatingProject] = useState(false);
+  const [managingProjectId, setManagingProjectId] = useState<string | null>(null);
+  const projects = data?.projects ?? [];
   const allTasks = [...(data?.tasks || [])].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-  const tasks = allTasks.filter(
+  const projectTasks = allTasks.filter(
+    (task) =>
+      projectFilter === null ||
+      (projectFilter === "none" ? !task.projectId : task.projectId === projectFilter),
+  );
+  const tasks = projectTasks.filter(
     (task) => filter === "All" || (filter === "In progress" ? activeTask(task) : !activeTask(task)),
   );
   const selected = selectedId ? allTasks.find((task) => task.id === selectedId) : undefined;
+  const managingProject = managingProjectId
+    ? projects.find((project) => project.id === managingProjectId)
+    : undefined;
+  const activeProject =
+    typeof projectFilter === "string" && projectFilter !== "none"
+      ? projects.find((project) => project.id === projectFilter)
+      : undefined;
   return (
     <View style={{ gap: 20 }}>
       <AgentStatus />
+      <ProjectSwitcher
+        projects={projects}
+        selected={projectFilter}
+        onSelect={(selection) => {
+          setProjectFilter(selection);
+          setSelectedId(null);
+        }}
+        onNew={() => setCreatingProject(true)}
+        onManage={(project) => setManagingProjectId(project.id)}
+      />
+      {activeProject?.description ? <Text style={s.muted}>{activeProject.description}</Text> : null}
       <View style={[s.row, { gap: 8, flexWrap: "wrap" }]}>
         {(["list", "board", "timeline"] as const).map((item) => (
           <Button key={item} small primary={view === item} onPress={() => setView(item)}>
@@ -231,15 +264,28 @@ export function AgentActivityScreen() {
         </>
       )}
       {view === "board" && (
-        <TaskBoard tasks={allTasks} onSelect={(task) => setSelectedId(task.id)} />
+        <TaskBoard tasks={projectTasks} onSelect={(task) => setSelectedId(task.id)} />
       )}
       {view === "timeline" && (
-        <TaskTimeline tasks={allTasks} onSelect={(task) => setSelectedId(task.id)} />
+        <TaskTimeline tasks={projectTasks} onSelect={(task) => setSelectedId(task.id)} />
       )}
       {selected && (
-        <IssueDetail task={selected} tasks={allTasks} onClose={() => setSelectedId(null)} />
+        <IssueDetail
+          task={selected}
+          tasks={allTasks}
+          projects={projects}
+          onClose={() => setSelectedId(null)}
+        />
       )}
       {creating && <TaskCreate onClose={() => setCreating(false)} />}
+      {creatingProject && <ProjectCreate onClose={() => setCreatingProject(false)} />}
+      {managingProject && (
+        <ProjectManage
+          project={managingProject}
+          taskCount={allTasks.filter((task) => task.projectId === managingProject.id).length}
+          onClose={() => setManagingProjectId(null)}
+        />
+      )}
       <SectionHeading title="Reviews & receipts" />
       <ActivityScreen />
     </View>

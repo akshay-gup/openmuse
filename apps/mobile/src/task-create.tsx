@@ -7,7 +7,7 @@ import { Button, ErrorNotice, Field, Sheet, s } from "./ui";
 
 const datePattern = /^\d{4}-\d{2}-\d{2}$/;
 
-/** Create a manual issue (human task). The agent is the primary manipulator. */
+/** Create a manual issue (human task). New issues start in No project. */
 export function TaskCreate({ onClose }: { onClose: () => void }) {
   const { refresh, mutate } = useAgentWorkspace();
   const [title, setTitle] = useState("");
