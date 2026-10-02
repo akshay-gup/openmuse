@@ -33,6 +33,7 @@ import { ChannelMessage } from "./channel-message";
 import { countThreadReplies } from "./thread-replies";
 import { ChannelThreadBanner } from "./channel-thread";
 import { BrowserThreadCard } from "./computer";
+import { DraftReply } from "./draft-reply";
 import { ConversationQueue, type QueuedMessage } from "./conversation-queue";
 import { runConversationTurn } from "./conversation-run";
 import { confirmedJevSelection, displayJevUserMessage, latestJevPanelId } from "./jev-actions";
@@ -264,7 +265,7 @@ export function ChatScreen({
   const [channelThreads, setChannelThreads] = useState<ChannelThread[] | null>(null);
   const { width } = useWindowDimensions();
   const [replyPanel, setReplyPanel] = useState<{
-    binding: ChannelThread;
+    binding?: ChannelThread;
     parent: Message;
     prompt?: { id: number; text: string; messageId?: string };
   } | null>(null);
@@ -504,6 +505,7 @@ export function ChatScreen({
       parentMessageId?: string;
       seed: { id: string; role: "user" | "assistant"; content: string }[];
       firstText?: string;
+      firstMessageId?: string;
       parent: Message;
     }) => {
       if (!channelId) return;
@@ -521,7 +523,11 @@ export function ChatScreen({
         binding,
         parent: opts.parent,
         prompt: opts.firstText
-          ? { id: Date.now(), text: opts.firstText, messageId: opts.parent.id }
+          ? {
+              id: Date.now(),
+              text: opts.firstText,
+              messageId: opts.firstMessageId ?? opts.parent.id,
+            }
           : undefined,
       });
       setPanelOpen(true);
@@ -546,17 +552,12 @@ export function ChatScreen({
     try {
       const existing = (channelThreads ?? []).find((t) => t.parentMessageId === parent.id);
       if (existing) {
-        if (replyPanel?.binding.threadId !== existing.threadId)
+        if (replyPanel?.binding?.threadId !== existing.threadId)
           setReplyPanel({ binding: existing, parent });
         setPanelOpen(true);
       } else {
-        const seeded = projectForSeed(parent);
-        await forkThread({
-          name: threadNameFor(textOf(parent)),
-          parentMessageId: parent.id,
-          parent,
-          seed: seeded ? [seeded] : [],
-        });
+        setReplyPanel({ parent });
+        setPanelOpen(true);
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -822,7 +823,11 @@ export function ChatScreen({
                           (sum, binding) => sum + (replyCounts[binding.threadId] ?? 0),
                           0,
                         )}
-                        hasThread={!!latestReply}
+                        hasThread={
+                          !!latestReply &&
+                          (mentionsAgent(text) ||
+                            replies.some((binding) => (replyCounts[binding.threadId] ?? 0) > 0))
+                        }
                         onNotify={notify}
                       />
                     ) : (
@@ -1275,6 +1280,20 @@ export function ChatScreen({
   );
   function renderReplyPanel() {
     if (!replyPanel) return null;
+    const panel = replyPanel;
+    const draftKey = panel.binding?.threadId ?? `draft:${panel.parent.id}`;
+    async function sendFirstReply(text: string) {
+      const seed = projectForSeed(panel.parent);
+      await forkThread({
+        name: threadNameFor(textOf(panel.parent)),
+        parent: panel.parent,
+        parentMessageId: panel.parent.id,
+        seed: seed ? [seed] : [],
+        firstText: text,
+        firstMessageId: `user-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      });
+      setThreadDrafts((drafts) => ({ ...drafts, [draftKey]: "" }));
+    }
     return (
       <View style={{ flex: 1, minHeight: 0 }}>
         <View
@@ -1284,7 +1303,7 @@ export function ChatScreen({
           ]}
         >
           <View>
-            <Text style={s.heading}>Thread</Text>
+            <Text style={s.heading}>{panel.binding ? "Thread" : "Reply"}</Text>
             <Text style={s.small}>Replying to a channel message</Text>
           </View>
           <Pressable
@@ -1309,18 +1328,25 @@ export function ChatScreen({
           />
         </ScrollView>
         <View style={{ height: 1, backgroundColor: colors.line }} />
-        <ChatScreen
-          key={replyPanel.binding.threadId}
-          thread={{ id: replyPanel.binding.threadId, existing: true }}
-          threadParent={replyPanel.parent}
-          active={active && panelOpen}
-          prompt={replyPanel.prompt}
-          onSaved={refreshReplies}
-          initialDraft={threadDrafts[replyPanel.binding.threadId] ?? ""}
-          onDraftChange={(text) =>
-            setThreadDrafts((drafts) => ({ ...drafts, [replyPanel.binding.threadId]: text }))
-          }
-        />
+        {panel.binding ? (
+          <ChatScreen
+            key={panel.binding.threadId}
+            thread={{ id: panel.binding.threadId, existing: true }}
+            threadParent={replyPanel.parent}
+            active={active && panelOpen}
+            prompt={replyPanel.prompt}
+            onSaved={refreshReplies}
+            initialDraft={threadDrafts[draftKey] ?? ""}
+            onDraftChange={(text) => setThreadDrafts((drafts) => ({ ...drafts, [draftKey]: text }))}
+          />
+        ) : (
+          <DraftReply
+            key={draftKey}
+            value={threadDrafts[draftKey] ?? ""}
+            onChange={(text) => setThreadDrafts((drafts) => ({ ...drafts, [draftKey]: text }))}
+            onSend={sendFirstReply}
+          />
+        )}
       </View>
     );
   }
