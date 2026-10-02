@@ -35,6 +35,10 @@ import type {
 } from "../../../packages/domain/src/agent";
 import { useAgentWorkspace } from "./agent-workspace";
 import { ActivityScreen, ConnectionsScreen } from "./screens";
+import { TaskBoard } from "./task-board";
+import { TaskCreate } from "./task-create";
+import { TaskDetail as IssueDetail } from "./task-detail";
+import { TaskTimeline } from "./task-timeline";
 import {
   Button,
   Card,
@@ -182,32 +186,60 @@ export function ChatWork() {
 export function AgentActivityScreen() {
   const { data } = useAgentWorkspace();
   const [filter, setFilter] = useState("All");
-  const tasks = [...(data?.tasks || [])]
-    .filter(
-      (task) =>
-        filter === "All" || (filter === "In progress" ? activeTask(task) : !activeTask(task)),
-    )
-    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  const [view, setView] = useState<"list" | "board" | "timeline">("list");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
+  const allTasks = [...(data?.tasks || [])].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  const tasks = allTasks.filter(
+    (task) => filter === "All" || (filter === "In progress" ? activeTask(task) : !activeTask(task)),
+  );
+  const selected = selectedId ? allTasks.find((task) => task.id === selectedId) : undefined;
   return (
     <View style={{ gap: 20 }}>
       <AgentStatus />
-      <View style={[s.row, { gap: 8 }]}>
-        {["All", "In progress", "Finished"].map((item) => (
-          <Button key={item} small primary={filter === item} onPress={() => setFilter(item)}>
-            {item}
+      <View style={[s.row, { gap: 8, flexWrap: "wrap" }]}>
+        {(["list", "board", "timeline"] as const).map((item) => (
+          <Button key={item} small primary={view === item} onPress={() => setView(item)}>
+            {item[0].toUpperCase() + item.slice(1)}
           </Button>
         ))}
+        {view !== "list" && (
+          <Button small icon={Plus} onPress={() => setCreating(true)}>
+            New issue
+          </Button>
+        )}
       </View>
-      {tasks.map((task) => (
-        <TaskCard key={task.id} task={task} />
-      ))}
-      {!tasks.length && (
-        <Empty
-          icon={ListChecks}
-          title="A place for the work"
-          detail="Delegate a task in Chat. Its plan, progress and results stay here."
-        />
+      {view === "list" && (
+        <>
+          <View style={[s.row, { gap: 8 }]}>
+            {["All", "In progress", "Finished"].map((item) => (
+              <Button key={item} small primary={filter === item} onPress={() => setFilter(item)}>
+                {item}
+              </Button>
+            ))}
+          </View>
+          {tasks.map((task) => (
+            <TaskCard key={task.id} task={task} />
+          ))}
+          {!tasks.length && (
+            <Empty
+              icon={ListChecks}
+              title="A place for the work"
+              detail="Delegate a task in Chat. Its plan, progress and results stay here."
+            />
+          )}
+        </>
       )}
+      {view === "board" && (
+        <TaskBoard tasks={allTasks} onSelect={(task) => setSelectedId(task.id)} />
+      )}
+      {view === "timeline" && (
+        <TaskTimeline tasks={allTasks} onSelect={(task) => setSelectedId(task.id)} />
+      )}
+      {selected && (
+        <IssueDetail task={selected} tasks={allTasks} onClose={() => setSelectedId(null)} />
+      )}
+      {creating && <TaskCreate onClose={() => setCreating(false)} />}
       <SectionHeading title="Reviews & receipts" />
       <ActivityScreen />
     </View>
@@ -892,6 +924,9 @@ export function DelegateSheet({ threadId }: { threadId?: string }) {
         kind,
         threadId,
         input: kind === "finance" ? { csv } : kind === "document" ? { messageId } : {},
+        priority: "medium",
+        blockedBy: [],
+        labels: [],
       });
       open({ type: "task", taskId: task.id });
     } catch (e) {
@@ -1362,6 +1397,9 @@ function GoalCard({ goal, onOpenTask }: { goal: Goal; onOpenTask?: () => void })
         kind: "plan",
         goalId: goal.id,
         input: {},
+        priority: "medium",
+        blockedBy: [],
+        labels: [],
       });
       onOpenTask?.();
       open({ type: "task", taskId: task.id });

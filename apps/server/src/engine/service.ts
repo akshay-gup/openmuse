@@ -20,6 +20,8 @@ import {
   monitorInputSchema,
   ORCHESTRATOR_CHANNEL_ID,
   type RunEvent,
+  type TaskStatus,
+  updateTaskSchema,
 } from "../../../../packages/domain/src/agent.ts";
 import type {
   ActionProposal,
@@ -438,6 +440,7 @@ export class AgentService {
     const id = idempotencyKey ? hash(`task:${idempotencyKey}`) : randomUUID();
     const existing = await this.db.get<AgentTask>(owner, "tasks", id);
     if (existing) return existing;
+    if (input.blockedBy.length) await this.checkBlockedBy(owner, id, input.blockedBy);
     if (
       (await this.db.list<AgentTask>(owner, "tasks")).filter((t) => !terminal.has(t.status))
         .length >= 100
@@ -457,18 +460,28 @@ export class AgentService {
           : input.kind === "finance"
             ? ["Validate transactions", "Calculate the summary", "Save your tracker"]
             : ["Understand the outcome", "Plan the work", "Use connected tools", "Return a result"];
+    const isManual = input.kind === "manual";
+    if (!isManual && !input.prompt)
+      throw new AppError("A prompt is required for agent-executed tasks", 422);
+    if (input.startAt && input.dueAt && input.startAt > input.dueAt)
+      throw new AppError("startAt must not be after dueAt", 422);
     const task: AgentTask = {
       id,
-      title: input.title ?? input.prompt.slice(0, 90),
-      prompt: input.prompt,
+      title: input.title ?? input.prompt?.slice(0, 90) ?? "Untitled task",
+      prompt: input.prompt ?? "",
       kind: input.kind,
       goalId: input.goalId,
+      priority: input.priority,
+      startAt: input.startAt ?? null,
+      dueAt: input.dueAt ?? null,
+      blockedBy: input.blockedBy,
+      labels: input.labels,
       channelId,
       originChannelId: channelId,
       delegatedTo: null,
       threadId: input.threadId,
       status: held ? "paused" : "queued",
-      plan: titles.map((title, i) => ({ id: String(i), title, status: "pending" })),
+      plan: isManual ? [] : titles.map((title, i) => ({ id: String(i), title, status: "pending" })),
       evidence: [],
       input: input.input,
       state: {
@@ -569,6 +582,125 @@ export class AgentService {
       detail: "Changed by you",
     });
     return updated;
+  }
+  /** Statuses a user or the agent may set directly on a worker-executed task. */
+  private static readonly userSettableWorkerStatuses: ReadonlySet<TaskStatus> = new Set([
+    "queued",
+    "paused",
+    "cancelled",
+  ]);
+  /** Manual (human) tasks move freely; they have no worker lifecycle. */
+  private static readonly manualStatuses: ReadonlySet<TaskStatus> = new Set([
+    "queued",
+    "running",
+    "paused",
+    "succeeded",
+    "cancelled",
+  ]);
+  /** Update a task's fields. The agent uses this to manage the board. */
+  async updateTask(owner: string, id: string, raw: unknown): Promise<AgentTask> {
+    const input = updateTaskSchema.parse(raw);
+    const task = await this.getTask(owner, id);
+    const patch: Partial<AgentTask> = {};
+    if (input.title !== undefined) patch.title = input.title;
+    if (input.prompt !== undefined) {
+      if (task.kind === "manual") throw new AppError("Manual tasks have no prompt", 422);
+      patch.prompt = input.prompt;
+    }
+    if (input.priority !== undefined) patch.priority = input.priority;
+    if (input.goalId !== undefined) {
+      if (input.goalId && !(await this.db.get(owner, "goals", input.goalId)))
+        throw new AppError("Goal not found", 404);
+      patch.goalId = input.goalId ?? undefined;
+    }
+    const startAt = input.startAt !== undefined ? input.startAt : (task.startAt ?? null);
+    const dueAt = input.dueAt !== undefined ? input.dueAt : (task.dueAt ?? null);
+    if (startAt && dueAt && startAt > dueAt)
+      throw new AppError("startAt must not be after dueAt", 422);
+    if (input.startAt !== undefined) patch.startAt = input.startAt;
+    if (input.dueAt !== undefined) patch.dueAt = input.dueAt;
+    if (input.blockedBy !== undefined) {
+      await this.checkBlockedBy(owner, id, input.blockedBy);
+      patch.blockedBy = input.blockedBy;
+    }
+    if (input.labels !== undefined) patch.labels = input.labels;
+    if (input.status !== undefined && input.status !== task.status) {
+      const allowed =
+        task.kind === "manual"
+          ? AgentService.manualStatuses
+          : AgentService.userSettableWorkerStatuses;
+      if (!allowed.has(input.status))
+        throw new AppError(
+          task.kind === "manual"
+            ? `Manual tasks can move between ${[...AgentService.manualStatuses].join(", ")}`
+            : "Worker-executed tasks can only be queued, paused, or cancelled directly; running and terminal states belong to the worker",
+          422,
+        );
+      if (terminal.has(task.status))
+        throw new AppError("Terminal tasks cannot be reopened; create a new task instead", 409);
+      patch.status = input.status;
+      patch.leaseId = null;
+      patch.leaseUntil = null;
+      if (input.status === "cancelled") {
+        patch.result = "Stopped by you.";
+        patch.error = null;
+      }
+    }
+    if (!Object.keys(patch).length) return task;
+    const updated = await this.db.compareAndSwap<AgentTask>(
+      owner,
+      "tasks",
+      id,
+      { status: task.status, leaseId: task.leaseId ?? null },
+      { ...patch, updatedAt: date() },
+    );
+    if (!updated) throw new AppError("Task changed; refresh and try again", 409);
+    if (patch.status && patch.status !== task.status) {
+      this.worker.abort(id);
+      await this.db.put(owner, "run-events", {
+        id: randomUUID(),
+        taskId: id,
+        kind: "status",
+        date: date(),
+        title: `Task ${patch.status}`,
+        detail: "Changed by you",
+      });
+    }
+    return updated;
+  }
+  private async checkBlockedBy(owner: string, id: string, blockedBy: string[]) {
+    const seen = new Set(blockedBy);
+    if (seen.has(id)) throw new AppError("A task cannot depend on itself", 422);
+    for (const depId of seen)
+      if (!(await this.db.get<AgentTask>(owner, "tasks", depId)))
+        throw new AppError(`Dependency not found: ${depId}`, 404);
+    // Cycle check: the task itself must be unreachable from its dependencies.
+    const stack = [...seen];
+    const visited = new Set<string>();
+    while (stack.length) {
+      const current = stack.pop() as string;
+      if (current === id) throw new AppError("Dependencies would create a cycle", 422);
+      if (visited.has(current)) continue;
+      visited.add(current);
+      const dep = await this.db.get<AgentTask>(owner, "tasks", current);
+      for (const next of dep?.blockedBy ?? []) stack.push(next);
+    }
+  }
+  /** Delete a task and drop it from other tasks' dependencies. */
+  async deleteTask(owner: string, id: string): Promise<{ deleted: string }> {
+    const task = await this.getTask(owner, id);
+    if (task.leaseId && (task.status === "running" || task.status === "waiting_approval"))
+      throw new AppError("Stop the task before deleting it", 409);
+    this.worker.abort(id);
+    await this.db.remove(owner, "tasks", id);
+    for (const other of await this.db.list<AgentTask>(owner, "tasks"))
+      if (other.blockedBy.includes(id))
+        await this.db.put(owner, "tasks", {
+          ...other,
+          blockedBy: other.blockedBy.filter((dep) => dep !== id),
+          updatedAt: date(),
+        });
+    return { deleted: id };
   }
   async answer(
     owner: string,

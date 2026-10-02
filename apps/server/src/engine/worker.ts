@@ -86,6 +86,7 @@ export class TaskWorker {
       const channelId = this.options.channelId;
       const due = records.filter(
         ({ value: t }) =>
+          t.kind !== "manual" &&
           !this.active.has(t.id) &&
           (channelId === undefined || (t.channelId ?? ORCHESTRATOR_CHANNEL_ID) === channelId) &&
           (t.status === "queued" ||

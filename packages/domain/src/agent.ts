@@ -10,6 +10,24 @@ export type TaskStatus =
   | "succeeded"
   | "failed"
   | "cancelled";
+export type TaskPriority = "low" | "medium" | "high" | "urgent";
+export const taskPriorities: TaskPriority[] = ["low", "medium", "high", "urgent"];
+/** Kanban columns for the board view. */
+export type TaskColumn = "todo" | "doing" | "done";
+export function taskColumn(status: TaskStatus): TaskColumn {
+  switch (status) {
+    case "running":
+    case "waiting_approval":
+    case "waiting_input":
+      return "doing";
+    case "succeeded":
+    case "failed":
+    case "cancelled":
+      return "done";
+    default:
+      return "todo";
+  }
+}
 export interface Evidence {
   id: string;
   kind: "mail" | "file" | "web" | "user";
@@ -27,9 +45,18 @@ export interface AgentTask {
   id: string;
   title: string;
   prompt: string;
-  kind: "agent" | "document" | "monitor" | "finance" | "plan";
+  kind: "agent" | "document" | "monitor" | "finance" | "plan" | "manual";
   status: TaskStatus;
   goalId?: string;
+  /** Manual tasks are human work: no prompt execution, the worker never claims them. */
+  priority: TaskPriority;
+  /** ISO date (yyyy-mm-dd) for the timeline view. */
+  startAt?: string | null;
+  /** ISO date (yyyy-mm-dd) for the timeline view. */
+  dueAt?: string | null;
+  /** Task ids this task is waiting on. */
+  blockedBy: string[];
+  labels: string[];
   /** Owning channel. Tasks are claimed by the worker assigned to this channel. */
   channelId?: string;
   /** Channel where the work was requested. Differs from channelId after delegation. */
@@ -141,16 +168,51 @@ export interface AgentWorkspace {
   identity: AgentIdentity;
   worker: { running: boolean; lastTickAt?: string };
 }
+export const taskPrioritySchema = z.enum(["low", "medium", "high", "urgent"]);
+const isoDate = z
+  .string()
+  .trim()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "expected yyyy-mm-dd")
+  .refine((d) => !Number.isNaN(Date.parse(d)), "invalid date");
 export const createTaskSchema = z.object({
   title: z.string().trim().min(1).max(160).optional(),
-  prompt: z.string().trim().min(1).max(12000),
-  kind: z.enum(["agent", "document", "monitor", "finance", "plan"]).default("agent"),
+  prompt: z.string().trim().min(1).max(12000).optional(),
+  kind: z.enum(["agent", "document", "monitor", "finance", "plan", "manual"]).default("agent"),
   goalId: z.string().optional(),
   channelId: z.string().trim().min(1).max(80).optional(),
   threadId: z.string().trim().min(1).max(120).optional(),
   input: z.record(z.string(), z.unknown()).default({}),
+  priority: taskPrioritySchema.default("medium"),
+  startAt: isoDate.nullish(),
+  dueAt: isoDate.nullish(),
+  blockedBy: z.array(z.string().trim().min(1).max(80)).max(20).default([]),
+  labels: z.array(z.string().trim().min(1).max(40)).max(20).default([]),
 });
 export type CreateTaskInput = z.infer<typeof createTaskSchema>;
+export const updateTaskSchema = z.object({
+  title: z.string().trim().min(1).max(160).optional(),
+  prompt: z.string().trim().min(1).max(12000).optional(),
+  status: z
+    .enum([
+      "queued",
+      "running",
+      "waiting_approval",
+      "waiting_input",
+      "scheduled",
+      "paused",
+      "succeeded",
+      "failed",
+      "cancelled",
+    ])
+    .optional(),
+  priority: taskPrioritySchema.optional(),
+  goalId: z.string().nullable().optional(),
+  startAt: isoDate.nullable().optional(),
+  dueAt: isoDate.nullable().optional(),
+  blockedBy: z.array(z.string().trim().min(1).max(80)).max(20).optional(),
+  labels: z.array(z.string().trim().min(1).max(40)).max(20).optional(),
+});
+export type UpdateTaskInput = z.infer<typeof updateTaskSchema>;
 /** Fixed id of the orchestrator channel: the control-plane surface. */
 export const ORCHESTRATOR_CHANNEL_ID = "orchestrator";
 export type ChannelStatus = "active" | "idle" | "archived";
