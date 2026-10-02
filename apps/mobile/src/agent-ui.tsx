@@ -34,6 +34,7 @@ import type {
   RunEvent,
 } from "../../../packages/domain/src/agent";
 import { useAgentWorkspace } from "./agent-workspace";
+import { PermissionsSettings } from "./opencode-permissions";
 import { ActivityScreen, ConnectionsScreen } from "./screens";
 import { TaskBoard } from "./task-board";
 import { TaskCreate } from "./task-create";
@@ -1906,6 +1907,7 @@ export function AppsScreen() {
               Remember
             </Button>
           </Card>
+          <PermissionsSettings />
         </>
       )}
       <ErrorNotice error={error} />
