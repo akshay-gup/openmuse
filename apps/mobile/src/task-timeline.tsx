@@ -87,9 +87,11 @@ export function TaskTimeline({
             const barColor =
               t.task.status === "succeeded"
                 ? "#7FB98A"
-                : t.task.kind === "manual"
-                  ? "#8E8BD8"
-                  : colors.blueDark;
+                : t.task.status === "failed"
+                  ? colors.danger
+                  : t.task.kind === "manual"
+                    ? "#8E8BD8"
+                    : colors.blueDark;
             return (
               <View key={t.task.id} style={[s.row, { minHeight: 44, alignItems: "center" }]}>
                 <Text

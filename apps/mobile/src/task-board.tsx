@@ -11,6 +11,7 @@ const columns: { id: TaskColumn; title: string }[] = [
   { id: "todo", title: "To Do" },
   { id: "doing", title: "In Progress" },
   { id: "done", title: "Done" },
+  { id: "failed", title: "Failed" },
 ];
 
 export const priorityColors: Record<TaskPriority, string> = {

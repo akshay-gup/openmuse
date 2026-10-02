@@ -294,11 +294,13 @@ export class ConversationAgent extends AbstractAgent {
       defineTool({
         name: "update_task",
         description:
-          "Edit any task or issue: retitle, change priority or dates, move it on the board (status), link dependencies, set labels. Manual tasks move freely between queued/running/paused/succeeded/cancelled; worker tasks can only be queued, paused, or cancelled directly — their running and terminal states belong to the worker.",
+          "Edit any task or issue: retitle, change priority or dates, move it on the board (status), link dependencies, set labels. Manual tasks move freely between queued/running/paused/succeeded/failed/cancelled; worker tasks can only be queued, paused, or cancelled directly — their running and terminal states belong to the worker.",
         parameters: z.object({
           taskId: z.string().min(1),
           title: z.string().trim().min(1).max(160).optional(),
-          status: z.enum(["queued", "running", "paused", "succeeded", "cancelled"]).optional(),
+          status: z
+            .enum(["queued", "running", "paused", "succeeded", "failed", "cancelled"])
+            .optional(),
           priority: z.enum(["low", "medium", "high", "urgent"]).optional(),
           startAt: z
             .string()

@@ -13,15 +13,16 @@ export type TaskStatus =
 export type TaskPriority = "low" | "medium" | "high" | "urgent";
 export const taskPriorities: TaskPriority[] = ["low", "medium", "high", "urgent"];
 /** Kanban columns for the board view. */
-export type TaskColumn = "todo" | "doing" | "done";
+export type TaskColumn = "todo" | "doing" | "done" | "failed";
 export function taskColumn(status: TaskStatus): TaskColumn {
   switch (status) {
     case "running":
     case "waiting_approval":
     case "waiting_input":
       return "doing";
-    case "succeeded":
     case "failed":
+      return "failed";
+    case "succeeded":
     case "cancelled":
       return "done";
     default:

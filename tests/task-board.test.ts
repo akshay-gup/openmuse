@@ -8,6 +8,7 @@ import type { Config } from "../apps/server/src/config.ts";
 import { createStore, type Store } from "../apps/server/src/db.ts";
 import { TaskWorker } from "../apps/server/src/engine/worker.ts";
 import type { AgentTask } from "../packages/domain/src/agent.ts";
+import { taskColumn } from "../packages/domain/src/agent.ts";
 
 let db: Store, server: Awaited<ReturnType<typeof createApp>>, directory: string, token: string;
 
@@ -75,8 +76,12 @@ test("manual tasks move freely across the board", async () => {
   const issue = await read<AgentTask>("/tasks", { title: "Move me", kind: "manual" }, 201);
   const running = await read<AgentTask>(`/tasks/${issue.id}`, { status: "running" }, 200, "PATCH");
   assert.equal(running.status, "running");
+  const failed = await read<AgentTask>(`/tasks/${issue.id}`, { status: "failed" }, 200, "PATCH");
+  assert.equal(failed.status, "failed");
+  assert.equal(taskColumn(failed.status), "failed");
   const done = await read<AgentTask>(`/tasks/${issue.id}`, { status: "succeeded" }, 200, "PATCH");
   assert.equal(done.status, "succeeded");
+  assert.equal(taskColumn(done.status), "done");
 });
 
 test("worker tasks cannot be completed or run directly", async () => {

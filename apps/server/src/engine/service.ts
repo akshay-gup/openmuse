@@ -595,6 +595,7 @@ export class AgentService {
     "running",
     "paused",
     "succeeded",
+    "failed",
     "cancelled",
   ]);
   /** Update a task's fields. The agent uses this to manage the board. */
