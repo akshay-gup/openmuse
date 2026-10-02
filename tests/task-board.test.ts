@@ -98,10 +98,24 @@ test("worker tasks cannot be completed or run directly", async () => {
   assert.equal(cancelled.status, "cancelled");
 });
 
-test("terminal tasks cannot be reopened", async () => {
-  const issue = await read<AgentTask>("/tasks", { title: "Done deal", kind: "manual" }, 201);
+test("terminal tasks can be reopened", async () => {
+  const issue = await read<AgentTask>("/tasks", { title: "Reopen me", kind: "manual" }, 201);
   await read(`/tasks/${issue.id}`, { status: "succeeded" }, 200, "PATCH");
-  await read(`/tasks/${issue.id}`, { status: "queued" }, 409, "PATCH");
+  const reopened = await read<AgentTask>(`/tasks/${issue.id}`, { status: "running" }, 200, "PATCH");
+  assert.equal(reopened.status, "running");
+  const retried = await read<AgentTask>(
+    "/tasks",
+    { title: "Worker rerun", prompt: "work", kind: "agent" },
+    201,
+  );
+  await read(`/tasks/${retried.id}`, { status: "cancelled" }, 200, "PATCH");
+  const requeued = await read<AgentTask>(
+    `/tasks/${retried.id}`,
+    { status: "queued" },
+    200,
+    "PATCH",
+  );
+  assert.equal(requeued.status, "queued");
 });
 
 test("dependencies validate existence, self-reference, and cycles", async () => {

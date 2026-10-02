@@ -636,8 +636,8 @@ export class AgentService {
             : "Worker-executed tasks can only be queued, paused, or cancelled directly; running and terminal states belong to the worker",
           422,
         );
-      if (terminal.has(task.status))
-        throw new AppError("Terminal tasks cannot be reopened; create a new task instead", 409);
+      // Terminal tasks can be reopened; the worker picks up a requeued
+      // task as a fresh run and prior results stay as history.
       patch.status = input.status;
       patch.leaseId = null;
       patch.leaseUntil = null;
