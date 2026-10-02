@@ -186,3 +186,45 @@ test("rules store sanitizes hostile channel ids to the workspace dir", async () 
   const names = await readdir(join(directory, "channels"));
   assert.ok(!names.includes(".."));
 });
+
+test("buildSessionRuleset uses ask base by default and allow base in auto mode", async () => {
+  const { buildSessionRuleset } = await import("../apps/server/src/opencode/index.ts");
+  const ask = buildSessionRuleset([]);
+  assert.equal(ask[0].permission, "*");
+  assert.equal(ask[0].action, "ask");
+  const auto = buildSessionRuleset([], "auto");
+  assert.equal(auto[0].permission, "*");
+  assert.equal(auto[0].action, "allow");
+  // Native denies survive in both modes.
+  for (const ruleset of [ask, auto]) {
+    const denied = ruleset.filter((r) => r.action === "deny").map((r) => r.permission);
+    assert.ok(denied.includes("question") && denied.includes("plan_enter"));
+  }
+  // Explicit user denies still win over the auto-allow base (last-wins).
+  const { parsePermissionRules } = await import("../apps/server/src/opencode/index.ts");
+  const mixed = buildSessionRuleset(parsePermissionRules(["edit:deny"]), "auto");
+  assert.equal(mixed.at(-1)?.permission, "edit");
+  assert.equal(mixed.at(-1)?.action, "deny");
+});
+
+test("permission mode round-trips per channel with thread override and inherit", async () => {
+  const store = new PermissionRulesStore(directory);
+  const binding = (threadId: string) => ({ threadId, channelId: "chan-mode" }) as never;
+  assert.equal(await store.channelMode("chan-mode"), "ask");
+  assert.equal(await store.effectiveMode(binding("t1")), "ask");
+  await store.setChannelMode("chan-mode", "auto");
+  assert.equal(await store.channelMode("chan-mode"), "auto");
+  assert.equal(await store.effectiveMode(binding("t1")), "auto");
+  // Thread override wins; clearing it inherits again.
+  assert.equal(await store.threadMode("chan-mode", "t1"), null);
+  await store.setThreadMode("chan-mode", "t1", "ask");
+  assert.equal(await store.effectiveMode(binding("t1")), "ask");
+  await store.setThreadMode("chan-mode", "t1", null);
+  assert.equal(await store.threadMode("chan-mode", "t1"), null);
+  assert.equal(await store.effectiveMode(binding("t1")), "auto");
+  // Setting thread rules preserves the thread mode.
+  await store.setThreadMode("chan-mode", "t2", "ask");
+  await store.setThreadRules("chan-mode", "t2", ["bash:deny"]);
+  assert.equal(await store.effectiveMode(binding("t2")), "ask");
+  assert.deepEqual(await store.threadRules("chan-mode", "t2"), ["bash:deny"]);
+});

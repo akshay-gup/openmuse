@@ -26,6 +26,17 @@ interface OAuthState {
   verifier: string;
   scopes: string[];
   generation: string;
+  /** "connect" links Gmail/Calendar; "login" signs the user into Hive. */
+  purpose?: "connect" | "login";
+  /** Web origin that opened the login popup (for postMessage target). */
+  origin?: string;
+}
+interface LoginCode {
+  id: string;
+  purpose: "login-code";
+  token: string;
+  mode: string;
+  expiresAt: number;
 }
 interface Credential {
   id: string;
@@ -145,6 +156,105 @@ export class GoogleAuth {
       code_challenge: createHash("sha256").update(verifier).digest("base64url"),
     }).toString();
     return { url: url.toString() };
+  }
+  /**
+   * Start a Google sign-in. Minimal identity scopes only — Gmail/Calendar
+   * stay as separate incremental consent via `connect()`. The same
+   * redirect URI serves both flows; the callback dispatches on the
+   * state's purpose.
+   */
+  async loginUrl(origin?: string) {
+    if (!this.configured())
+      throw new AppError(
+        "Configure GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET and TOKEN_ENCRYPTION_KEY for Google sign-in",
+        503,
+      );
+    const state = randomBytes(32).toString("base64url"),
+      verifier = randomBytes(48).toString("base64url");
+    await this.db.put("system", "oauth", {
+      id: state,
+      owner: "",
+      expiresAt: Date.now() + 10 * 60 * 1000,
+      verifier,
+      scopes: ["openid", "email", "profile"],
+      generation: "",
+      purpose: "login",
+      ...(origin ? { origin } : {}),
+    });
+    const url = new URL("https://accounts.google.com/o/oauth2/v2/auth");
+    url.search = new URLSearchParams({
+      client_id: this.config.googleClientId ?? "",
+      redirect_uri: this.config.googleRedirectUri,
+      response_type: "code",
+      scope: "openid email profile",
+      state,
+      prompt: "select_account",
+      code_challenge_method: "S256",
+      code_challenge: createHash("sha256").update(verifier).digest("base64url"),
+    }).toString();
+    return { url: url.toString() };
+  }
+  /** Peek at a pending OAuth state's purpose without consuming it. */
+  async callbackPurpose(stateId: string): Promise<"connect" | "login" | null> {
+    const state = await this.db.get<OAuthState>("system", "oauth", stateId);
+    if (!state) return null;
+    return state.purpose === "login" ? "login" : "connect";
+  }
+  /**
+   * Complete a Google sign-in: exchange the code and return the Google
+   * identity. Consumes the state.
+   */
+  async loginCallback(stateId: string, code: string) {
+    const state = await this.db.take<OAuthState>("system", "oauth", stateId);
+    if (!state || state.expiresAt < Date.now())
+      throw new AppError("Google sign-in expired. Try again.", 400);
+    if (state.purpose !== "login") throw new AppError("Google sign-in expired. Try again.", 400);
+    const response = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        client_id: this.config.googleClientId ?? "",
+        client_secret: this.config.googleClientSecret ?? "",
+        redirect_uri: this.config.googleRedirectUri,
+        grant_type: "authorization_code",
+        code,
+        code_verifier: state.verifier,
+      }),
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!response.ok) throw new AppError("Google could not complete sign-in. Try again.", 502);
+    const token = tokenSchema.parse(await response.json());
+    const userinfo = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
+      headers: { Authorization: `Bearer ${token.access_token}` },
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!userinfo.ok) throw new AppError("Google could not verify identity. Try again.", 502);
+    const profile = z
+      .object({ sub: z.string().min(1), email: z.email(), name: z.string().optional() })
+      .parse(await userinfo.json());
+    return { ...profile, origin: state.origin };
+  }
+  /**
+   * Mint a single-use login code for the app to exchange for its session
+   * token (keeps the bearer token out of browser history / deep links).
+   */
+  async mintLoginCode(token: string, mode: string): Promise<string> {
+    const code = randomBytes(24).toString("base64url");
+    await this.db.put<LoginCode>("system", "oauth", {
+      id: code,
+      purpose: "login-code",
+      token,
+      mode,
+      expiresAt: Date.now() + 5 * 60 * 1000,
+    });
+    return code;
+  }
+  /** Exchange a single-use login code for the session token. */
+  async exchangeLoginCode(code: string): Promise<{ token: string; mode: string }> {
+    const record = await this.db.take<LoginCode>("system", "oauth", code);
+    if (record?.purpose !== "login-code" || (record.expiresAt ?? 0) < Date.now())
+      throw new AppError("Sign-in expired. Try again.", 400);
+    return { token: record.token, mode: record.mode as "sample" | "live" };
   }
   async callback(stateId: string, code: string) {
     const state = await this.db.take<OAuthState>("system", "oauth", stateId);

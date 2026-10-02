@@ -16,7 +16,9 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   AppState,
+  Linking,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   Text,
@@ -33,7 +35,7 @@ import {
   IdeasScreen,
 } from "./src/agent-ui";
 import { AgentWorkspaceProvider, useAgentWorkspace } from "./src/agent-workspace";
-import { API_URL, createSession, MuseApi } from "./src/api";
+import { API_URL, createSession, exchangeLoginCode, googleLoginUrl, MuseApi } from "./src/api";
 import { ChannelChatBanner, ChatScreen, WorkspaceTools } from "./src/chat";
 import { ComputerEntry } from "./src/computer";
 import { ComputerDraftProvider } from "./src/computer-drafts";
@@ -85,9 +87,76 @@ export default function App() {
       setBusy(false);
     }
   }, []);
+  const finishGoogleSignIn = useCallback(async (code: string) => {
+    setBusy(true);
+    setError("");
+    try {
+      const session = await exchangeLoginCode(code);
+      setToken(session.token);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }, []);
+  const signInWithGoogle = useCallback(async () => {
+    setBusy(true);
+    setError("");
+    try {
+      const onWeb = Platform.OS === "web" && typeof window !== "undefined";
+      const { url } = await googleLoginUrl(onWeb ? window.location.origin : undefined);
+      if (onWeb) {
+        const popup = window.open(url, "hive-google-signin", "width=520,height=640");
+        if (!popup) throw new Error("Allow popups to sign in with Google.");
+        const timer = setInterval(() => {
+          if (popup.closed) {
+            clearInterval(timer);
+            setBusy(false);
+          }
+        }, 500);
+      } else {
+        await Linking.openURL(url);
+        setBusy(false);
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+      setBusy(false);
+    }
+  }, []);
   useEffect(() => {
     void connect();
   }, [connect]);
+  // Web: the sign-in popup posts back { hiveAuthCode } (see server callback page).
+  useEffect(() => {
+    if (Platform.OS !== "web" || typeof window === "undefined") return;
+    let expectedOrigin = "";
+    try {
+      expectedOrigin = new URL(API_URL).origin;
+    } catch {
+      return;
+    }
+    const onMessage = (event: MessageEvent) => {
+      if (event.origin !== expectedOrigin) return;
+      const code = (event.data as { hiveAuthCode?: unknown } | null)?.hiveAuthCode;
+      if (typeof code === "string" && code) void finishGoogleSignIn(code);
+    };
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, [finishGoogleSignIn]);
+  // Native: the server redirects to hive://auth?code=... after sign-in.
+  useEffect(() => {
+    if (Platform.OS === "web") return;
+    const handle = (url: string | null) => {
+      if (!url) return;
+      const match = url.match(/^hive:\/\/auth\?code=([^&]+)/);
+      if (match?.[1]) void finishGoogleSignIn(decodeURIComponent(match[1]));
+    };
+    const sub = Linking.addEventListener("url", ({ url }) => handle(url));
+    Linking.getInitialURL()
+      .then(handle)
+      .catch(() => {});
+    return () => sub.remove();
+  }, [finishGoogleSignIn]);
   return (
     <SafeAreaProvider>
       <StatusBar style="dark" />
@@ -131,6 +200,7 @@ export default function App() {
                 <Button primary onPress={() => void connect(accessKey || undefined)}>
                   Open workspace
                 </Button>
+                <Button onPress={() => void signInWithGoogle()}>Sign in with Google</Button>
                 <Text style={[s.small, { marginTop: 15 }]}>
                   Local workspaces open without a key. Make sure your Hive server is running at{" "}
                   {API_URL}.

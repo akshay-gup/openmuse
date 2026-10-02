@@ -26,6 +26,8 @@ export {
   buildSessionRuleset,
   defaultSessionRuleset,
   invalidRuleLines,
+  isPermissionMode,
+  type PermissionMode,
   type PermissionRuleset,
   parsePermissionRules,
   taskSessionRuleset,

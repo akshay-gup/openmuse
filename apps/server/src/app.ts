@@ -140,8 +140,51 @@ export async function createApp(
     const state = c.req.query("state"),
       code = c.req.query("code");
     if (!state || !code) throw new AppError("Google callback is incomplete");
+    if ((await google.callbackPurpose(state)) === "login") {
+      const profile = await google.loginCallback(state, code);
+      const owner = `google:${profile.sub}`;
+      const now = new Date().toISOString();
+      interface HiveUser {
+        id: string;
+        email: string;
+        name: string;
+        createdAt: string;
+        lastLoginAt: string;
+      }
+      const existing = await db.get<HiveUser>("system", "users", owner);
+      await db.put("system", "users", {
+        id: owner,
+        email: profile.email,
+        name: profile.name ?? profile.email,
+        createdAt: existing?.createdAt ?? now,
+        lastLoginAt: now,
+      });
+      await agent.ensure(owner);
+      const session = await auth.sessionForOwner(owner);
+      const loginCode = await google.mintLoginCode(session.token, session.mode);
+      const target = profile.origin ? JSON.stringify(profile.origin) : "null";
+      return c.html(
+        `<!doctype html><html><head><meta charset="utf-8"><title>Hive sign-in</title></head>` +
+          `<body><h1>Signed in to Hive</h1><p>You can return to the app.</p><script>` +
+          `(function(){var code=${JSON.stringify(loginCode)},target=${target};` +
+          `if(window.opener&&target){window.opener.postMessage({hiveAuthCode:code},target);` +
+          `setTimeout(function(){window.close();},400);}` +
+          `else{window.location.replace("hive://auth?code="+encodeURIComponent(code));}})();` +
+          `</script></body></html>`,
+      );
+    }
     await google.callback(state, code);
     return c.html("<h1>Google is connected</h1><p>Return to Hive and refresh your workspace.</p>");
+  });
+  /** Public: start Google sign-in, returns the OAuth URL to open. */
+  app.get("/api/auth/google/url", async (c) => {
+    const origin = c.req.query("origin");
+    return c.json(await google.loginUrl(origin || undefined));
+  });
+  /** Public: exchange a single-use login code for the session token. */
+  app.post("/api/auth/exchange", async (c) => {
+    const body = z.object({ code: z.string().min(1) }).parse(await c.req.json());
+    return c.json(await google.exchangeLoginCode(body.code));
   });
   app.use("/api/*", async (c, next) => {
     const signedRoute =

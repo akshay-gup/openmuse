@@ -20,10 +20,14 @@ export class Auth {
         !timingSafeEqual(digest(accessKey), digest(this.config.accessKey)))
     )
       throw new AppError("Access key is incorrect", 401);
+    return this.sessionForOwner("local-user");
+  }
+  /** Create a session for any owner (used by Google sign-in). */
+  async sessionForOwner(owner: string) {
     const token = randomBytes(32).toString("base64url");
     await this.db.put("system", "sessions", {
       id: digest(token).toString("hex"),
-      owner: "local-user",
+      owner,
       expiresAt: Date.now() + 24 * 60 * 60 * 1000,
     });
     return { token, mode: this.config.mode };
