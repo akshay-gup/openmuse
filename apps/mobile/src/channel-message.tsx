@@ -50,7 +50,7 @@ export function ChannelMessage({ text, author, assistant, onReply, replyCount = 
           {onReply && <Pressable accessibilityRole="button" accessibilityLabel={replyCount ? `Open thread, ${replyCount} replies` : "Reply in thread"}
             disabled={replyDisabled} onPress={onReply} style={{ alignSelf: "flex-start", paddingVertical: 6 }}>
             <Text style={{ color: colors.blueDark, fontSize: 13, fontWeight: "600" }}>
-              {replyCount ? `${replyCount} ${replyCount === 1 ? "reply" : "replies"}` : hasThread ? "Open thread" : "Reply in thread"}
+              {replyCount ? `${replyCount} ${replyCount === 1 ? "reply" : "replies"}` : hasThread ? "Thread started · 0 replies" : "Reply in thread"}
               {selected ? " · Viewing thread" : ""}
             </Text>
           </Pressable>}

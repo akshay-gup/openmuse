@@ -239,7 +239,7 @@ export function ChatScreen({
   initialDraft = "",
   onDraftChange,
 }: {
-  prompt?: { id: number; text: string };
+  prompt?: { id: number; text: string; messageId?: string };
   thread?: Selection;
   active?: boolean;
   threadParent?: Message;
@@ -259,7 +259,7 @@ export function ChatScreen({
   const [channelThreads, setChannelThreads] = useState<ChannelThread[] | null>(null);
   const { width } = useWindowDimensions();
   const [replyPanel, setReplyPanel] = useState<{
-    binding: ChannelThread; parent: Message; prompt?: { id: number; text: string };
+    binding: ChannelThread; parent: Message; prompt?: { id: number; text: string; messageId?: string };
   } | null>(null);
   const [panelOpen, setPanelOpen] = useState(false);
   const [openingReply, setOpeningReply] = useState(false);
@@ -360,7 +360,10 @@ export function ChatScreen({
       runLock.current = true;
       setBusy(true);
       setError("");
-      if (message) agent.addMessage({ id: message.id, role: "user", content: message.text });
+      // A channel mention is already persisted as the thread's root. Run
+      // that message in place instead of appending it as a second user turn.
+      if (message && !agent.messages.some((existing) => existing.id === message.id))
+        agent.addMessage({ id: message.id, role: "user", content: message.text });
       try {
         await runConversationTurn(
           agentId,
@@ -490,7 +493,7 @@ export function ChatScreen({
       );
       setChannelThreads((threads) => [...(threads ?? []), binding]);
       setReplyPanel({ binding, parent: opts.parent,
-        prompt: opts.firstText ? { id: Date.now(), text: opts.firstText } : undefined,
+        prompt: opts.firstText ? { id: Date.now(), text: opts.firstText, messageId: opts.parent.id } : undefined,
       });
       setPanelOpen(true);
     },
@@ -528,7 +531,7 @@ export function ChatScreen({
   function closeReplies() { setPanelOpen(false); refreshReplies(); }
   useEffect(() => {
     if (active && prompt && isReady && loaded && claimPrompt(prompt.id) && prompt.text.trim())
-      enqueue(prompt.text);
+      enqueue(prompt.text, prompt.messageId);
   }, [active, prompt, isReady, loaded, enqueue, claimPrompt]);
   useEffect(() => {
     const subscription = copilotkit.subscribe({
@@ -579,6 +582,8 @@ export function ChatScreen({
         if (projected) seed.push(projected);
       }
       clearComposer();
+      // Post the parent immediately; thread creation starts on this mention.
+      enqueue(fullText, messageId);
       void forkThread({
         name: threadNameFor(fullText),
         parentMessageId: messageId,
@@ -586,9 +591,6 @@ export function ChatScreen({
         parent: { id: messageId, role: "user", content: fullText },
         firstText: fullText,
       }).catch((e) => setError(e instanceof Error ? e.message : String(e)));
-      // The mention persists in the channel through the normal path; the
-      // server treats channel runs as chat-only no-ops.
-      enqueue(fullText, messageId);
       return;
     }
     enqueue(fullText);
