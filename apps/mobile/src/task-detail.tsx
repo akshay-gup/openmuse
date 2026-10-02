@@ -15,10 +15,23 @@ const manualTransitions: TaskStatus[] = ["queued", "running", "paused", "succeed
 const workerTransitions: TaskStatus[] = ["queued", "paused", "cancelled"];
 
 function statusLabel(status: TaskStatus): string {
-  return status
-    .split("_")
-    .map((part) => part[0].toUpperCase() + part.slice(1))
-    .join(" ");
+  switch (status) {
+    case "queued":
+      return "To Do";
+    case "running":
+      return "In Progress";
+    case "succeeded":
+      return "Done";
+    case "paused":
+      return "Paused";
+    case "cancelled":
+      return "Cancelled";
+    default:
+      return status
+        .split("_")
+        .map((part) => part[0].toUpperCase() + part.slice(1))
+        .join(" ");
+  }
 }
 
 const datePattern = /^\d{4}-\d{2}-\d{2}$/;
