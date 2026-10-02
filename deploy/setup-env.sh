@@ -49,6 +49,14 @@ elif [ -z "$(get PUBLIC_API_URL)" ]; then
   setvar PUBLIC_API_URL "https://hive.example.com"
 fi
 
+# Pin the data dir to an absolute path: the database, uploaded files, and
+# channel workspace dirs (channels/<id>/threads/*.json) all live here.
+# Set-if-absent so a hand-picked DATA_DIR is never clobbered; the server
+# adopts a legacy ./.hive on first boot after the move.
+if [ -z "$(get DATA_DIR)" ]; then
+  printf '%s=%s\n' "DATA_DIR" "/opt/hive/data" >> "$ENV_FILE"
+fi
+
 echo "hive.env ready at $ENV_FILE"
 echo
 echo "Your Hive sign-in key (save this):"

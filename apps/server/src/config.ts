@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, renameSync } from "node:fs";
 import { resolve } from "node:path";
 import { parseEnv } from "node:util";
 import { normalizeMention } from "./opencode/agui.ts";
@@ -26,6 +26,27 @@ if (existsSync(".env")) {
 }
 process.env.DO_NOT_TRACK ??= "1";
 process.env.COPILOTKIT_TELEMETRY_DISABLED ??= "true";
+
+/**
+ * One-time move off the old cwd-relative default: when DATA_DIR points
+ * somewhere fresh but a legacy ./.hive from an earlier install exists,
+ * adopt it so the database, files, and channel folders survive the move.
+ * Best-effort; a failed move never fails boot (data stays where it was).
+ */
+function adoptLegacyDataDir(dataDir: string) {
+  const legacy = resolve(".hive");
+  if (legacy === dataDir || !existsSync(legacy)) return;
+  try {
+    const fresh = !existsSync(dataDir) || readdirSync(dataDir).length === 0;
+    if (!fresh) return;
+    renameSync(legacy, dataDir);
+    console.log(`[Hive] Moved legacy data dir ${legacy} -> ${dataDir}`);
+  } catch (error) {
+    console.warn(
+      `[Hive] Could not move legacy data dir: ${error instanceof Error ? error.message : error}`,
+    );
+  }
+}
 
 export interface Config {
   mode: "sample" | "live";
@@ -107,12 +128,14 @@ export function readConfig(): Config {
     throw new Error("JEV_MODE=live requires a nonblank TYPESAFE_API_KEY");
   const port = Number(process.env.PORT ?? 8787);
   const publicUrl = process.env.PUBLIC_API_URL ?? `http://localhost:${port}`;
+  const dataDir = resolve(process.env.DATA_DIR ?? ".hive");
+  adoptLegacyDataDir(dataDir);
   const config: Config = {
     mode,
     port,
     host: process.env.HOST ?? "127.0.0.1",
     publicUrl,
-    dataDir: resolve(process.env.DATA_DIR ?? ".hive"),
+    dataDir,
     databaseUrl: process.env.DATABASE_URL,
     webDir: process.env.WEB_DIR?.trim() || undefined,
     accessKey: process.env.HIVE_ACCESS_KEY,
