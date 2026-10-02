@@ -11,7 +11,7 @@ import { priorityColors } from "./task-board";
 import { Button, ErrorNotice, Field, Sheet, s } from "./ui";
 import { useWorkspace } from "./workspace";
 
-const manualTransitions: TaskStatus[] = ["queued", "running", "paused", "succeeded", "cancelled"];
+const manualTransitions: TaskStatus[] = ["queued", "running", "succeeded"];
 const workerTransitions: TaskStatus[] = ["queued", "paused", "cancelled"];
 
 function statusLabel(status: TaskStatus): string {
