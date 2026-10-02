@@ -2,7 +2,7 @@ import { ShieldCheck } from "lucide-react-native";
 import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import type { Channel } from "../../../packages/domain/src/agent";
-import { Button, Card, colors, ErrorNotice, Field, SectionHeading, s } from "./ui";
+import { Button, Card, colors, ErrorNotice, SectionHeading, s } from "./ui";
 import { useWorkspace } from "./workspace";
 
 interface PendingRequest {
@@ -122,13 +122,50 @@ export function PendingApprovals({ threadId }: { threadId: string }) {
   );
 }
 
-const RULES_HINT =
-  "One rule per line: tool:pattern:action — e.g. bash:git status:allow · edit:deny · *:ask";
-
 /**
  * Multiline opencode-style permission rule editor. `loadUrl` returns
  * `{ rules: string[], channelRules?: string[] }`; `saveUrl` accepts
  * `{ rules: string[] }`.
+ */
+type RuleAction = "allow" | "ask" | "deny";
+const ACTIONS: { id: RuleAction; label: string }[] = [
+  { id: "allow", label: "Allow" },
+  { id: "ask", label: "Ask" },
+  { id: "deny", label: "Deny" },
+];
+/** Tools the agent can ask about, as named in OpenCode's TUI. */
+const PERMISSION_TOOLS: { id: string; label: string }[] = [
+  { id: "*", label: "Everything else" },
+  { id: "bash", label: "Run commands" },
+  { id: "edit", label: "Edit files" },
+  { id: "write", label: "Create files" },
+  { id: "read", label: "Read files" },
+  { id: "glob", label: "Find files" },
+  { id: "grep", label: "Search files" },
+  { id: "list", label: "List directories" },
+  { id: "webfetch", label: "Fetch URLs" },
+  { id: "websearch", label: "Search the web" },
+  { id: "todowrite", label: "Manage to-dos" },
+];
+
+/** Parse "tool:action" or "tool:pattern:action" strings into tool → action. */
+function parseRules(rules: string[]): Record<string, RuleAction> {
+  const out: Record<string, RuleAction> = {};
+  for (const entry of rules) {
+    const parts = entry.split(":").map((s) => s.trim());
+    if (parts.length < 2) continue;
+    const tool = parts[0];
+    const action = parts[parts.length - 1].toLowerCase();
+    if (!tool || (action !== "allow" && action !== "ask" && action !== "deny")) continue;
+    out[tool] = action;
+  }
+  return out;
+}
+
+/**
+ * TUI-style permission selector: per-tool Allow / Ask / Deny, no patterns.
+ * `loadUrl` returns `{ rules: string[], channelRules?: string[] }`;
+ * `saveUrl` accepts `{ rules: string[] }` ("tool:action" strings).
  */
 export function PermissionRulesEditor({
   loadUrl,
@@ -140,7 +177,7 @@ export function PermissionRulesEditor({
   title: string;
 }) {
   const { api } = useWorkspace();
-  const [text, setText] = useState<string | null>(null);
+  const [choices, setChoices] = useState<Record<string, RuleAction> | null>(null);
   const [channelRules, setChannelRules] = useState<string[] | null>(null);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -149,7 +186,7 @@ export function PermissionRulesEditor({
     setError("");
     try {
       const data = await api.request<{ rules: string[]; channelRules?: string[] }>(loadUrl);
-      setText(data.rules.join("\n"));
+      setChoices(parseRules(data.rules));
       setChannelRules(data.channelRules ?? null);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -157,20 +194,18 @@ export function PermissionRulesEditor({
   }, [api, loadUrl]);
 
   useEffect(() => {
-    setText(null);
+    setChoices(null);
     void load();
   }, [load]);
 
   async function save() {
+    if (!choices) return;
     setSaving(true);
     setError("");
     try {
-      const rules = (text ?? "")
-        .split("\n")
-        .map((line) => line.trim())
-        .filter(Boolean);
+      const rules = PERMISSION_TOOLS.map((tool) => `${tool.id}:${choices[tool.id] ?? "ask"}`);
       const data = await api.request<{ rules: string[] }>(saveUrl, { rules }, "PUT");
-      setText(data.rules.join("\n"));
+      setChoices(parseRules(data.rules));
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -178,26 +213,38 @@ export function PermissionRulesEditor({
     }
   }
 
-  if (text === null)
+  if (choices === null)
     return error ? <ErrorNotice error={error} /> : <ActivityIndicator color={colors.blueDark} />;
   return (
-    <View style={{ gap: 8 }}>
+    <View style={{ gap: 10 }}>
       <Text style={s.small}>{title}</Text>
       {!!channelRules?.length && (
         <Text style={[s.small, { color: colors.muted }]}>
           Channel rules (inherited): {channelRules.join(" · ")}
         </Text>
       )}
-      <Field
-        label="Permission rules"
-        value={text}
-        onChangeText={setText}
-        multiline
-        placeholder={RULES_HINT}
-        autoCapitalize="none"
-        autoCorrect={false}
-      />
-      <Text style={[s.small, { color: colors.muted }]}>{RULES_HINT}</Text>
+      {PERMISSION_TOOLS.map((tool) => {
+        const active = choices[tool.id] ?? "ask";
+        return (
+          <View key={tool.id} style={[s.row, { gap: 8, alignItems: "center" }]}>
+            <Text style={[s.text, { flex: 1, fontSize: 14 }]} numberOfLines={1}>
+              {tool.label}
+            </Text>
+            <View style={[s.row, { gap: 6 }]}>
+              {ACTIONS.map((action) => (
+                <Button
+                  key={action.id}
+                  small
+                  primary={active === action.id}
+                  onPress={() => setChoices({ ...choices, [tool.id]: action.id })}
+                >
+                  {action.label}
+                </Button>
+              ))}
+            </View>
+          </View>
+        );
+      })}
       <ErrorNotice error={error} />
       <View style={[s.row, { gap: 8 }]}>
         <Button small primary busy={saving} onPress={() => void save()}>
