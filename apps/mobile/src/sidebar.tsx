@@ -125,7 +125,7 @@ export function Sidebar() {
   }
 
   const userChannels = (channels ?? [])
-    .filter((channel) => channel.id !== ORCHESTRATOR_CHANNEL_ID)
+    .filter((channel) => channel.id !== ORCHESTRATOR_CHANNEL_ID && channel.status !== "archived")
     .sort((a, b) => a.name.localeCompare(b.name));
 
   return (
