@@ -45,7 +45,13 @@ import type { WorkspaceService } from "../workspace.ts";
 import { ChannelManager } from "./channels.ts";
 import { analyzeSpending } from "./finance.ts";
 import { executeModelTask } from "./model.ts";
-import { channelWorkspaceDir, LocalDiskThreadStore, type ThreadBindingStore } from "./threads.ts";
+import {
+  channelWorkspaceDir,
+  diskOwnerForChannel,
+  LocalDiskThreadStore,
+  SHARED_OWNER,
+  type ThreadBindingStore,
+} from "./threads.ts";
 import { LostLeaseError, type TaskContext, TaskWorker } from "./worker.ts";
 
 const hash = (text: string) => createHash("sha256").update(text).digest("hex");
@@ -169,11 +175,33 @@ export class AgentService {
       lastActiveAt: now,
     };
     await this.db.insertIfAbsent(owner, "channels", channel);
+    // Best-effort: give the orchestrator its own private directory.
+    try {
+      await mkdir(channelWorkspaceDir(this.config.dataDir, owner, ORCHESTRATOR_CHANNEL_ID), {
+        recursive: true,
+      });
+    } catch {
+      /* storage unavailable */
+    }
     return (await this.db.get<Channel>(owner, "channels", ORCHESTRATOR_CHANNEL_ID)) ?? channel;
+  }
+  /** Channels are shared across users; each user's orchestrator is private. */
+  private channelOwner(channelId: string, owner: string): string {
+    return diskOwnerForChannel(channelId, owner);
+  }
+  /** Fetch a channel by id, from the shared store or the user's own. */
+  async getChannel(owner: string, channelId: string): Promise<Channel | null> {
+    return this.db.get<Channel>(this.channelOwner(channelId, owner), "channels", channelId);
+  }
+  /** Persist a channel under its owner (shared, or the user's own orchestrator). */
+  private async putChannel(owner: string, channel: Channel): Promise<void> {
+    await this.db.put(this.channelOwner(channel.id, owner), "channels", channel);
   }
   async listChannels(owner: string): Promise<Channel[]> {
     await this.ensureOrchestratorChannel(owner);
-    return this.db.list<Channel>(owner, "channels");
+    const shared = await this.db.list<Channel>(SHARED_OWNER, "channels");
+    const orchestrator = await this.db.get<Channel>(owner, "channels", ORCHESTRATOR_CHANNEL_ID);
+    return orchestrator ? [...shared, orchestrator] : shared;
   }
   async createChannel(owner: string, raw: unknown): Promise<Channel> {
     const input = createChannelSchema.parse(raw);
@@ -185,7 +213,7 @@ export class AgentService {
         .replace(/[^a-z0-9]+/g, "-")
         .replace(/^-+|-+$/g, "") || randomUUID().slice(0, 8);
     const id = input.id ?? slug;
-    if (await this.db.get<Channel>(owner, "channels", id))
+    if (await this.db.get<Channel>(SHARED_OWNER, "channels", id))
       throw new AppError("Channel already exists", 409);
     const now = new Date().toISOString();
     const channel: Channel = {
@@ -198,27 +226,29 @@ export class AgentService {
       workerPid: null,
       lastActiveAt: now,
     };
-    await this.db.put(owner, "channels", channel);
+    await this.db.put(SHARED_OWNER, "channels", channel);
     // Best-effort: give the channel its own directory on local disk.
     // This must not fail channel creation.
     try {
-      await mkdir(channelWorkspaceDir(this.config.dataDir, channel.id), { recursive: true });
+      await mkdir(channelWorkspaceDir(this.config.dataDir, SHARED_OWNER, channel.id), {
+        recursive: true,
+      });
     } catch {
       /* storage unavailable */
     }
     return channel;
   }
-  async archiveChannel(owner: string, id: string): Promise<Channel> {
+  async archiveChannel(id: string): Promise<Channel> {
     if (id === ORCHESTRATOR_CHANNEL_ID)
       throw new AppError("The orchestrator channel cannot be archived", 409);
-    const channel = await this.db.get<Channel>(owner, "channels", id);
+    const channel = await this.db.get<Channel>(SHARED_OWNER, "channels", id);
     if (!channel) throw new AppError("Channel not found", 404);
     const updated: Channel = {
       ...channel,
       status: "archived",
       updatedAt: new Date().toISOString(),
     };
-    await this.db.put(owner, "channels", updated);
+    await this.db.put(SHARED_OWNER, "channels", updated);
     return updated;
   }
   /**
@@ -232,7 +262,7 @@ export class AgentService {
     name?: string,
     parentMessageId?: string,
   ): Promise<ChannelThread> {
-    const channel = await this.db.get<Channel>(owner, "channels", channelId);
+    const channel = await this.getChannel(owner, channelId);
     if (!channel || channel.status === "archived") throw new AppError("Channel not found", 404);
     const existing = await this.threads.list(owner, channelId);
     const binding: ChannelThread = {
@@ -244,7 +274,7 @@ export class AgentService {
     };
     await this.threads.write(owner, binding);
     this.threadChannelCache.set(`${owner}/${binding.threadId}`, binding);
-    await this.db.put(owner, "channels", {
+    await this.putChannel(owner, {
       ...channel,
       status: "active",
       lastActiveAt: binding.createdAt,
@@ -264,7 +294,7 @@ export class AgentService {
   ): Promise<ChannelThread> {
     const cached = await this.channelOfThread(owner, threadId);
     if (cached) return cached;
-    const channel = await this.db.get<Channel>(owner, "channels", channelId);
+    const channel = await this.getChannel(owner, channelId);
     if (!channel || channel.status === "archived") throw new AppError("Channel not found", 404);
     const binding: ChannelThread = {
       threadId,
@@ -286,7 +316,11 @@ export class AgentService {
     // Keep the OpenCode session title in sync when the thread is bound.
     const runtime = this.opencodeRuntime;
     if (runtime && renamed.opencodeSessionId) {
-      const directory = channelWorkspaceDir(this.config.dataDir, renamed.channelId);
+      const directory = channelWorkspaceDir(
+        this.config.dataDir,
+        diskOwnerForChannel(renamed.channelId, owner),
+        renamed.channelId,
+      );
       const sessionId = renamed.opencodeSessionId;
       void runtime.pool
         .forDirectory(directory)
@@ -297,7 +331,7 @@ export class AgentService {
   }
   /** Threads bound to a channel, oldest first. */
   async listChannelThreads(owner: string, channelId: string): Promise<ChannelThread[]> {
-    const channel = await this.db.get<Channel>(owner, "channels", channelId);
+    const channel = await this.getChannel(owner, channelId);
     if (!channel) throw new AppError("Channel not found", 404);
     return this.threads.list(owner, channelId);
   }
@@ -343,7 +377,7 @@ export class AgentService {
     if (task.status === "running" && task.leaseId)
       throw new AppError("Task is running; checkpoint it to waiting before delegating", 409);
     if (target !== ORCHESTRATOR_CHANNEL_ID) {
-      const channel = await this.db.get<Channel>(owner, "channels", target);
+      const channel = await this.getChannel(owner, target);
       if (!channel || channel.status === "archived")
         throw new AppError("Target channel not found", 404);
     }
@@ -359,9 +393,9 @@ export class AgentService {
       updatedAt: new Date().toISOString(),
     };
     await this.db.put(owner, "tasks", updated);
-    const channel = await this.db.get<Channel>(owner, "channels", target);
+    const channel = await this.getChannel(owner, target);
     if (channel)
-      await this.db.put(owner, "channels", {
+      await this.putChannel(owner, {
         ...channel,
         status: "active",
         lastActiveAt: new Date().toISOString(),
@@ -438,10 +472,7 @@ export class AgentService {
       throw new AppError("Goal not found", 404);
     if (input.projectId) await this.requireProject(owner, input.projectId);
     const channelId = input.channelId ?? ORCHESTRATOR_CHANNEL_ID;
-    if (
-      channelId !== ORCHESTRATOR_CHANNEL_ID &&
-      !(await this.db.get<Channel>(owner, "channels", channelId))
-    )
+    if (channelId !== ORCHESTRATOR_CHANNEL_ID && !(await this.getChannel(owner, channelId)))
       throw new AppError("Channel not found", 404);
     const id = idempotencyKey ? hash(`task:${idempotencyKey}`) : randomUUID();
     const existing = await this.db.get<AgentTask>(owner, "tasks", id);
@@ -504,9 +535,9 @@ export class AgentService {
     };
     await this.ensure(owner);
     await this.db.insertIfAbsent(owner, "tasks", task);
-    const channel = await this.db.get<Channel>(owner, "channels", channelId);
+    const channel = await this.getChannel(owner, channelId);
     if (channel)
-      await this.db.put(owner, "channels", {
+      await this.putChannel(owner, {
         ...channel,
         status: "active",
         lastActiveAt: new Date().toISOString(),

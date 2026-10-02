@@ -107,7 +107,14 @@ test("user rules are appended last so they win via findLast", () => {
 });
 
 test("session directory is the channel workspace dir", () => {
-  assert.equal(sessionDirectory(config, "proj-x"), join(directory, "channels", "proj-x"));
+  assert.equal(
+    sessionDirectory(config, "u1", "proj-x"),
+    join(directory, "owners", "shared", "channels", "proj-x"),
+  );
+  assert.equal(
+    sessionDirectory(config, "u1", "orchestrator"),
+    join(directory, "owners", "u1", "channels", "orchestrator"),
+  );
 });
 
 // --- Session binding tests with a stubbed SDK client ---
@@ -156,7 +163,7 @@ test("rotateThreadSession persists opencodeSessionId before returning", async ()
   await ctx.threads.write("owner", binding);
   const ref = await rotateThreadSession(ctx, "owner", "thread-1");
   assert.match(ref.sessionId, /^ses_test_/);
-  assert.equal(ref.directory, join(directory, "channels", "proj-x"));
+  assert.equal(ref.directory, join(directory, "owners", "shared", "channels", "proj-x"));
   const stored = (await ctx.threads.scan("owner")).find((b) => b.threadId === "thread-1");
   assert.equal(stored?.opencodeSessionId, ref.sessionId);
   // The session was created with the default-ask ruleset.

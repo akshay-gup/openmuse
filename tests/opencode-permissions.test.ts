@@ -136,12 +136,12 @@ test("rejectAllForScope rejects every pending request best-effort", async () => 
 
 test("rules store round-trips channel rules on disk", async () => {
   const store = new PermissionRulesStore(directory);
-  assert.deepEqual(await store.channelRules("chan-a"), []);
-  const saved = await store.setChannelRules("chan-a", ["bash:git *:allow", "edit:deny"]);
+  assert.deepEqual(await store.channelRules("u1", "chan-a"), []);
+  const saved = await store.setChannelRules("u1", "chan-a", ["bash:git *:allow", "edit:deny"]);
   assert.deepEqual(saved, ["bash:git *:allow", "edit:deny"]);
-  assert.deepEqual(await store.channelRules("chan-a"), ["bash:git *:allow", "edit:deny"]);
+  assert.deepEqual(await store.channelRules("u1", "chan-a"), ["bash:git *:allow", "edit:deny"]);
   // A second instance sees the same file.
-  assert.deepEqual(await new PermissionRulesStore(directory).channelRules("chan-a"), [
+  assert.deepEqual(await new PermissionRulesStore(directory).channelRules("u1", "chan-a"), [
     "bash:git *:allow",
     "edit:deny",
   ]);
@@ -150,22 +150,22 @@ test("rules store round-trips channel rules on disk", async () => {
 test("rules store rejects invalid rule lines", async () => {
   const store = new PermissionRulesStore(directory);
   await assert.rejects(
-    () => store.setChannelRules("chan-a", ["bash:ls:allow", "bogus"]),
+    () => store.setChannelRules("u1", "chan-a", ["bash:ls:allow", "bogus"]),
     /Invalid permission rules: bogus/,
   );
   await assert.rejects(
-    () => store.setThreadRules("chan-a", "thread-1", ["also-bogus"]),
+    () => store.setThreadRules("u1", "chan-a", "thread-1", ["also-bogus"]),
     /Invalid permission rules: also-bogus/,
   );
 });
 
 test("thread overrides merge after channel rules so they win", async () => {
   const store = new PermissionRulesStore(directory);
-  await store.setChannelRules("chan-b", ["bash:*:ask"]);
-  await store.setThreadRules("chan-b", "thread-9", ["bash:git status:allow"]);
-  assert.deepEqual(await store.threadRules("chan-b", "thread-9"), ["bash:git status:allow"]);
-  assert.deepEqual(await store.threadRules("chan-b", "other-thread"), []);
-  const ruleset = await store.effectiveRules({
+  await store.setChannelRules("u1", "chan-b", ["bash:*:ask"]);
+  await store.setThreadRules("u1", "chan-b", "thread-9", ["bash:git status:allow"]);
+  assert.deepEqual(await store.threadRules("u1", "chan-b", "thread-9"), ["bash:git status:allow"]);
+  assert.deepEqual(await store.threadRules("u1", "chan-b", "other-thread"), []);
+  const ruleset = await store.effectiveRules("u1", {
     threadId: "thread-9",
     channelId: "chan-b",
     name: "t",
@@ -179,11 +179,11 @@ test("thread overrides merge after channel rules so they win", async () => {
 
 test("rules store sanitizes hostile channel ids to the workspace dir", async () => {
   const store = new PermissionRulesStore(directory);
-  await store.setChannelRules("../../evil", ["edit:deny"]);
-  assert.deepEqual(await store.channelRules("../../evil"), ["edit:deny"]);
+  await store.setChannelRules("u1", "../../evil", ["edit:deny"]);
+  assert.deepEqual(await store.channelRules("u1", "../../evil"), ["edit:deny"]);
   // Lands under channels/, not outside the data dir.
   const { readdir } = await import("node:fs/promises");
-  const names = await readdir(join(directory, "channels"));
+  const names = await readdir(join(directory, "owners", "shared", "channels"));
   assert.ok(!names.includes(".."));
 });
 
@@ -210,21 +210,21 @@ test("buildSessionRuleset uses ask base by default and allow base in auto mode",
 test("permission mode round-trips per channel with thread override and inherit", async () => {
   const store = new PermissionRulesStore(directory);
   const binding = (threadId: string) => ({ threadId, channelId: "chan-mode" }) as never;
-  assert.equal(await store.channelMode("chan-mode"), "ask");
-  assert.equal(await store.effectiveMode(binding("t1")), "ask");
-  await store.setChannelMode("chan-mode", "auto");
-  assert.equal(await store.channelMode("chan-mode"), "auto");
-  assert.equal(await store.effectiveMode(binding("t1")), "auto");
+  assert.equal(await store.channelMode("u1", "chan-mode"), "ask");
+  assert.equal(await store.effectiveMode("u1", binding("t1")), "ask");
+  await store.setChannelMode("u1", "chan-mode", "auto");
+  assert.equal(await store.channelMode("u1", "chan-mode"), "auto");
+  assert.equal(await store.effectiveMode("u1", binding("t1")), "auto");
   // Thread override wins; clearing it inherits again.
-  assert.equal(await store.threadMode("chan-mode", "t1"), null);
-  await store.setThreadMode("chan-mode", "t1", "ask");
-  assert.equal(await store.effectiveMode(binding("t1")), "ask");
-  await store.setThreadMode("chan-mode", "t1", null);
-  assert.equal(await store.threadMode("chan-mode", "t1"), null);
-  assert.equal(await store.effectiveMode(binding("t1")), "auto");
+  assert.equal(await store.threadMode("u1", "chan-mode", "t1"), null);
+  await store.setThreadMode("u1", "chan-mode", "t1", "ask");
+  assert.equal(await store.effectiveMode("u1", binding("t1")), "ask");
+  await store.setThreadMode("u1", "chan-mode", "t1", null);
+  assert.equal(await store.threadMode("u1", "chan-mode", "t1"), null);
+  assert.equal(await store.effectiveMode("u1", binding("t1")), "auto");
   // Setting thread rules preserves the thread mode.
-  await store.setThreadMode("chan-mode", "t2", "ask");
-  await store.setThreadRules("chan-mode", "t2", ["bash:deny"]);
-  assert.equal(await store.effectiveMode(binding("t2")), "ask");
-  assert.deepEqual(await store.threadRules("chan-mode", "t2"), ["bash:deny"]);
+  await store.setThreadMode("u1", "chan-mode", "t2", "ask");
+  await store.setThreadRules("u1", "chan-mode", "t2", ["bash:deny"]);
+  assert.equal(await store.effectiveMode("u1", binding("t2")), "ask");
+  assert.deepEqual(await store.threadRules("u1", "chan-mode", "t2"), ["bash:deny"]);
 });

@@ -3,7 +3,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { EventType, type RunAgentInput } from "@ag-ui/core";
 import { defineTool } from "@copilotkit/runtime/v2";
 import { z } from "zod";
-import type { AgentTask, Channel } from "../../../../packages/domain/src/agent.ts";
+import type { AgentTask } from "../../../../packages/domain/src/agent.ts";
 import { emailDraftSchema, eventDraftSchema } from "../../../../packages/domain/src/index.ts";
 import { runOpencodeTask } from "../opencode/tasks.ts";
 import type { AgentService } from "./service.ts";
@@ -295,7 +295,7 @@ export async function executeModelTask(
   let originNote = "";
   if (task.threadId || task.originChannelId) {
     const originChannel = task.originChannelId
-      ? await service.db.get<Channel>(owner, "channels", task.originChannelId)
+      ? await service.getChannel(owner, task.originChannelId)
       : null;
     originNote = ` This task was delegated from ${originChannel ? `channel #${originChannel.name}` : "a channel"}${task.threadId ? ` (thread ${task.threadId})` : ""}; its status is visible there.`;
   }

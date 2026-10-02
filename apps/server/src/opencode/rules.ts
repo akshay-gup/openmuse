@@ -16,7 +16,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { ChannelThread } from "../../../../packages/domain/src/agent.ts";
-import { safeChannelDirName } from "../engine/threads.ts";
+import { diskOwnerForChannel, safeChannelDirName, safeOwnerDir } from "../engine/threads.ts";
 import {
   invalidRuleLines,
   isPermissionMode,
@@ -53,14 +53,26 @@ function normalizeMode(raw: unknown): PermissionMode | undefined {
 export class PermissionRulesStore {
   constructor(private readonly baseDir: string) {}
 
-  private path(channelId: string): string {
-    return join(this.baseDir, "channels", safeChannelDirName(channelId), "permissions.json");
+  private path(owner: string, channelId: string): string {
+    return join(
+      this.baseDir,
+      "owners",
+      safeOwnerDir(owner),
+      "channels",
+      safeChannelDirName(channelId),
+      "permissions.json",
+    );
   }
 
-  private async read(channelId: string): Promise<ChannelPermissionFile> {
+  /** Resolve the disk owner: shared channels are global, orchestrators are per-user. */
+  private diskOwner(owner: string, channelId: string): string {
+    return diskOwnerForChannel(channelId, owner);
+  }
+
+  private async read(owner: string, channelId: string): Promise<ChannelPermissionFile> {
     let raw: unknown;
     try {
-      raw = JSON.parse(await readFile(this.path(channelId), "utf8"));
+      raw = JSON.parse(await readFile(this.path(owner, channelId), "utf8"));
     } catch {
       return { ...EMPTY, threads: {} };
     }
@@ -84,65 +96,94 @@ export class PermissionRulesStore {
     return out;
   }
 
-  private async write(channelId: string, file: ChannelPermissionFile): Promise<void> {
-    const path = this.path(channelId);
-    await mkdir(join(this.baseDir, "channels", safeChannelDirName(channelId)), { recursive: true });
+  private async write(
+    owner: string,
+    channelId: string,
+    file: ChannelPermissionFile,
+  ): Promise<void> {
+    const path = this.path(owner, channelId);
+    await mkdir(
+      join(this.baseDir, "owners", safeOwnerDir(owner), "channels", safeChannelDirName(channelId)),
+      {
+        recursive: true,
+      },
+    );
     await writeFile(path, JSON.stringify(file, null, 2));
   }
 
   /** Channel-level rule strings (may be empty). */
-  async channelRules(channelId: string): Promise<string[]> {
-    return (await this.read(channelId)).rules;
+  async channelRules(owner: string, channelId: string): Promise<string[]> {
+    return (await this.read(this.diskOwner(owner, channelId), channelId)).rules;
   }
 
   /** A single thread's override rule strings (may be empty). */
-  async threadRules(channelId: string, threadId: string): Promise<string[]> {
-    return (await this.read(channelId)).threads[threadId]?.rules ?? [];
+  async threadRules(owner: string, channelId: string, threadId: string): Promise<string[]> {
+    return (
+      (await this.read(this.diskOwner(owner, channelId), channelId)).threads[threadId]?.rules ?? []
+    );
   }
 
   /**
    * Replace the channel-level rules. Every non-empty line must parse to a
    * rule; throws listing the offending lines.
    */
-  async setChannelRules(channelId: string, rules: string[]): Promise<string[]> {
+  async setChannelRules(owner: string, channelId: string, rules: string[]): Promise<string[]> {
     const bad = invalidRuleLines(rules);
     if (bad.length > 0) throw new Error(`Invalid permission rules: ${bad.join("; ")}`);
-    const file = await this.read(channelId);
+    const diskOwner = this.diskOwner(owner, channelId);
+    const file = await this.read(diskOwner, channelId);
     file.rules = normalize(rules);
-    await this.write(channelId, file);
+    await this.write(diskOwner, channelId, file);
     return file.rules;
   }
 
   /** Replace one thread's override rules (same validation; keeps any mode override). */
-  async setThreadRules(channelId: string, threadId: string, rules: string[]): Promise<string[]> {
+  async setThreadRules(
+    owner: string,
+    channelId: string,
+    threadId: string,
+    rules: string[],
+  ): Promise<string[]> {
     const bad = invalidRuleLines(rules);
     if (bad.length > 0) throw new Error(`Invalid permission rules: ${bad.join("; ")}`);
-    const file = await this.read(channelId);
+    const diskOwner = this.diskOwner(owner, channelId);
+    const file = await this.read(diskOwner, channelId);
     const prev = file.threads[threadId];
     file.threads[threadId] = {
       rules: normalize(rules),
       ...(prev?.mode ? { mode: prev.mode } : {}),
     };
-    await this.write(channelId, file);
+    await this.write(diskOwner, channelId, file);
     return file.threads[threadId].rules;
   }
 
   /** Channel permission mode ("ask" when unset). */
-  async channelMode(channelId: string): Promise<PermissionMode> {
-    return (await this.read(channelId)).mode ?? "ask";
+  async channelMode(owner: string, channelId: string): Promise<PermissionMode> {
+    return (await this.read(this.diskOwner(owner, channelId), channelId)).mode ?? "ask";
   }
 
   /** Set the channel permission mode. */
-  async setChannelMode(channelId: string, mode: PermissionMode): Promise<PermissionMode> {
-    const file = await this.read(channelId);
+  async setChannelMode(
+    owner: string,
+    channelId: string,
+    mode: PermissionMode,
+  ): Promise<PermissionMode> {
+    const diskOwner = this.diskOwner(owner, channelId);
+    const file = await this.read(diskOwner, channelId);
     file.mode = mode;
-    await this.write(channelId, file);
+    await this.write(diskOwner, channelId, file);
     return mode;
   }
 
   /** A thread's mode override, or null when it inherits the channel mode. */
-  async threadMode(channelId: string, threadId: string): Promise<PermissionMode | null> {
-    return (await this.read(channelId)).threads[threadId]?.mode ?? null;
+  async threadMode(
+    owner: string,
+    channelId: string,
+    threadId: string,
+  ): Promise<PermissionMode | null> {
+    return (
+      (await this.read(this.diskOwner(owner, channelId), channelId)).threads[threadId]?.mode ?? null
+    );
   }
 
   /**
@@ -150,17 +191,19 @@ export class PermissionRulesStore {
    * channel mode.
    */
   async setThreadMode(
+    owner: string,
     channelId: string,
     threadId: string,
     mode: PermissionMode | null,
   ): Promise<PermissionMode | null> {
-    const file = await this.read(channelId);
+    const diskOwner = this.diskOwner(owner, channelId);
+    const file = await this.read(diskOwner, channelId);
     const prev = file.threads[threadId] ?? { rules: [] };
     file.threads[threadId] = {
       rules: prev.rules,
       ...(mode ? { mode } : {}),
     };
-    await this.write(channelId, file);
+    await this.write(diskOwner, channelId, file);
     return mode;
   }
 
@@ -168,8 +211,8 @@ export class PermissionRulesStore {
    * Effective mode for a thread binding: thread override wins, otherwise the
    * channel mode, defaulting to "ask". Feeds `SessionContext.permissionMode`.
    */
-  async effectiveMode(binding: ChannelThread): Promise<PermissionMode> {
-    const file = await this.read(binding.channelId);
+  async effectiveMode(owner: string, binding: ChannelThread): Promise<PermissionMode> {
+    const file = await this.read(this.diskOwner(owner, binding.channelId), binding.channelId);
     return file.threads[binding.threadId]?.mode ?? file.mode ?? "ask";
   }
 
@@ -177,8 +220,8 @@ export class PermissionRulesStore {
    * Effective ruleset for a thread binding: parsed channel rules first,
    * thread overrides last (findLast → thread wins). Feeds `SessionContext.userRules`.
    */
-  async effectiveRules(binding: ChannelThread): Promise<PermissionRuleset> {
-    const file = await this.read(binding.channelId);
+  async effectiveRules(owner: string, binding: ChannelThread): Promise<PermissionRuleset> {
+    const file = await this.read(this.diskOwner(owner, binding.channelId), binding.channelId);
     const threadRules = file.threads[binding.threadId]?.rules ?? [];
     return parsePermissionRules([...file.rules, ...threadRules]);
   }

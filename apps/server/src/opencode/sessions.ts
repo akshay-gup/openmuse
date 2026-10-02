@@ -11,7 +11,11 @@
 import { mkdir } from "node:fs/promises";
 import type { ChannelThread } from "../../../../packages/domain/src/agent.ts";
 import type { Config } from "../config.ts";
-import { channelWorkspaceDir, type ThreadBindingStore } from "../engine/threads.ts";
+import {
+  channelWorkspaceDir,
+  diskOwnerForChannel,
+  type ThreadBindingStore,
+} from "../engine/threads.ts";
 import { AppError } from "../errors.ts";
 import type { OpencodeClientPool } from "./client.ts";
 import { buildSessionRuleset, type PermissionMode, type PermissionRuleset } from "./permissions.ts";
@@ -40,8 +44,8 @@ export interface SessionContext {
 }
 
 /** The session's working directory: the channel's workspace dir. */
-export function sessionDirectory(config: Config, channelId: string): string {
-  return channelWorkspaceDir(config.dataDir, channelId);
+export function sessionDirectory(config: Config, owner: string, channelId: string): string {
+  return channelWorkspaceDir(config.dataDir, diskOwnerForChannel(channelId, owner), channelId);
 }
 
 async function findBinding(
@@ -66,7 +70,7 @@ export async function rotateThreadSession(
   threadId: string,
 ): Promise<OpencodeSessionRef> {
   const binding = await findBinding(ctx.threads, owner, threadId);
-  const directory = sessionDirectory(ctx.config, binding.channelId);
+  const directory = sessionDirectory(ctx.config, owner, binding.channelId);
   await mkdir(directory, { recursive: true });
   const client = ctx.clients.forDirectory(directory);
   const userRules = (await ctx.userRules?.(binding)) ?? [];
@@ -98,7 +102,7 @@ export async function ensureThreadSession(
   threadId: string,
 ): Promise<OpencodeSessionRef> {
   const binding = await findBinding(ctx.threads, owner, threadId);
-  const directory = sessionDirectory(ctx.config, binding.channelId);
+  const directory = sessionDirectory(ctx.config, owner, binding.channelId);
   if (binding.opencodeSessionId) {
     const client = ctx.clients.forDirectory(directory);
     const existing = await client.session

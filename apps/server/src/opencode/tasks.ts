@@ -17,7 +17,7 @@
  * is unchanged — only the execution backend differs.
  */
 import { mkdir } from "node:fs/promises";
-import type { AgentTask, Channel } from "../../../../packages/domain/src/agent.ts";
+import type { AgentTask } from "../../../../packages/domain/src/agent.ts";
 import { ORCHESTRATOR_CHANNEL_ID } from "../../../../packages/domain/src/agent.ts";
 import type { Config } from "../config.ts";
 import type { AgentService } from "../engine/service.ts";
@@ -136,10 +136,11 @@ interface TaskSession {
 
 async function createTaskSession(
   runtime: OpencodeTaskRuntime,
+  owner: string,
   task: AgentTask,
 ): Promise<TaskSession> {
   const channelId = task.originChannelId ?? ORCHESTRATOR_CHANNEL_ID;
-  const directory = sessionDirectory(runtime.config, channelId);
+  const directory = sessionDirectory(runtime.config, owner, channelId);
   await mkdir(directory, { recursive: true });
   const client = runtime.pool.forDirectory(directory);
   const created = await client.session.create({
@@ -224,12 +225,12 @@ export async function runOpencodeTask(
   let originNote = "";
   if (task.threadId || task.originChannelId) {
     const originChannel = task.originChannelId
-      ? await service.db.get<Channel>(owner, "channels", task.originChannelId)
+      ? await service.getChannel(owner, task.originChannelId)
       : null;
     originNote = `This task was delegated from ${originChannel ? `channel #${originChannel.name}` : "a channel"}${task.threadId ? ` (thread ${task.threadId})` : ""}; its status is visible there.`;
   }
 
-  const { sessionId, directory, scope, channelId } = await createTaskSession(runtime, task);
+  const { sessionId, directory, scope, channelId } = await createTaskSession(runtime, owner, task);
   const client = runtime.pool.forDirectory(directory);
 
   const collector = new TaskTextCollector();

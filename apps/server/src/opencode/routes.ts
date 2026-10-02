@@ -78,7 +78,7 @@ export function opencodePermissionRoutes(deps: OpencodeShimDeps) {
     const channels = await deps.service.listChannels(owner);
     if (!channels.some((channel) => channel.id === channelId))
       return c.json({ error: "Channel not found" }, 404);
-    return c.json({ channelId, rules: await deps.rules.channelRules(channelId) });
+    return c.json({ channelId, rules: await deps.rules.channelRules(owner, channelId) });
   });
 
   app.put("/channels/:channelId/permissions", async (c) => {
@@ -92,7 +92,7 @@ export function opencodePermissionRoutes(deps: OpencodeShimDeps) {
     const bad = invalidRuleLines(parsed.data.rules);
     if (bad.length > 0)
       return c.json({ error: `Invalid permission rules: ${bad.join("; ")}` }, 422);
-    const rules = await deps.rules.setChannelRules(channelId, parsed.data.rules);
+    const rules = await deps.rules.setChannelRules(owner, channelId, parsed.data.rules);
     return c.json({ channelId, rules });
   });
 
@@ -102,7 +102,7 @@ export function opencodePermissionRoutes(deps: OpencodeShimDeps) {
     const channels = await deps.service.listChannels(owner);
     if (!channels.some((channel) => channel.id === channelId))
       return c.json({ error: "Channel not found" }, 404);
-    return c.json({ channelId, mode: await deps.rules.channelMode(channelId) });
+    return c.json({ channelId, mode: await deps.rules.channelMode(owner, channelId) });
   });
 
   app.put("/channels/:channelId/permissions/mode", async (c) => {
@@ -114,7 +114,7 @@ export function opencodePermissionRoutes(deps: OpencodeShimDeps) {
     const parsed = modeSchema.safeParse(await c.req.json().catch(() => null));
     if (!parsed.success || !isPermissionMode(parsed.data.mode))
       return c.json({ error: 'Body must be { mode: "ask" | "auto" }' }, 400);
-    const mode = await deps.rules.setChannelMode(channelId, parsed.data.mode);
+    const mode = await deps.rules.setChannelMode(owner, channelId, parsed.data.mode);
     return c.json({ channelId, mode });
   });
 
@@ -124,8 +124,8 @@ export function opencodePermissionRoutes(deps: OpencodeShimDeps) {
     const binding = await deps.service.channelOfThread(owner, threadId);
     if (!binding) return c.json({ error: "Thread is not bound to a channel" }, 404);
     const [rules, channelRules] = await Promise.all([
-      deps.rules.threadRules(binding.channelId, threadId),
-      deps.rules.channelRules(binding.channelId),
+      deps.rules.threadRules(owner, binding.channelId, threadId),
+      deps.rules.channelRules(owner, binding.channelId),
     ]);
     return c.json({ threadId, channelId: binding.channelId, rules, channelRules });
   });
@@ -140,7 +140,12 @@ export function opencodePermissionRoutes(deps: OpencodeShimDeps) {
     const bad = invalidRuleLines(parsed.data.rules);
     if (bad.length > 0)
       return c.json({ error: `Invalid permission rules: ${bad.join("; ")}` }, 422);
-    const rules = await deps.rules.setThreadRules(binding.channelId, threadId, parsed.data.rules);
+    const rules = await deps.rules.setThreadRules(
+      owner,
+      binding.channelId,
+      threadId,
+      parsed.data.rules,
+    );
     return c.json({ threadId, channelId: binding.channelId, rules });
   });
 
@@ -150,8 +155,8 @@ export function opencodePermissionRoutes(deps: OpencodeShimDeps) {
     const binding = await deps.service.channelOfThread(owner, threadId);
     if (!binding) return c.json({ error: "Thread is not bound to a channel" }, 404);
     const [mode, channelMode] = await Promise.all([
-      deps.rules.threadMode(binding.channelId, threadId),
-      deps.rules.channelMode(binding.channelId),
+      deps.rules.threadMode(owner, binding.channelId, threadId),
+      deps.rules.channelMode(owner, binding.channelId),
     ]);
     return c.json({ threadId, channelId: binding.channelId, mode, channelMode });
   });
@@ -164,7 +169,12 @@ export function opencodePermissionRoutes(deps: OpencodeShimDeps) {
     const parsed = threadModeSchema.safeParse(await c.req.json().catch(() => null));
     if (!parsed.success)
       return c.json({ error: 'Body must be { mode: "ask" | "auto" | null }' }, 400);
-    const mode = await deps.rules.setThreadMode(binding.channelId, threadId, parsed.data.mode);
+    const mode = await deps.rules.setThreadMode(
+      owner,
+      binding.channelId,
+      threadId,
+      parsed.data.mode,
+    );
     return c.json({ threadId, channelId: binding.channelId, mode });
   });
 
