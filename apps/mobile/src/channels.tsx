@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { type Channel, ORCHESTRATOR_CHANNEL_ID } from "../../../packages/domain/src/agent";
 import { useMuseThread } from "./threads";
-import { Button, colors, ErrorNotice, Field, s } from "./ui";
+import { Button, colors, Empty, ErrorNotice, Field, s } from "./ui";
 import { useWorkspace } from "./workspace";
 
 /**
@@ -59,8 +59,8 @@ export function ChannelsSection({ onClose }: { onClose: () => void }) {
     .sort((a, b) => a.name.localeCompare(b.name));
 
   return (
-    <View style={{ gap: 10 }}>
-      <View style={s.between}>
+    <View style={{ gap: 12 }}>
+      <View style={[s.between, { marginBottom: 4 }]}>
         <Text style={s.heading}>Channels</Text>
         <Button small onPress={() => void load()} icon={RefreshCw} disabled={loading}>
           Refresh
@@ -70,7 +70,7 @@ export function ChannelsSection({ onClose }: { onClose: () => void }) {
       {loading && !channels ? (
         <ActivityIndicator color={colors.blueDark} />
       ) : userChannels.length === 0 ? (
-        <Text style={s.muted}>No channels yet. Create one to start chatting.</Text>
+        <Empty icon={Hash} title="No channels yet" detail="Create one to start chatting." />
       ) : (
         userChannels.map((channel) => {
           const isActive = selection.id === `channel:${channel.id}`;
@@ -78,12 +78,12 @@ export function ChannelsSection({ onClose }: { onClose: () => void }) {
             <View
               key={channel.id}
               style={{
-                paddingVertical: 10,
+                paddingVertical: 8,
                 borderBottomWidth: 1,
                 borderBottomColor: colors.line,
               }}
             >
-              <View style={[s.row, { gap: 10, alignItems: "center" }]}>
+              <View style={[s.row, { gap: 12, alignItems: "center" }]}>
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel={`Open channel: ${channel.name}`}
@@ -92,11 +92,11 @@ export function ChannelsSection({ onClose }: { onClose: () => void }) {
                     s.row,
                     {
                       flex: 1,
-                      gap: 10,
+                      gap: 12,
                       alignItems: "center",
-                      paddingVertical: 6,
-                      paddingHorizontal: 8,
-                      borderRadius: 8,
+                      paddingVertical: 10,
+                      paddingHorizontal: 12,
+                      borderRadius: 12,
                       backgroundColor: isActive ? "#E8EDF0" : "transparent",
                     },
                   ]}
@@ -130,7 +130,7 @@ export function ChannelsSection({ onClose }: { onClose: () => void }) {
         })
       )}
       {creating ? (
-        <View style={{ gap: 8 }}>
+        <View style={{ gap: 12 }}>
           <Field label="Channel name" value={name} onChangeText={setName} />
           <View style={[s.row, { gap: 8 }]}>
             <Button

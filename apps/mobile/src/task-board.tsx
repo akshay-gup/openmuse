@@ -36,16 +36,19 @@ export function TaskBoardCard({ task, onPress }: { task: AgentTask; onPress: () 
       accessibilityRole="button"
       accessibilityLabel={`Open issue: ${task.title}`}
       onPress={onPress}
-      style={{
-        backgroundColor: "#FFFFFF",
-        borderRadius: 14,
-        borderWidth: 1,
-        borderColor: colors.line,
-        padding: 12,
-        gap: 8,
-      }}
+      style={({ pressed }) => [
+        {
+          backgroundColor: "#FFFFFF",
+          borderRadius: 16,
+          borderWidth: 1,
+          borderColor: colors.line,
+          padding: 14,
+          gap: 10,
+          opacity: pressed ? 0.92 : 1,
+        },
+      ]}
     >
-      <View style={[s.row, { gap: 8 }]}>
+      <View style={[s.row, { gap: 10 }]}>
         <View
           style={{
             width: 8,
@@ -63,8 +66,8 @@ export function TaskBoardCard({ task, onPress }: { task: AgentTask; onPress: () 
           style={{
             backgroundColor: manual ? colors.lavender : colors.sky,
             borderRadius: 10,
-            paddingHorizontal: 8,
-            paddingVertical: 3,
+            paddingHorizontal: 9,
+            paddingVertical: 4,
           }}
         >
           <Text style={[s.small, { fontWeight: "700" }]}>{manual ? "Manual" : "Agent"}</Text>
@@ -74,8 +77,8 @@ export function TaskBoardCard({ task, onPress }: { task: AgentTask; onPress: () 
             style={{
               backgroundColor: "#F4F4F6",
               borderRadius: 10,
-              paddingHorizontal: 8,
-              paddingVertical: 3,
+              paddingHorizontal: 9,
+              paddingVertical: 4,
             }}
           >
             <Text style={s.small}>Due {due}</Text>
@@ -110,22 +113,22 @@ export function TaskBoard({
           <View
             key={column.id}
             style={{
-              width: wide ? undefined : 280,
+              width: wide ? undefined : 300,
               flex: wide ? 1 : undefined,
-              gap: 8,
+              gap: 10,
               backgroundColor: "#F4F4F6",
-              borderRadius: 16,
-              padding: 10,
+              borderRadius: 18,
+              padding: 12,
             }}
           >
-            <View style={[s.row, { gap: 8, alignItems: "center" }]}>
+            <View style={[s.row, { gap: 8, alignItems: "center", paddingHorizontal: 4 }]}>
               <Text style={[s.text, { fontWeight: "700", fontSize: 14 }]}>{column.title}</Text>
               <View
                 style={{
                   backgroundColor: "#FFFFFF",
                   borderRadius: 10,
-                  paddingHorizontal: 8,
-                  paddingVertical: 2,
+                  paddingHorizontal: 9,
+                  paddingVertical: 3,
                 }}
               >
                 <Text style={[s.small, { fontWeight: "700" }]}>{items.length}</Text>
@@ -134,7 +137,7 @@ export function TaskBoard({
             {items.map((task) => (
               <TaskBoardCard key={task.id} task={task} onPress={() => onSelect(task)} />
             ))}
-            {!items.length && <Text style={s.small}>Nothing here.</Text>}
+            {!items.length && <Text style={[s.small, { padding: 8 }]}>Nothing here.</Text>}
           </View>
         );
       })}

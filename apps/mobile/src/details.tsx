@@ -144,6 +144,9 @@ function MailDetail({ mail: m }: { mail: Mail }) {
           <Text style={s.muted}>Loading the conversation…</Text>
         </View>
       )}
+      {!loading && !thread.length && (
+        <Empty icon={MailIcon} title="Nothing here" detail="This conversation has no messages." />
+      )}
       {thread.map((message) => (
         <Card key={message.id} style={{ marginBottom: 16 }}>
           <View style={s.between}>
@@ -152,7 +155,7 @@ function MailDetail({ mail: m }: { mail: Mail }) {
               <Text style={s.small}>{message.from}</Text>
               <Text style={s.small}>To: {message.to.join(", ")}</Text>
             </View>
-            <Text style={s.small}>
+            <Text style={[s.small, { flexShrink: 0, marginLeft: 12 }]}>
               {dateLabel(message.date)} · {timeLabel(message.date)}
             </Text>
           </View>
@@ -160,27 +163,47 @@ function MailDetail({ mail: m }: { mail: Mail }) {
           <Text selectable style={[s.text, { lineHeight: 25 }]}>
             {message.body}
           </Text>
-          {message.attachments.map((id) => {
-            const file = w.files.find((f) => f.id === id);
-            return file ? (
-              <LinkRow
-                key={id}
-                title={file.name}
-                detail={`${file.pageCount} pages · PDF attachment`}
-                icon={FileText}
-                onPress={() => open({ type: "file", file })}
-              />
-            ) : (
-              <Button
-                key={id}
-                busy={importing === id}
-                icon={FileText}
-                onPress={() => void importAttachment(id)}
-              >
-                {decodeURIComponent(id.split(":").slice(2).join(":")) || "Open attachment"}
-              </Button>
-            );
-          })}
+          {!!message.attachments.length && (
+            <View style={{ marginTop: 16, gap: 4 }}>
+              <Text style={s.label}>Attachments</Text>
+              {message.attachments.map((id) => {
+                const file = w.files.find((f) => f.id === id);
+                const name =
+                  file?.name ||
+                  decodeURIComponent(id.split(":").slice(2).join(":")) ||
+                  "Attachment";
+                return (
+                  <View key={id} style={[s.row, { gap: 12, paddingVertical: 10 }]}>
+                    <View style={s.iconBox}>
+                      <FileText size={19} color={colors.text} />
+                    </View>
+                    <View style={{ flex: 1, gap: 2 }}>
+                      <Text style={[s.text, { fontWeight: "500" }]} numberOfLines={1}>
+                        {name}
+                      </Text>
+                      <Text style={s.small}>
+                        {file ? `${file.pageCount} pages · PDF` : "Not imported yet"}
+                      </Text>
+                    </View>
+                    {file ? (
+                      <Button small onPress={() => open({ type: "file", file })}>
+                        Open
+                      </Button>
+                    ) : (
+                      <Button
+                        small
+                        primary
+                        busy={importing === id}
+                        onPress={() => void importAttachment(id)}
+                      >
+                        Import
+                      </Button>
+                    )}
+                  </View>
+                );
+              })}
+            </View>
+          )}
         </Card>
       ))}
       <ErrorNotice error={error} />
@@ -315,8 +338,8 @@ function EmailEditor({ draft }: { draft?: Partial<EmailDraft> & { id?: string } 
         style={{ minHeight: 210 }}
       />
       {w.files.length > 0 && (
-        <Card style={{ padding: 16, marginBottom: 18 }}>
-          <Text style={[s.heading, { fontSize: 13, marginBottom: 5 }]}>Attachments</Text>
+        <Card style={{ marginBottom: 20 }}>
+          <SectionHeading title="Attachments" />
           {w.files.map((f) => (
             <CheckRow
               key={f.id}
@@ -510,7 +533,7 @@ function EventEditor({
         placeholder="Anything else to keep in mind?"
       />
       {!!conflicts.length && (
-        <Card style={{ backgroundColor: colors.orange, padding: 16, marginBottom: 16 }}>
+        <Card style={{ backgroundColor: colors.orange, marginBottom: 16 }}>
           <Text style={s.heading}>This time overlaps</Text>
           {conflicts.map((c) => (
             <Text key={c.id} style={s.muted}>
@@ -597,7 +620,7 @@ function ReviewDetail({ initial }: { initial: ActionProposal }) {
       }
       onClose={close}
     >
-      <View style={[s.row, { gap: 13, marginBottom: 21 }]}>
+      <View style={[s.row, { gap: 12, marginBottom: 20 }]}>
         <View style={[s.iconBox, { backgroundColor: colors.lavender }]}>
           <ShieldCheck size={22} color={colors.text} />
         </View>
@@ -609,7 +632,7 @@ function ReviewDetail({ initial }: { initial: ActionProposal }) {
           {action.status.replace(/_/g, " ")}
         </Chip>
       </View>
-      <Card style={{ gap: 13 }}>
+      <Card style={{ gap: 12 }}>
         <ReviewLine label="Account" value={action.account || w.profile.email} />
         {email ? (
           <>
@@ -621,20 +644,25 @@ function ReviewDetail({ initial }: { initial: ActionProposal }) {
             <Text selectable style={[s.text, { lineHeight: 25 }]}>
               {String(d.body || "")}
             </Text>
-            <View style={s.divider} />
-            <Text style={s.label}>Attachments</Text>
-            {Array.isArray(d.attachmentIds) && d.attachmentIds.length ? (
-              d.attachmentIds.map((id) => {
-                const file = w.files.find((f) => f.id === id);
-                return (
-                  <Text key={String(id)} style={s.text}>
-                    {file?.name || String(id)} · version {String(id).slice(-8)}
-                  </Text>
-                );
-              })
-            ) : (
-              <Text style={s.muted}>No attachments</Text>
-            )}
+            <View style={{ marginTop: 16, gap: 4 }}>
+              <Text style={s.label}>Attachments</Text>
+              {Array.isArray(d.attachmentIds) && d.attachmentIds.length ? (
+                d.attachmentIds.map((id) => {
+                  const file = w.files.find((f) => f.id === id);
+                  return (
+                    <LinkRow
+                      key={String(id)}
+                      icon={FileText}
+                      title={file?.name || String(id)}
+                      detail={`Version ${String(id).slice(-8)}`}
+                      onPress={() => file && open({ type: "file", file })}
+                    />
+                  );
+                })
+              ) : (
+                <Text style={s.muted}>No attachments</Text>
+              )}
+            </View>
           </>
         ) : (
           <>
@@ -675,7 +703,7 @@ function ReviewDetail({ initial }: { initial: ActionProposal }) {
       </Card>
       <ErrorNotice error={error || action.error} />
       {!!action.result && (
-        <Card style={{ marginTop: 16, backgroundColor: colors.green, padding: 18 }}>
+        <Card style={{ marginTop: 16, backgroundColor: colors.green }}>
           <Text selectable style={s.text}>
             {resultSummary(action.result)}
           </Text>
@@ -683,7 +711,7 @@ function ReviewDetail({ initial }: { initial: ActionProposal }) {
       )}
       {pending ? (
         <>
-          <Text style={[s.small, { marginVertical: 17 }]}>
+          <Text style={[s.small, { marginVertical: 16 }]}>
             Review expires{" "}
             {new Date(action.expiresAt).toLocaleString(undefined, {
               year: "numeric",
@@ -714,7 +742,7 @@ function ReviewDetail({ initial }: { initial: ActionProposal }) {
           </View>
         </>
       ) : (
-        <Button style={{ alignSelf: "flex-start", marginTop: 19 }} onPress={close}>
+        <Button style={{ alignSelf: "flex-start", marginTop: 16 }} onPress={close}>
           Done
         </Button>
       )}
@@ -802,12 +830,12 @@ function FileDetail({ file: f }: { file: Artifact }) {
       {f.fields && f.fields.length > 0 && (
         <Card>
           <SectionHeading title="Fill this form" />
-          <Text style={[s.muted, { marginBottom: 18 }]}>
+          <Text style={[s.muted, { marginBottom: 16 }]}>
             Add your details below. Saving creates a new copy and keeps the original intact.
           </Text>
           {f.fields.map((field) =>
             field.type === "unsupported" ? (
-              <Text key={field.name} style={s.muted}>
+              <Text key={field.name} style={[s.muted, { marginBottom: 20 }]}>
                 {field.name} · this field type is not supported
               </Text>
             ) : field.type === "checkbox" ? (
@@ -866,7 +894,10 @@ function BrowserDetail({ initial }: { initial: BrowserSession }) {
         }
       })
       .catch((e) => {
-        if (active) setError(e instanceof Error ? e.message : String(e));
+        if (active) {
+          setError(e instanceof Error ? e.message : String(e));
+          setLoading(false);
+        }
       });
     return () => {
       active = false;
@@ -923,7 +954,7 @@ function BrowserDetail({ initial }: { initial: BrowserSession }) {
       onClose={close}
       wide
     >
-      <View style={[s.row, { gap: 10, marginBottom: 16 }]}>
+      <View style={[s.row, { gap: 12, alignItems: "flex-end", marginBottom: 16 }]}>
         <View style={{ flex: 1 }}>
           <Field
             label="Website address"
@@ -934,28 +965,47 @@ function BrowserDetail({ initial }: { initial: BrowserSession }) {
             onSubmitEditing={() => void mutate()}
           />
         </View>
-        <Button primary busy={busy} disabled={loading || !url.trim()} onPress={() => void mutate()}>
-          {browser.status === "closed" ? "Reopen" : browser.status === "error" ? "Reconnect" : "Go"}
-        </Button>
+        <View style={{ paddingBottom: 20 }}>
+          <Button
+            primary
+            busy={busy}
+            disabled={loading || !url.trim()}
+            onPress={() => void mutate()}
+          >
+            {browser.status === "closed"
+              ? "Reopen"
+              : browser.status === "error"
+                ? "Reconnect"
+                : "Go"}
+          </Button>
+        </View>
       </View>
       <ErrorNotice error={error} />
       {loading ? (
-        <View style={[s.row, { gap: 10, paddingVertical: 24 }]}>
-          {error ? (
-            <Button onPress={() => setRetry(retry + 1)}>Retry connection</Button>
-          ) : (
-            <>
-              <ActivityIndicator color={colors.blueDark} />
-              <Text style={s.muted}>Connecting to your browser…</Text>
-            </>
-          )}
+        <View style={[s.row, { gap: 12, paddingVertical: 32, justifyContent: "center" }]}>
+          <ActivityIndicator color={colors.blueDark} />
+          <Text style={s.muted}>Connecting to your browser…</Text>
         </View>
+      ) : error ? (
+        <Empty
+          icon={Globe2}
+          title="Could not reach this session"
+          detail="Check the address above and try again."
+        >
+          <Button onPress={() => setRetry(retry + 1)}>Retry connection</Button>
+        </Empty>
       ) : browser.status === "active" && browser.consoleUrl ? (
         <BrowserConsole url={api.url(browser.consoleUrl)} />
       ) : browser.status === "active" && browser.previewUrl ? (
         <Image
           source={{ uri: api.url(browser.previewUrl) }}
-          style={{ width: "100%", height: 450, backgroundColor: colors.canvas }}
+          style={{
+            width: "100%",
+            aspectRatio: 16 / 10,
+            maxHeight: 520,
+            backgroundColor: colors.canvas,
+            borderRadius: 16,
+          }}
           resizeMode="contain"
         />
       ) : (

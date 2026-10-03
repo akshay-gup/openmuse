@@ -160,7 +160,7 @@ export function BrowserToolCard({
           icon={Hand}
           disabled={!browser || running}
           onPress={() => browser && open({ type: "browser", browser })}
-          style={{ backgroundColor: "#F9F9FA", minHeight: 38, paddingVertical: 8 }}
+          style={{ backgroundColor: "#F9F9FA" }}
         >
           Take control
         </Button>

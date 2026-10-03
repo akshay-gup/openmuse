@@ -22,16 +22,16 @@ export function ComputerEntry() {
         s.row,
         {
           alignSelf: "center",
-          gap: 6,
-          paddingHorizontal: 12,
-          paddingVertical: 7,
-          borderRadius: 20,
+          gap: 8,
+          paddingHorizontal: 14,
+          paddingVertical: 10,
+          borderRadius: 999,
           backgroundColor: "#F1F3F4",
         },
       ]}
     >
-      <Monitor size={13} color={colors.muted} />
-      <Text style={{ fontSize: 12, color: colors.muted }}>
+      <Monitor size={14} color={colors.muted} />
+      <Text style={{ fontSize: 13, color: colors.muted }}>
         Computer
         {!available ? " · offline" : active ? " · take control" : " · ready"}
       </Text>

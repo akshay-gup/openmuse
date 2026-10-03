@@ -29,9 +29,11 @@ export function ProjectSwitcher({
       accessibilityLabel={label}
       onPress={onPress}
       style={{
-        borderRadius: 16,
-        paddingHorizontal: 14,
-        paddingVertical: 8,
+        borderRadius: 999,
+        paddingHorizontal: 16,
+        paddingVertical: 10,
+        minHeight: 40,
+        justifyContent: "center",
         backgroundColor: active ? "#1F1F24" : "#EDEDEF",
       }}
     >
@@ -56,9 +58,11 @@ export function ProjectSwitcher({
             onLongPress={() => onManage(project)}
             delayLongPress={500}
             style={{
-              borderRadius: 16,
-              paddingHorizontal: 14,
-              paddingVertical: 8,
+              borderRadius: 999,
+              paddingHorizontal: 16,
+              paddingVertical: 10,
+              minHeight: 40,
+              justifyContent: "center",
               backgroundColor: selected === project.id ? "#1F1F24" : "#EDEDEF",
             }}
           >
@@ -110,7 +114,7 @@ export function ProjectCreate({ onClose }: { onClose: () => void }) {
 
   return (
     <Sheet title="New project" subtitle="Group tasks on the board" onClose={onClose}>
-      <View style={{ gap: 14 }}>
+      <View style={{ gap: 16 }}>
         <ErrorNotice error={error} />
         <Field
           label="Name"
@@ -186,7 +190,7 @@ export function ProjectManage({
       subtitle={`${taskCount} task${taskCount === 1 ? "" : "s"}`}
       onClose={onClose}
     >
-      <View style={{ gap: 14 }}>
+      <View style={{ gap: 16 }}>
         <ErrorNotice error={error} />
         <Field label="Name" value={name} onChangeText={setName} />
         <Button primary busy={busy} onPress={() => void save()}>

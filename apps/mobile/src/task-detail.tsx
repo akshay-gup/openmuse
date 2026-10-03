@@ -120,7 +120,7 @@ export function TaskDetail({
 
   return (
     <Sheet title={manual ? "Issue" : "Task"} subtitle={statusLabel(task.status)} onClose={onClose}>
-      <View style={{ gap: 14 }}>
+      <View style={{ gap: 16 }}>
         <ErrorNotice error={error} />
         <Field label="Title" value={title} onChangeText={setTitle} />
         <View style={{ gap: 6 }}>
@@ -224,7 +224,7 @@ export function TaskDetail({
           )}
         </View>
         {!!blockers.length && (
-          <View style={{ gap: 4 }}>
+          <View style={{ gap: 8 }}>
             <Text style={s.label}>Blocked by</Text>
             {blockers.map((blocker) => (
               <Text key={blocker.id} style={s.muted} numberOfLines={1}>

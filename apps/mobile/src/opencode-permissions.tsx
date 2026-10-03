@@ -1,8 +1,8 @@
-import { ShieldCheck } from "lucide-react-native";
+import { Hash, ShieldCheck } from "lucide-react-native";
 import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import type { Channel } from "../../../packages/domain/src/agent";
-import { Button, Card, colors, ErrorNotice, SectionHeading, s } from "./ui";
+import { Button, Card, colors, Empty, ErrorNotice, SectionHeading, s } from "./ui";
 import { useWorkspace } from "./workspace";
 
 interface PendingRequest {
@@ -72,11 +72,11 @@ export function PendingApprovals({ threadId }: { threadId: string }) {
         <View
           key={request.requestId}
           style={{
-            gap: 8,
-            paddingHorizontal: 12,
-            paddingVertical: 10,
+            gap: 10,
+            paddingHorizontal: 14,
+            paddingVertical: 14,
             backgroundColor: "#FFF8E7",
-            borderRadius: 14,
+            borderRadius: 16,
             borderWidth: 1,
             borderColor: "#F0DFAE",
           }}
@@ -91,10 +91,11 @@ export function PendingApprovals({ threadId }: { threadId: string }) {
             The agent is waiting for approval (
             {Math.max(0, Math.round((Date.now() - request.askedAt) / 1000))}s)
           </Text>
-          <View style={[s.row, { gap: 8 }]}>
+          <View style={[s.row, { gap: 8, flexWrap: "wrap" }]}>
             <Button
               small
               primary
+              busy={busy === request.requestId}
               disabled={busy === request.requestId}
               onPress={() => void reply(request.requestId, "once")}
             >
@@ -102,6 +103,7 @@ export function PendingApprovals({ threadId }: { threadId: string }) {
             </Button>
             <Button
               small
+              busy={busy === request.requestId}
               disabled={busy === request.requestId}
               onPress={() => void reply(request.requestId, "always")}
             >
@@ -110,6 +112,7 @@ export function PendingApprovals({ threadId }: { threadId: string }) {
             <Button
               small
               danger
+              busy={busy === request.requestId}
               disabled={busy === request.requestId}
               onPress={() => void reply(request.requestId, "reject")}
             >
@@ -183,7 +186,11 @@ export function PermissionModeSelector({
   }
 
   if (mode === undefined)
-    return error ? <ErrorNotice error={error} /> : <ActivityIndicator color={colors.blueDark} />;
+    return error ? (
+      <ErrorNotice error={error} />
+    ) : (
+      <ActivityIndicator color={colors.blueDark} style={{ paddingVertical: 20 }} />
+    );
   const inheritDetail = channelMode
     ? `Channel: ${channelMode === "auto" ? "Auto-approve" : "Ask"}`
     : "Channel default";
@@ -204,11 +211,11 @@ export function PermissionModeSelector({
             style={[
               s.row,
               {
-                gap: 8,
+                gap: 10,
                 alignItems: "center",
-                paddingVertical: 8,
-                paddingHorizontal: 12,
-                borderRadius: 12,
+                paddingVertical: 12,
+                paddingHorizontal: 14,
+                borderRadius: 14,
                 borderWidth: 1,
                 borderColor: active ? colors.blueDark : colors.line,
                 backgroundColor: active ? "#EFF6FF" : "transparent",
@@ -286,16 +293,16 @@ export function PermissionsSettings() {
       </Text>
       <ErrorNotice error={error} />
       {channels === null ? (
-        <ActivityIndicator color={colors.blueDark} />
+        <ActivityIndicator color={colors.blueDark} style={{ paddingVertical: 20 }} />
       ) : !channels.length ? (
-        <Text style={s.muted}>No channels yet.</Text>
+        <Empty icon={Hash} title="No channels yet" detail="Create a channel to set its rules." />
       ) : (
         channels.map((channel) => (
           <View
             key={channel.id}
             style={{
-              gap: 8,
-              paddingBottom: 12,
+              gap: 12,
+              paddingBottom: 16,
               borderBottomWidth: 1,
               borderBottomColor: colors.line,
             }}
@@ -304,13 +311,15 @@ export function PermissionsSettings() {
               accessibilityRole="button"
               accessibilityLabel={`Permission rules for ${channel.name}`}
               onPress={() => setExpanded(expanded === channel.id ? null : channel.id)}
-              style={[s.row, { gap: 8, alignItems: "center" }]}
+              style={[s.row, { gap: 10, alignItems: "center", paddingVertical: 10 }]}
             >
-              <ShieldCheck size={16} color={colors.muted} />
+              <ShieldCheck size={17} color={colors.muted} />
               <Text style={[s.text, { flex: 1, fontWeight: "600" }]} numberOfLines={1}>
                 {channel.name}
               </Text>
-              <Text style={s.small}>{expanded === channel.id ? "Hide" : "Edit"}</Text>
+              <Text style={[s.small, { fontWeight: "600" }]}>
+                {expanded === channel.id ? "Hide" : "Edit"}
+              </Text>
             </Pressable>
             {expanded === channel.id && <ChannelPermissionRules channelId={channel.id} />}
           </View>

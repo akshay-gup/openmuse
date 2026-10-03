@@ -78,7 +78,7 @@ export function TodayScreen() {
     .filter((e) => eventDate(e) === today)
     .sort((a, b) => a.start.localeCompare(b.start));
   return (
-    <View style={{ gap: 25 }}>
+    <View style={{ gap: 24 }}>
       <View
         style={[
           {
@@ -182,7 +182,7 @@ export function TodayScreen() {
           </View>
         )}
       </View>
-      <View style={{ flexDirection: "row", gap: 13, flexWrap: "wrap" }}>
+      <View style={{ flexDirection: "row", gap: 12, flexWrap: "wrap" }}>
         {[
           {
             label: "UNREAD EMAILS",
@@ -215,27 +215,27 @@ export function TodayScreen() {
             onPress={() => navigate(item.section)}
             style={{ flex: 1, minWidth: 180 }}
           >
-            <Card style={{ padding: 21, height: 126 }}>
+            <Card style={{ padding: 20, minHeight: 148 }}>
               <View style={s.between}>
-                <Text style={[s.label, { fontSize: 9, letterSpacing: 1 }]}>{item.label}</Text>
+                <Text style={s.label}>{item.label}</Text>
                 <View
                   style={[
                     s.iconBox,
-                    { width: 31, height: 31, borderRadius: 10, backgroundColor: item.tint },
+                    { width: 36, height: 36, borderRadius: 12, backgroundColor: item.tint },
                   ]}
                 >
-                  <item.icon size={15} color={colors.text} />
+                  <item.icon size={17} color={colors.text} />
                 </View>
               </View>
-              <Text style={{ fontSize: 29, color: colors.text, letterSpacing: -1, marginTop: -2 }}>
+              <Text style={{ fontSize: 30, color: colors.text, letterSpacing: -1, marginTop: 8 }}>
                 {String(item.value).padStart(2, "0")}
               </Text>
-              <Text style={[s.small, { fontSize: 10, marginTop: 3 }]}>{item.note}</Text>
+              <Text style={[s.small, { marginTop: 4 }]}>{item.note}</Text>
             </Card>
           </Pressable>
         ))}
       </View>
-      <View style={{ flexDirection: wide ? "row" : "column", gap: 22 }}>
+      <View style={{ flexDirection: wide ? "row" : "column", gap: 24 }}>
         <Card style={{ flex: 1 }}>
           <SectionHeading
             title="On your calendar"
@@ -257,15 +257,15 @@ export function TodayScreen() {
               s.row,
               {
                 gap: 8,
-                paddingTop: 15,
+                paddingVertical: 12,
                 marginTop: 9,
                 borderTopWidth: 1,
                 borderTopColor: colors.line,
               },
             ]}
           >
-            <Plus size={15} color={colors.muted} />
-            <Text style={s.small}>Make time for something</Text>
+            <Plus size={16} color={colors.muted} />
+            <Text style={[s.text, { fontSize: 14 }]}>Make time for something</Text>
           </Pressable>
         </Card>
         <Card style={{ flex: 1 }}>
@@ -290,15 +290,15 @@ export function TodayScreen() {
                 ]}
               >
                 <Avatar name={m.sender} index={i} />
-                <View style={{ flex: 1, gap: 3 }}>
+                <View style={{ flex: 1, gap: 4 }}>
                   <View style={s.between}>
-                    <Text style={[s.text, { fontSize: 12, fontWeight: "600" }]}>{m.sender}</Text>
-                    <Text style={[s.small, { fontSize: 10 }]}>{timeLabel(m.date)}</Text>
+                    <Text style={[s.text, { fontSize: 14, fontWeight: "600" }]}>{m.sender}</Text>
+                    <Text style={s.small}>{timeLabel(m.date)}</Text>
                   </View>
-                  <Text numberOfLines={1} style={[s.text, { fontSize: 12, lineHeight: 18 }]}>
+                  <Text numberOfLines={1} style={[s.text, { fontSize: 14, lineHeight: 20 }]}>
                     {m.subject}
                   </Text>
-                  <Text numberOfLines={1} style={[s.small, { fontSize: 11 }]}>
+                  <Text numberOfLines={1} style={[s.small, { fontSize: 12 }]}>
                     {m.body.replace(/\n/g, " ")}
                   </Text>
                 </View>
@@ -318,7 +318,7 @@ export function TodayScreen() {
           )}
         </Card>
       </View>
-      <View style={{ flexDirection: wide ? "row" : "column", gap: 22 }}>
+      <View style={{ flexDirection: wide ? "row" : "column", gap: 24 }}>
         <Card style={{ flex: 1, backgroundColor: "#F0F0E7" }}>
           <SectionHeading title="A hand with the little things" />
           <Text style={[s.muted, { marginBottom: 15 }]}>
@@ -421,25 +421,23 @@ export function AgendaRow({
       onPress={() => open({ type: "event", event: e, neighbors })}
       style={[s.row, { gap: 16, paddingVertical: 14 }]}
     >
-      <View style={{ width: 65 }}>
-        <Text style={[s.text, { fontSize: 11 }]}>
+      <View style={{ width: 64 }}>
+        <Text style={[s.text, { fontSize: 12, fontWeight: "500" }]}>
           {e.allDay ? "All day" : timeLabel(e.start, e.timeZone)}
         </Text>
-        {!e.allDay && (
-          <Text style={[s.small, { fontSize: 10 }]}>{timeLabel(e.end, e.timeZone)}</Text>
-        )}
+        {!e.allDay && <Text style={s.small}>{timeLabel(e.end, e.timeZone)}</Text>}
       </View>
       <View
         style={{
           width: 3,
-          height: 42,
+          height: 44,
           borderRadius: 4,
           backgroundColor: ["#BCDAEB", "#C7D6AB", "#D9CDEA"][index % 3],
         }}
       />
-      <View style={{ flex: 1, gap: 3 }}>
-        <Text style={[s.text, { fontSize: 13, fontWeight: "500" }]}>{e.title}</Text>
-        <Text numberOfLines={1} style={[s.small, { fontSize: 11 }]}>
+      <View style={{ flex: 1, gap: 4 }}>
+        <Text style={[s.text, { fontSize: 14, fontWeight: "500" }]}>{e.title}</Text>
+        <Text numberOfLines={1} style={s.small}>
           {e.location || (e.attendees.length ? `${e.attendees.length} attendees` : "Time for you")}
         </Text>
       </View>
@@ -492,7 +490,7 @@ export function MailScreen() {
             placeholderTextColor={colors.muted}
             value={query}
             onChangeText={setQuery}
-            style={{ flex: 1, paddingVertical: 13, fontSize: 13, color: colors.text }}
+            style={{ flex: 1, paddingVertical: 12, fontSize: 15, color: colors.text }}
           />
         </View>
         <Button onPress={() => open({ type: "email" })} primary icon={Plus}>
@@ -537,16 +535,16 @@ export function MailScreen() {
               onPress={() => open({ type: "mail", mail: m })}
               style={[
                 s.row,
-                { gap: 15, paddingVertical: 20, borderTopWidth: 1, borderTopColor: colors.line },
+                { gap: 16, paddingVertical: 18, borderTopWidth: 1, borderTopColor: colors.line },
               ]}
             >
               <Avatar name={m.sender} index={i} />
-              <View style={{ flex: 1, gap: 5 }}>
+              <View style={{ flex: 1, gap: 6 }}>
                 <View style={s.between}>
                   <Text style={[s.text, { fontWeight: m.unread ? "600" : "400" }]}>{m.sender}</Text>
                   <Text style={s.small}>{dateLabel(m.date)}</Text>
                 </View>
-                <Text style={[s.text, { fontWeight: "500", fontSize: 13 }]}>{m.subject}</Text>
+                <Text style={[s.text, { fontWeight: "500", fontSize: 14 }]}>{m.subject}</Text>
                 <Text style={s.muted} numberOfLines={1}>
                   {m.body.replace(/\n/g, " ")}
                 </Text>
@@ -840,7 +838,7 @@ export function BrowserScreen() {
     }
   }
   return (
-    <View style={{ gap: 22 }}>
+    <View style={{ gap: 24 }}>
       <Card style={{ backgroundColor: colors.sky }}>
         <View style={[s.row, { gap: 12, marginBottom: 15 }]}>
           <Globe2 size={22} color={colors.blueDark} />
@@ -1026,15 +1024,15 @@ export function FilesScreen() {
                   <Chip>PDF</Chip>
                 </View>
               </View>
-              <View style={{ padding: 21, gap: 6 }}>
-                <Text numberOfLines={1} style={[s.heading, { fontSize: 14 }]}>
+              <View style={{ padding: 20, gap: 6 }}>
+                <Text numberOfLines={1} style={s.heading}>
                   {f.name}
                 </Text>
                 <Text style={s.small}>
                   {f.pageCount} {f.pageCount === 1 ? "page" : "pages"} ·{" "}
                   {Math.max(1, Math.round(f.size / 1024))} KB
                 </Text>
-                <View style={[s.between, { marginTop: 9 }]}>
+                <View style={[s.between, { marginTop: 8 }]}>
                   <Chip>{f.source}</Chip>
                   <Text style={s.small}>{dateLabel(f.createdAt)}</Text>
                 </View>
@@ -1136,7 +1134,7 @@ export function ActivityScreen() {
                 ]}
               >
                 <View
-                  style={[s.iconBox, { height: 34, width: 34, backgroundColor: colors.canvas }]}
+                  style={[s.iconBox, { height: 36, width: 36, backgroundColor: colors.canvas }]}
                 >
                   <Clock3 size={16} color={colors.muted} />
                 </View>
@@ -1250,20 +1248,20 @@ export function ConnectionsScreen({ query = "" }: { query?: string }) {
     },
   ].filter((row) => `${row.name} ${row.group}`.toLowerCase().includes(query.toLowerCase()));
   return (
-    <View style={{ gap: 22 }}>
+    <View style={{ gap: 24 }}>
       {[true, false].map((isConnected) => {
         const group = rows.filter((row) => row.connected === isConnected);
         if (!group.length) return null;
         return (
-          <View key={String(isConnected)} style={{ gap: 8 }}>
-            <Text style={[s.small, { marginLeft: 12 }]}>
+          <View key={String(isConnected)} style={{ gap: 10 }}>
+            <Text style={[s.label, { marginLeft: 16 }]}>
               {isConnected
                 ? w.mode === "sample"
                   ? "Your connections"
                   : "Connected"
                 : "Available integrations"}
             </Text>
-            <View style={{ paddingHorizontal: 16, borderRadius: 23, backgroundColor: "#F3F4F5" }}>
+            <View style={{ paddingHorizontal: 16, borderRadius: 20, backgroundColor: "#F3F4F5" }}>
               {group.map((row, index) => (
                 <Pressable
                   key={row.id}
@@ -1275,8 +1273,8 @@ export function ConnectionsScreen({ query = "" }: { query?: string }) {
                   style={[
                     s.row,
                     {
-                      gap: 14,
-                      minHeight: 61,
+                      gap: 16,
+                      minHeight: 64,
                       borderBottomWidth: index < group.length - 1 ? 1 : 0,
                       borderBottomColor: "#E5E7E9",
                     },
@@ -1284,17 +1282,17 @@ export function ConnectionsScreen({ query = "" }: { query?: string }) {
                 >
                   <View
                     style={{
-                      width: 29,
-                      height: 29,
-                      borderRadius: 7,
+                      width: 36,
+                      height: 36,
+                      borderRadius: 10,
                       backgroundColor: "#FFF",
                       alignItems: "center",
                       justifyContent: "center",
                     }}
                   >
-                    <row.icon size={23} color={row.color} />
+                    <row.icon size={20} color={row.color} />
                   </View>
-                  <Text style={[s.text, { flex: 1 }]}>{row.name}</Text>
+                  <Text style={[s.text, { flex: 1, fontWeight: "500" }]}>{row.name}</Text>
                   {row.connected && row.group === "google" && w.mode === "sample" && (
                     <Text style={s.small}>Local data</Text>
                   )}
@@ -1303,7 +1301,8 @@ export function ConnectionsScreen({ query = "" }: { query?: string }) {
                   ) : (
                     <Text
                       style={{
-                        fontSize: 13,
+                        fontSize: 14,
+                        fontWeight: "600",
                         color: row.group === "google" ? colors.blueDark : colors.muted,
                       }}
                     >

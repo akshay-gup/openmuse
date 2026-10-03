@@ -31,10 +31,8 @@ export function FileThreadCard({ file }: { file: Artifact }) {
                   paddingBottom: 9,
                 }}
               >
-                <Text style={[s.small, { fontSize: 9 }]}>
-                  {field.name.replace(/_/g, " ").toUpperCase()}
-                </Text>
-                <Text style={[s.text, { fontSize: 12 }]}>{field.value || "—"}</Text>
+                <Text style={s.label}>{field.name.replace(/_/g, " ").toUpperCase()}</Text>
+                <Text style={[s.text, { fontSize: 13 }]}>{field.value || "—"}</Text>
               </View>
             ))
           ) : (

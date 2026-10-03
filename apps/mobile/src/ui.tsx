@@ -15,6 +15,34 @@ import {
   type ViewStyle,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+/** Spacing scale: everything in the app should be a multiple of 4. */
+export const sp = {
+  xs: 4,
+  sm: 8,
+  md: 12,
+  lg: 16,
+  xl: 20,
+  xxl: 24,
+  xxxl: 32,
+} as const;
+/** Type scale. body is the default reading size; small is the smallest
+ *  running text anywhere; label is reserved for section/field eyebrows. */
+export const type = {
+  display: { fontSize: 32, lineHeight: 40 },
+  title: { fontSize: 24, lineHeight: 30, fontWeight: "600", letterSpacing: -0.6 },
+  heading: { fontSize: 16, lineHeight: 22, fontWeight: "600", letterSpacing: -0.25 },
+  body: { fontSize: 15, lineHeight: 23 },
+  sub: { fontSize: 13, lineHeight: 20 },
+  caption: { fontSize: 12, lineHeight: 17 },
+  micro: { fontSize: 11, lineHeight: 15 },
+  label: {
+    fontSize: 11,
+    lineHeight: 15,
+    fontWeight: "700",
+    letterSpacing: 1.2,
+    textTransform: "uppercase",
+  },
+} as const;
 export const colors = {
   canvas: "#FCFCFC",
   card: "#FFFFFF",
@@ -34,61 +62,61 @@ export const s = StyleSheet.create({
   between: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   text: { color: colors.text, fontSize: 15, lineHeight: 23 },
   muted: { color: colors.muted, fontSize: 14, lineHeight: 21 },
-  small: { color: colors.muted, fontSize: 11, lineHeight: 17 },
+  small: { color: colors.muted, fontSize: 12, lineHeight: 17 },
   label: {
     color: colors.muted,
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: "700",
-    letterSpacing: 1.4,
+    letterSpacing: 1.2,
     textTransform: "uppercase",
   },
-  title: { color: colors.text, fontSize: 23, fontWeight: "600", letterSpacing: -0.7 },
+  title: { color: colors.text, fontSize: 24, fontWeight: "600", letterSpacing: -0.6 },
   heading: { color: colors.text, fontSize: 16, fontWeight: "600", letterSpacing: -0.25 },
   card: {
     backgroundColor: colors.card,
-    borderRadius: 23,
+    borderRadius: 20,
     borderWidth: 0,
     borderColor: colors.line,
     padding: 20,
   },
-  divider: { height: 1, backgroundColor: colors.line, marginVertical: 18 },
+  divider: { height: 1, backgroundColor: colors.line, marginVertical: 20 },
   input: {
     borderWidth: 1,
     borderColor: colors.line,
-    borderRadius: 19,
+    borderRadius: 16,
     paddingHorizontal: 16,
     paddingVertical: 12,
     color: colors.text,
     fontSize: 16,
     backgroundColor: "#FFF",
-    minHeight: 45,
+    minHeight: 48,
   },
-  field: { gap: 7, marginBottom: 16 },
+  field: { gap: 8, marginBottom: 20 },
   button: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
-    paddingHorizontal: 17,
-    minHeight: 42,
+    paddingHorizontal: 18,
+    minHeight: 46,
     paddingVertical: 10,
-    borderRadius: 24,
+    borderRadius: 999,
   },
   primary: { backgroundColor: colors.blue },
   secondary: { backgroundColor: "#F1F2F3" },
-  buttonText: { fontSize: 14, fontWeight: "600" },
+  buttonText: { fontSize: 15, fontWeight: "600" },
   chip: {
     paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 20,
+    paddingVertical: 5,
+    borderRadius: 999,
     alignSelf: "flex-start",
     backgroundColor: colors.canvas,
   },
-  chipText: { fontSize: 10, fontWeight: "600", color: colors.muted },
+  chipText: { fontSize: 11, fontWeight: "600", color: colors.muted },
   iconBox: {
     width: 42,
     height: 42,
-    borderRadius: 13,
+    borderRadius: 14,
     justifyContent: "center",
     alignItems: "center",
     backgroundColor: colors.sky,
@@ -103,7 +131,7 @@ export const s = StyleSheet.create({
   },
   sheet: {
     backgroundColor: colors.canvas,
-    borderRadius: 26,
+    borderRadius: 28,
     width: "100%",
     maxWidth: 790,
     maxHeight: "94%",
@@ -143,7 +171,7 @@ export function Button({
       style={({ pressed }) => [
         s.button,
         primary ? s.primary : s.secondary,
-        small && { minHeight: 38, paddingVertical: 7, paddingHorizontal: 13 },
+        small && { minHeight: 40, paddingVertical: 8, paddingHorizontal: 14 },
         (disabled || busy) && { opacity: 0.5 },
         pressed && { transform: [{ scale: 0.98 }] },
         style,
@@ -226,8 +254,8 @@ export function Empty({
   children?: ReactNode;
 }) {
   return (
-    <View style={{ alignItems: "center", padding: 40, gap: 13 }}>
-      <View style={[s.iconBox, { width: 55, height: 55, borderRadius: 18 }]}>
+    <View style={{ alignItems: "center", padding: 48, gap: 16 }}>
+      <View style={[s.iconBox, { width: 56, height: 56, borderRadius: 18 }]}>
         <Icon size={24} color={colors.blueDark} />
       </View>
       <Text style={s.heading}>{title}</Text>
@@ -324,13 +352,13 @@ export function CheckRow({
       accessibilityRole="checkbox"
       accessibilityState={{ checked }}
       onPress={onPress}
-      style={[s.row, { gap: 10, paddingVertical: 9 }]}
+      style={[s.row, { gap: 12, paddingVertical: 12 }]}
     >
       <View
         style={{
-          width: 19,
-          height: 19,
-          borderRadius: 5,
+          width: 20,
+          height: 20,
+          borderRadius: 6,
           borderWidth: 1,
           borderColor: checked ? colors.text : colors.line,
           backgroundColor: checked ? colors.text : "#FFF",
@@ -354,7 +382,7 @@ export function SectionHeading({
   onPress?: () => void;
 }) {
   return (
-    <View style={[s.between, { marginBottom: 19 }]}>
+    <View style={[s.between, { marginBottom: 16 }]}>
       <Text style={s.heading}>{title}</Text>
       {action && onPress && (
         <Pressable accessibilityRole="button" onPress={onPress} style={[s.row, { gap: 5 }]}>
@@ -384,7 +412,7 @@ export function LinkRow({
       onPress={onPress}
       style={({ pressed }) => [
         s.row,
-        { paddingVertical: 13, gap: 14, borderRadius: 10 },
+        { paddingVertical: 14, gap: 14, borderRadius: 12 },
         pressed && { backgroundColor: colors.canvas },
       ]}
     >

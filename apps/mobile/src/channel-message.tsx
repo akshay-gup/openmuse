@@ -52,18 +52,18 @@ export function ChannelMessage({
       onFocus={() => setFocused(true)}
       onBlur={() => setFocused(false)}
       style={{
-        paddingHorizontal: 10,
-        paddingVertical: grouped ? 5 : 12,
-        borderRadius: 8,
+        paddingHorizontal: 12,
+        paddingVertical: grouped ? 6 : 14,
+        borderRadius: 12,
         backgroundColor: selected ? colors.sky : hovered ? "#F4F5F7" : "transparent",
       }}
     >
       <View style={{ flexDirection: "row", gap: 12 }}>
         <View
           style={{
-            width: 34,
-            height: 34,
-            borderRadius: 8,
+            width: 36,
+            height: 36,
+            borderRadius: 12,
             backgroundColor: assistant ? colors.blue : colors.lavender,
             opacity: grouped ? 0 : 1,
             alignItems: "center",
@@ -99,8 +99,8 @@ export function ChannelMessage({
                 backgroundColor: "#FFFFFF",
                 borderWidth: 1,
                 borderColor: colors.line,
-                borderRadius: 9,
-                padding: 2,
+                borderRadius: 12,
+                padding: 3,
               },
             ]}
           >
@@ -111,13 +111,13 @@ export function ChannelMessage({
                 disabled={replyDisabled}
                 onPress={onReply}
                 style={({ pressed }) => ({
-                  padding: 7,
-                  borderRadius: 6,
+                  padding: 10,
+                  borderRadius: 8,
                   opacity: replyDisabled ? 0.4 : 1,
                   backgroundColor: pressed ? colors.blue : "#FFFFFF",
                 })}
               >
-                <MessageSquare size={16} color={colors.muted} />
+                <MessageSquare size={17} color={colors.muted} />
               </Pressable>
             )}
             <Pressable
@@ -125,15 +125,15 @@ export function ChannelMessage({
               accessibilityLabel={Platform.OS === "web" ? "Copy message" : "Share message"}
               onPress={() => void copy()}
               style={({ pressed }) => ({
-                padding: 7,
-                borderRadius: 6,
+                padding: 10,
+                borderRadius: 8,
                 backgroundColor: pressed ? colors.blue : "#FFFFFF",
               })}
             >
               {Platform.OS === "web" ? (
-                <Copy size={16} color={colors.muted} />
+                <Copy size={17} color={colors.muted} />
               ) : (
-                <Share2 size={16} color={colors.muted} />
+                <Share2 size={17} color={colors.muted} />
               )}
             </Pressable>
           </View>
@@ -152,7 +152,7 @@ export function ChannelMessage({
               }
               disabled={replyDisabled}
               onPress={onReply}
-              style={{ alignSelf: "flex-start", paddingVertical: 6 }}
+              style={{ alignSelf: "flex-start", paddingVertical: 10 }}
             >
               <Text style={{ color: colors.blueDark, fontSize: 13, fontWeight: "600" }}>
                 {replyCount

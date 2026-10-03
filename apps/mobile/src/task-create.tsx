@@ -57,7 +57,7 @@ export function TaskCreate({ onClose }: { onClose: () => void }) {
 
   return (
     <Sheet title="New issue" subtitle="A human task on the board" onClose={onClose}>
-      <View style={{ gap: 14 }}>
+      <View style={{ gap: 16 }}>
         <ErrorNotice error={error} />
         <Field
           label="Title"

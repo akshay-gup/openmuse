@@ -12,17 +12,17 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "
 import {
   KeyboardAvoidingView,
   Modal,
-  useWindowDimensions,
   Platform,
   Pressable,
   ScrollView,
   Text,
   TextInput,
   type TextStyle,
+  useWindowDimensions,
   View,
 } from "react-native";
-import { z } from "zod";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { z } from "zod";
 import type { Channel, ChannelThread } from "../../../packages/domain/src/agent";
 import { ArtifactCard } from "./agent-ui";
 import { useAgentWorkspace } from "./agent-workspace";
@@ -30,19 +30,19 @@ import { AssistantResponse } from "./assistant-response";
 import { BackgroundUpdates } from "./background-updates";
 import { BrowserRunContext, BrowserToolCard } from "./browser-tool-card";
 import { ChannelMessage } from "./channel-message";
-import { countThreadReplies } from "./thread-replies";
 import { ChannelThreadBanner } from "./channel-thread";
 import { BrowserThreadCard } from "./computer";
-import { DraftReply } from "./draft-reply";
 import { ConversationQueue, type QueuedMessage } from "./conversation-queue";
 import { runConversationTurn } from "./conversation-run";
+import { DraftReply } from "./draft-reply";
 import { confirmedJevSelection, displayJevUserMessage, latestJevPanelId } from "./jev-actions";
 import { JevInteractionContext, JevToolCard } from "./jev-tool-card";
 import { MailToolCard } from "./mail-tool-card";
 import { PendingApprovals } from "./opencode-permissions";
 import { FileThreadCard, TaskThreadCard } from "./thread-artifacts";
+import { countThreadReplies } from "./thread-replies";
 import { resolveThreadId, type Selection, useMuseThread } from "./threads";
-import { Button, Card, CheckRow, colors, ErrorNotice, s } from "./ui";
+import { Button, Card, CheckRow, colors, ErrorNotice, IconButton, s } from "./ui";
 import { useWorkspace } from "./workspace";
 
 const displayParameters = z.record(z.string(), z.unknown());
@@ -1302,18 +1302,11 @@ export function ChatScreen({
             { paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.line },
           ]}
         >
-          <View>
+          <View style={{ gap: 2 }}>
             <Text style={s.heading}>{panel.binding ? "Thread" : "Reply"}</Text>
             <Text style={s.small}>Replying to a channel message</Text>
           </View>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Close thread"
-            onPress={closeReplies}
-            style={{ padding: 10 }}
-          >
-            <X size={20} color={colors.text} />
-          </Pressable>
+          <IconButton icon={X} label="Close thread" onPress={closeReplies} />
         </View>
         <ScrollView
           style={{ maxHeight: 180, flexGrow: 0 }}

@@ -5,7 +5,7 @@ import { colors, s } from "./ui";
 
 const DAY_MS = 86_400_000;
 const DAY_WIDTH = 26;
-const LABEL_WIDTH = 150;
+const LABEL_WIDTH = 168;
 const WINDOW_DAYS = 28;
 
 function parseDay(value: string): number {
@@ -93,9 +93,9 @@ export function TaskTimeline({
                     ? "#8E8BD8"
                     : colors.blueDark;
             return (
-              <View key={t.task.id} style={[s.row, { minHeight: 44, alignItems: "center" }]}>
+              <View key={t.task.id} style={[s.row, { minHeight: 48, alignItems: "center" }]}>
                 <Text
-                  style={[s.text, { width: LABEL_WIDTH, fontSize: 13, lineHeight: 18 }]}
+                  style={[s.text, { width: LABEL_WIDTH, fontSize: 14, lineHeight: 20 }]}
                   numberOfLines={2}
                 >
                   {t.task.title}
@@ -105,9 +105,9 @@ export function TaskTimeline({
                     <View
                       style={{
                         marginLeft: t.startOffset * DAY_WIDTH,
-                        width: 12,
-                        height: 12,
-                        borderRadius: 6,
+                        width: 14,
+                        height: 14,
+                        borderRadius: 7,
                         backgroundColor: barColor,
                       }}
                     />
@@ -115,9 +115,9 @@ export function TaskTimeline({
                     <View
                       style={{
                         marginLeft: t.startOffset * DAY_WIDTH,
-                        width: Math.max((t.endOffset - t.startOffset + 1) * DAY_WIDTH - 4, 12),
-                        height: 14,
-                        borderRadius: 7,
+                        width: Math.max((t.endOffset - t.startOffset + 1) * DAY_WIDTH - 4, 14),
+                        height: 16,
+                        borderRadius: 8,
                         backgroundColor: barColor,
                       }}
                     />
@@ -137,7 +137,7 @@ export function TaskTimeline({
         </View>
       </ScrollView>
       {!!unscheduled.length && (
-        <View style={{ gap: 8 }}>
+        <View style={{ gap: 12 }}>
           <Text style={[s.text, { fontWeight: "700", fontSize: 14 }]}>
             Unscheduled ({unscheduled.length})
           </Text>

@@ -39,15 +39,15 @@ function SidebarRow({
       onPress={onPress}
       style={{
         flexDirection: "row",
-        gap: 10,
+        gap: 12,
         alignItems: "center",
-        paddingVertical: 8,
-        paddingHorizontal: 8,
-        borderRadius: 8,
+        paddingVertical: 12,
+        paddingHorizontal: 12,
+        borderRadius: 12,
         backgroundColor: active ? "#E8EDF0" : "transparent",
       }}
     >
-      <Icon size={16} color={active ? colors.text : colors.muted} />
+      <Icon size={17} color={active ? colors.text : colors.muted} />
       <Text style={[s.text, { fontWeight: active ? "600" : "400" }]} numberOfLines={1}>
         {label}
       </Text>
@@ -196,11 +196,9 @@ export function Sidebar({
       </View>
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingHorizontal: 12, paddingVertical: 18, gap: 2 }}
+        contentContainerStyle={{ paddingHorizontal: 12, paddingVertical: 16, gap: 4 }}
       >
-        <Text style={[s.small, { fontWeight: "700", paddingHorizontal: 8, marginBottom: 8 }]}>
-          Direct messages
-        </Text>
+        <Text style={[s.label, { paddingHorizontal: 12, marginBottom: 8 }]}>Direct messages</Text>
         <SidebarRow
           icon={Bot}
           label={data?.identity.name || "Hive"}
@@ -210,16 +208,16 @@ export function Sidebar({
         <View
           style={[
             s.row,
-            { alignItems: "center", marginTop: 14, marginBottom: 2, paddingHorizontal: 8 },
+            { alignItems: "center", marginTop: 16, marginBottom: 4, paddingHorizontal: 12 },
           ]}
         >
-          <Text style={[s.small, { flex: 1, fontWeight: "700" }]}>Channels</Text>
+          <Text style={[s.label, { flex: 1 }]}>Channels</Text>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Refresh channels"
             disabled={loading}
             onPress={() => void load()}
-            style={{ padding: 4 }}
+            style={{ padding: 10 }}
           >
             <RefreshCw size={14} color={colors.muted} />
           </Pressable>
@@ -238,15 +236,15 @@ export function Sidebar({
                 onPress={() => conversation({ id: `channel:${channel.id}`, existing: true })}
                 style={{
                   flexDirection: "row",
-                  gap: 8,
+                  gap: 10,
                   alignItems: "center",
-                  paddingVertical: 8,
-                  paddingHorizontal: 8,
-                  borderRadius: 8,
+                  paddingVertical: 12,
+                  paddingHorizontal: 12,
+                  borderRadius: 12,
                   backgroundColor: isActive ? "#E8EDF0" : "transparent",
                 }}
               >
-                <Hash size={15} color={isActive ? colors.text : colors.muted} />
+                <Hash size={16} color={isActive ? colors.text : colors.muted} />
                 <Text
                   style={[s.text, { flex: 1, fontWeight: isActive ? "600" : "400" }]}
                   numberOfLines={1}
@@ -258,7 +256,7 @@ export function Sidebar({
           })
         )}
         {creating ? (
-          <View style={{ gap: 8, paddingHorizontal: 8, marginTop: 6 }}>
+          <View style={{ gap: 12, paddingHorizontal: 12, marginTop: 8 }}>
             <Field label="Channel name" value={name} onChangeText={setName} />
             <View style={[s.row, { gap: 8 }]}>
               <Button
@@ -282,17 +280,15 @@ export function Sidebar({
             onPress={() => setCreating(true)}
             style={[
               s.row,
-              { gap: 8, alignItems: "center", paddingVertical: 8, paddingHorizontal: 8 },
+              { gap: 10, alignItems: "center", paddingVertical: 12, paddingHorizontal: 12 },
             ]}
           >
-            <Plus size={15} color={colors.muted} />
-            <Text style={s.small}>New channel</Text>
+            <Plus size={16} color={colors.muted} />
+            <Text style={[s.text, { fontSize: 14 }]}>New channel</Text>
           </Pressable>
         )}
         <View style={[s.divider, { marginVertical: 16 }]} />
-        <Text style={[s.small, { fontWeight: "700", paddingHorizontal: 8, marginBottom: 8 }]}>
-          Workspace
-        </Text>
+        <Text style={[s.label, { paddingHorizontal: 12, marginBottom: 8 }]}>Workspace</Text>
         {workspaceLinks.map((item) => (
           <SidebarRow
             key={item.id}
@@ -321,13 +317,13 @@ export function Sidebar({
         />
       </ScrollView>
       <View
-        style={[s.row, { borderTopWidth: 1, borderTopColor: colors.line, padding: 18, gap: 10 }]}
+        style={[s.row, { borderTopWidth: 1, borderTopColor: colors.line, padding: 16, gap: 12 }]}
       >
         <View
           style={{
-            width: 30,
-            height: 30,
-            borderRadius: 9,
+            width: 36,
+            height: 36,
+            borderRadius: 12,
             backgroundColor: colors.lavender,
             alignItems: "center",
             justifyContent: "center",
@@ -338,7 +334,7 @@ export function Sidebar({
           </Text>
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={[s.text, { fontSize: 13 }]} numberOfLines={1}>
+          <Text style={[s.text, { fontSize: 14, fontWeight: "500" }]} numberOfLines={1}>
             {workspace.profile.name || "You"}
           </Text>
           <Text style={s.small}>Signed in</Text>

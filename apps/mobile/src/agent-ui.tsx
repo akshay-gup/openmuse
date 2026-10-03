@@ -4,6 +4,7 @@ import {
   CalendarDays,
   ChevronRight,
   CircleDollarSign,
+  Clock3,
   FileText,
   Globe2,
   Heart,
@@ -87,14 +88,19 @@ export function AgentStatus() {
   const { data, error, refresh } = useAgentWorkspace();
   if (data?.worker.running && !error) return null;
   return (
-    <View style={{ gap: 8 }}>
+    <View style={{ gap: 12 }}>
       <ErrorNotice error={error ? `Agent updates unavailable. ${error}` : ""} />
       {!!error && (
         <Button small onPress={() => void refresh().catch(() => {})}>
           Reconnect agent
         </Button>
       )}
-      {!data && !error && <ActivityIndicator color={colors.blueDark} />}
+      {!data && !error && (
+        <View style={[s.row, { gap: 10, paddingVertical: 16, justifyContent: "center" }]}>
+          <ActivityIndicator color={colors.blueDark} />
+          <Text style={s.muted}>Checking the agent…</Text>
+        </View>
+      )}
       {data && !data.worker.running && (
         <Text style={s.small}>Worker is offline. Saved work will continue when it reconnects.</Text>
       )}
@@ -125,17 +131,17 @@ export function TaskCard({
     >
       <Card
         style={{
-          padding: compact ? 15 : 20,
-          gap: 11,
-          borderRadius: 22,
+          padding: compact ? 16 : 20,
+          gap: 12,
+          borderRadius: 20,
           backgroundColor: "#F0F1F2",
         }}
       >
-        <View style={[s.row, { gap: 10 }]}>
+        <View style={[s.row, { gap: 12 }]}>
           <View
             style={[
               s.iconBox,
-              { width: 34, height: 34, backgroundColor: waiting ? colors.orange : colors.sky },
+              { width: 36, height: 36, backgroundColor: waiting ? colors.orange : colors.sky },
             ]}
           >
             <ListChecks size={18} color={colors.blueDark} />
@@ -150,13 +156,13 @@ export function TaskCard({
           <ChevronRight size={17} color={colors.muted} />
         </View>
         {!!task.plan.length && (
-          <View style={{ height: 4, backgroundColor: colors.line, borderRadius: 4 }}>
+          <View style={{ height: 6, backgroundColor: colors.line, borderRadius: 6 }}>
             <View
               style={{
-                height: 4,
+                height: 6,
                 width: `${Math.round((done / task.plan.length) * 100)}%`,
                 backgroundColor: "#6AAEE0",
-                borderRadius: 4,
+                borderRadius: 6,
               }}
             />
           </View>
@@ -218,7 +224,7 @@ export function AgentActivityScreen() {
       ? projects.find((project) => project.id === projectFilter)
       : undefined;
   return (
-    <View style={{ gap: 20 }}>
+    <View style={{ gap: 24 }}>
       <AgentStatus />
       <ProjectSwitcher
         projects={projects}
@@ -231,7 +237,7 @@ export function AgentActivityScreen() {
         onManage={(project) => setManagingProjectId(project.id)}
       />
       {activeProject?.description ? <Text style={s.muted}>{activeProject.description}</Text> : null}
-      <View style={[s.row, { gap: 8, flexWrap: "wrap" }]}>
+      <View style={[s.row, { gap: 10, flexWrap: "wrap" }]}>
         {(["list", "board", "timeline"] as const).map((item) => (
           <Button key={item} small primary={view === item} onPress={() => setView(item)}>
             {item[0].toUpperCase() + item.slice(1)}
@@ -245,7 +251,7 @@ export function AgentActivityScreen() {
       </View>
       {view === "list" && (
         <>
-          <View style={[s.row, { gap: 8 }]}>
+          <View style={[s.row, { gap: 10 }]}>
             {["All", "In progress", "Finished"].map((item) => (
               <Button key={item} small primary={filter === item} onPress={() => setFilter(item)}>
                 {item}
@@ -458,9 +464,12 @@ export function TaskDetail({ taskId }: { taskId: string }) {
     >
       <ErrorNotice error={error} />
       {!task ? (
-        <ActivityIndicator color={colors.blueDark} />
+        <View style={[s.row, { gap: 10, paddingVertical: 32, justifyContent: "center" }]}>
+          <ActivityIndicator color={colors.blueDark} />
+          <Text style={s.muted}>Loading saved progress…</Text>
+        </View>
       ) : (
-        <View style={{ gap: 20 }}>
+        <View style={{ gap: 24 }}>
           <Text selectable style={s.text}>
             {task.prompt}
           </Text>
@@ -519,7 +528,7 @@ export function TaskDetail({ taskId }: { taskId: string }) {
             </Card>
           )}
           {task.status === "waiting_input" && (
-            <Card style={{ backgroundColor: colors.sky, gap: 10 }}>
+            <Card style={{ backgroundColor: colors.sky, gap: 12 }}>
               <Text style={s.heading}>{task.question || "A detail from you will help"}</Text>
               {fieldNames.map((name) =>
                 missing.some(
@@ -579,7 +588,7 @@ export function TaskDetail({ taskId }: { taskId: string }) {
             </Card>
           )}
           {!!task.plan.length && (
-            <Card style={{ gap: 15 }}>
+            <Card style={{ gap: 16 }}>
               <Text style={s.heading}>Plan</Text>
               {task.plan.map((step, index) => (
                 <View key={step.id} style={[s.row, { gap: 10, alignItems: "flex-start" }]}>
@@ -618,7 +627,7 @@ export function TaskDetail({ taskId }: { taskId: string }) {
                 <Image
                   accessibilityLabel="Agent browser preview"
                   source={{ uri: api.url(browser.previewUrl) }}
-                  style={{ width: "100%", aspectRatio: 1.6, borderRadius: 12 }}
+                  style={{ width: "100%", aspectRatio: 1.6, borderRadius: 16 }}
                 />
               )}
               <Button
@@ -662,7 +671,7 @@ export function TaskDetail({ taskId }: { taskId: string }) {
             <ArtifactCard key={artifact.id} artifact={artifact} />
           ))}
           {!!task.evidence.length && (
-            <View style={{ gap: 14 }}>
+            <View style={{ gap: 16 }}>
               <Text style={s.heading}>Sources</Text>
               <EvidenceList items={task.evidence} />
             </View>
@@ -683,7 +692,11 @@ export function TaskDetail({ taskId }: { taskId: string }) {
             </View>
           ))}
           {!detail?.events.length && (
-            <Text style={s.muted}>The worker will record each step here.</Text>
+            <Empty
+              icon={Clock3}
+              title="Nothing recorded yet"
+              detail="The worker will record each step here."
+            />
           )}
         </View>
       )}
@@ -800,7 +813,7 @@ function FinanceArtifact({ artifact }: { artifact: AgentArtifact }) {
   const period = record(artifact.data.period);
   return (
     <Card
-      style={{ gap: 12, padding: 10, backgroundColor: "#EEEEF0", maxWidth: 440, width: "100%" }}
+      style={{ gap: 12, padding: 12, backgroundColor: "#EEEEF0", maxWidth: 440, width: "100%" }}
     >
       <Pressable
         accessibilityRole="button"
@@ -829,13 +842,13 @@ function FinanceArtifact({ artifact }: { artifact: AgentArtifact }) {
               <Rect width="100%" height="100%" fill="url(#finance)" />
             </Svg>
           </View>
-          <Text style={{ color: "#D4DCFC", fontSize: 11, lineHeight: 18, marginBottom: 20 }}>
+          <Text style={{ color: "#D4DCFC", fontSize: 12, lineHeight: 19, marginBottom: 20 }}>
             Read from your imported transactions.{"\n"}
             {String(period?.from ?? "")} — {String(period?.to ?? "")}
             {"\n"}
             {transactions.length} transactions, categorized and summarized.
           </Text>
-          <View style={[s.row, { gap: 7 }]}>
+          <View style={[s.row, { gap: 8 }]}>
             {(
               [
                 ["Income", "income"],
@@ -845,29 +858,31 @@ function FinanceArtifact({ artifact }: { artifact: AgentArtifact }) {
             ).map(([label, key]) => (
               <View
                 key={key}
-                style={{ flex: 1, padding: 11, borderRadius: 12, backgroundColor: "#1D2025" }}
+                style={{ flex: 1, padding: 14, borderRadius: 12, backgroundColor: "#1D2025" }}
               >
-                <Text style={{ color: "#A4A7AD", fontSize: 9 }}>{label}</Text>
+                <Text style={{ color: "#A4A7AD", fontSize: 11 }}>{label}</Text>
                 <Text
                   selectable
                   numberOfLines={1}
                   adjustsFontSizeToFit
                   minimumFontScale={0.65}
                   style={{
-                    fontSize: 17,
+                    fontSize: 20,
                     fontWeight: "600",
                     color: key === "saved" ? "#58D3AE" : "#FFF",
-                    marginTop: 5,
+                    marginTop: 6,
                   }}
                 >
                   {amount(artifact.data[key])}
                 </Text>
-                <Text style={{ color: "#7E8289", fontSize: 8, marginTop: 4 }}>source currency</Text>
+                <Text style={{ color: "#7E8289", fontSize: 11, marginTop: 4 }}>
+                  source currency
+                </Text>
               </View>
             ))}
           </View>
         </View>
-        <View style={[s.row, { gap: 11, paddingHorizontal: 8, paddingTop: 13, paddingBottom: 4 }]}>
+        <View style={[s.row, { gap: 12, paddingHorizontal: 12, paddingVertical: 12 }]}>
           <Text style={{ fontSize: 25 }}>💸</Text>
           <View style={{ flex: 1, gap: 2 }}>
             <Text style={[s.text, { fontWeight: "600" }]}>Finance tracker</Text>
@@ -877,7 +892,7 @@ function FinanceArtifact({ artifact }: { artifact: AgentArtifact }) {
         </View>
       </Pressable>
       {details && (
-        <View style={{ gap: 16, padding: 10 }}>
+        <View style={{ gap: 16, padding: 12 }}>
           <Text style={s.label}>Where your money went</Text>
           {categories.map((category) => {
             const row = record(category);
@@ -888,13 +903,13 @@ function FinanceArtifact({ artifact }: { artifact: AgentArtifact }) {
                   <Text style={s.text}>{String(row.name)}</Text>
                   <Text style={s.text}>{amount(row.amount)}</Text>
                 </View>
-                <View style={{ height: 7, backgroundColor: "#DFE8EB", borderRadius: 8 }}>
+                <View style={{ height: 6, backgroundColor: "#DFE8EB", borderRadius: 6 }}>
                   <View
                     style={{
                       width: `${Math.min(100, (Number(row.amount) / spending) * 100)}%`,
-                      height: 7,
+                      height: 6,
                       backgroundColor: colors.blueDark,
-                      borderRadius: 8,
+                      borderRadius: 6,
                     }}
                   />
                 </View>
@@ -907,7 +922,7 @@ function FinanceArtifact({ artifact }: { artifact: AgentArtifact }) {
           {goalSaved ? (
             <Text style={s.text}>Your savings goal is saved in Goals.</Text>
           ) : (
-            <View style={{ gap: 10 }}>
+            <View style={{ gap: 12 }}>
               <Field
                 label="Turn this into a savings goal"
                 value={goalTitle}
@@ -1009,8 +1024,8 @@ export function DelegateSheet({ threadId }: { threadId?: string }) {
         }
       />
       {kind === "document" && (
-        <View style={{ gap: 8, marginBottom: 18 }}>
-          <Text style={s.heading}>Choose the email with the PDF</Text>
+        <View style={{ gap: 8, marginBottom: 20 }}>
+          <Text style={[s.heading, { marginBottom: 4 }]}>Choose the email with the PDF</Text>
           {workspace.mail
             .filter((mail) => mail.attachments.length)
             .map((mail) => (
@@ -1049,7 +1064,7 @@ export function DelegateSheet({ threadId }: { threadId?: string }) {
               Try example transactions
             </Button>
           )}
-          <Text style={[s.small, { marginVertical: 12 }]}>
+          <Text style={[s.small, { marginVertical: 16 }]}>
             Positive amounts are expenses; negative amounts are income. Imported data only. No bank
             connection is implied.
           </Text>
@@ -1094,7 +1109,7 @@ export function IdeasScreen() {
   }
   const ideas = data?.ideas.filter((idea) => idea.status === "new") || [];
   return (
-    <View style={{ gap: 20 }}>
+    <View style={{ gap: 24 }}>
       <AgentStatus />
       <View style={s.between}>
         <Text style={s.small}>Inspired by your connected apps</Text>
@@ -1116,7 +1131,7 @@ export function IdeasScreen() {
       {(data?.ideas || [])
         .filter((idea) => idea.status === "accepted")
         .map((idea) => (
-          <Card key={idea.id} style={{ gap: 7 }}>
+          <Card key={idea.id} style={{ gap: 10 }}>
             <Text style={s.heading}>{idea.title}</Text>
             <Chip tint={colors.green}>Started</Chip>
             {!!idea.taskId && <TaskLink taskId={idea.taskId} />}
@@ -1186,7 +1201,7 @@ function IdeaCard({ idea }: { idea: Idea }) {
         </View>
       </Pressable>
       {expanded && (
-        <View style={{ gap: 15, marginTop: 18, paddingLeft: 48 }}>
+        <View style={{ gap: 16, marginTop: 16, paddingLeft: 48 }}>
           <EvidenceList items={idea.evidence} />
           {editing && (
             <Field label="What should Hive do?" value={prompt} onChangeText={setPrompt} multiline />
@@ -1223,10 +1238,10 @@ export function GoalsScreen() {
   const monitor = data?.monitors.find((item) => item.id === selectedMonitor);
   const monitors = data?.monitors || [];
   return (
-    <View style={{ gap: 22 }}>
+    <View style={{ gap: 24 }}>
       <AgentStatus />
-      <View style={{ gap: 8 }}>
-        <View style={[s.between, { marginBottom: 5 }]}>
+      <View style={{ gap: 12 }}>
+        <View style={[s.between, { marginBottom: 4 }]}>
           <View style={[s.row, { gap: 10 }]}>
             <View
               style={{
@@ -1250,7 +1265,7 @@ export function GoalsScreen() {
             accessibilityRole="button"
             accessibilityLabel={`Open tracking: ${item.title}`}
             onPress={() => setSelectedMonitor(item.id)}
-            style={[s.row, { gap: 12, paddingVertical: 13 }]}
+            style={[s.row, { gap: 12, paddingVertical: 14 }]}
           >
             <Square size={21} color="#A7AAAC" />
             <View style={{ flex: 1, gap: 4 }}>
@@ -1265,7 +1280,7 @@ export function GoalsScreen() {
           </Pressable>
         ))}
         {!monitors.length && (
-          <Text style={[s.muted, { paddingVertical: 10 }]}>
+          <Text style={[s.muted, { paddingVertical: 12 }]}>
             Ticket prices, a reservation, a page you’re watching.
           </Text>
         )}
@@ -1276,8 +1291,8 @@ export function GoalsScreen() {
         )}
       </View>
       <View style={{ height: 1, backgroundColor: colors.line }} />
-      <View style={{ gap: 8 }}>
-        <View style={[s.row, { gap: 10, marginBottom: 5 }]}>
+      <View style={{ gap: 12 }}>
+        <View style={[s.row, { gap: 10, marginBottom: 4 }]}>
           <View
             style={{
               width: 16,
@@ -1296,7 +1311,7 @@ export function GoalsScreen() {
             accessibilityRole="button"
             accessibilityLabel={`Open goal: ${item.title}`}
             onPress={() => setSelectedGoal(item.id)}
-            style={[s.row, { gap: 12, paddingVertical: 13 }]}
+            style={[s.row, { gap: 12, paddingVertical: 14 }]}
           >
             <Square
               size={21}
@@ -1313,7 +1328,7 @@ export function GoalsScreen() {
           </Pressable>
         ))}
         {!data?.goals.length && (
-          <Text style={[s.muted, { paddingVertical: 10 }]}>
+          <Text style={[s.muted, { paddingVertical: 12 }]}>
             Big plans start with one small step.
           </Text>
         )}
@@ -1331,7 +1346,7 @@ export function GoalsScreen() {
           accessibilityRole="button"
           accessibilityLabel={`Create ${item.name.toLowerCase()} goal`}
           onPress={() => setAdding(item.name)}
-          style={[s.row, { gap: 12, minHeight: 38 }]}
+          style={[s.row, { gap: 12, minHeight: 44, paddingVertical: 8 }]}
         >
           <item.icon size={23} color="#989C9F" />
           <Text style={[s.text, { flex: 1, color: "#666A6D" }]}>{item.name}</Text>
@@ -1641,7 +1656,7 @@ function MonitorCard({ monitor, onOpenTask }: { monitor: Monitor; onOpenTask?: (
     }
   }
   return (
-    <Card style={{ gap: 13 }}>
+    <Card style={{ gap: 12 }}>
       <View style={s.between}>
         <Text style={[s.heading, { flex: 1 }]}>{monitor.title}</Text>
         <Chip tint={colors.sky}>{statusLabel(monitor.status)}</Chip>
@@ -1713,12 +1728,12 @@ export function NotificationsSheet() {
       subtitle="Results and decisions that need your attention."
       onClose={close}
     >
-      <View style={{ gap: 14 }}>
+      <View style={{ gap: 16 }}>
         <ErrorNotice error={error} />
         {data?.notifications.map((item) => (
           <Card
             key={item.id}
-            style={{ gap: 8, backgroundColor: item.read ? colors.card : colors.sky }}
+            style={{ gap: 10, backgroundColor: item.read ? colors.card : colors.sky }}
           >
             <View style={s.between}>
               <Text style={s.heading}>{item.title}</Text>
@@ -1806,7 +1821,7 @@ export function AppsScreen() {
     },
   ];
   return (
-    <View style={{ gap: 22 }}>
+    <View style={{ gap: 24 }}>
       <AgentStatus />
       <Field
         label="Search apps"
@@ -1815,8 +1830,8 @@ export function AppsScreen() {
         placeholder="Search connectors"
       />
       <ConnectionsScreen query={query} />
-      <Text style={s.heading}>On your computer</Text>
-      <Card style={{ paddingVertical: 3, backgroundColor: "#F4F5F6" }}>
+      <SectionHeading title="On your computer" />
+      <Card style={{ paddingHorizontal: 16, paddingVertical: 8, backgroundColor: "#F4F5F6" }}>
         {shortcuts
           .filter((item) =>
             `${item.title} ${item.detail}`.toLowerCase().includes(query.toLowerCase()),
@@ -1838,7 +1853,7 @@ export function AppsScreen() {
       </Button>
       {settings && (
         <>
-          <Card style={{ gap: 10 }}>
+          <Card style={{ gap: 12 }}>
             <SectionHeading title="Your agent" />
             <View style={[s.row, { gap: 16, justifyContent: "center", marginBottom: 12 }]}>
               {(["sky", "sand", "lilac"] as const).map((item) => (
@@ -1849,7 +1864,7 @@ export function AppsScreen() {
                   accessibilityState={{ checked: avatar === item }}
                   onPress={() => setAvatar(item)}
                   style={{
-                    padding: 7,
+                    padding: 10,
                     borderRadius: 24,
                     backgroundColor: avatar === item ? colors.sky : colors.canvas,
                   }}
@@ -1934,7 +1949,7 @@ function MemoryRow({ memory }: { memory: AgentMemory }) {
   }
   return (
     <View
-      style={{ gap: 8, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: colors.line }}
+      style={{ gap: 10, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: colors.line }}
     >
       {editing ? (
         <Field label="Memory" value={text} onChangeText={setText} />
