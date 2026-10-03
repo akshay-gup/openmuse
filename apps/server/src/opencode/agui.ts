@@ -1,3 +1,5 @@
+import { conversationTools } from "../engine/tools.ts";
+import type { HiveToolBridge } from "./hive-tools.ts";
 /**
  * AG-UI shim over OpenCode sessions.
  *
@@ -42,6 +44,7 @@ export interface OpencodeShimDeps {
   config: Config;
   tracker: PermissionTracker;
   rules: PermissionRulesStore;
+  hiveTools?: HiveToolBridge;
 }
 
 const runInputSchema = z.object({
@@ -372,7 +375,7 @@ export class RunTranslator {
       this.send({
         type: "TOOL_CALL_START",
         toolCallId: callID,
-        toolCallName: tool,
+        toolCallName: tool.replace(/^hive_[a-f0-9]{16}_/, ""),
         parentMessageId,
       });
       current.started = true;
@@ -501,11 +504,13 @@ async function runOpencodeTurn(ctx: RunContext): Promise<void> {
     return;
   }
 
+  const toolAbort = new AbortController();
   let resolveDone!: () => void;
   const donePromise = new Promise<void>((resolve) => {
     resolveDone = resolve;
   });
   const finish = () => {
+    toolAbort.abort();
     settleRun(ctx);
     resolveDone();
   };
@@ -539,6 +544,9 @@ async function runOpencodeTurn(ctx: RunContext): Promise<void> {
   ctx.onAbort = onAbort;
   signal.addEventListener("abort", onAbort, { once: true });
 
+  let toolLease: Awaited<ReturnType<HiveToolBridge["connect"]>> | undefined;
+  const cancelTools = () => toolAbort.abort();
+  signal.addEventListener("abort", cancelTools, { once: true });
   try {
     const { sessionId, directory } = await ensureThreadSession(
       {
@@ -554,6 +562,26 @@ async function runOpencodeTurn(ctx: RunContext): Promise<void> {
     ctx.session = { sessionId, directory };
     deps.bus.track(input.threadId, sessionId);
 
+    if (deps.hiveTools) {
+      const toolInput = {
+        ...input,
+        tools: [],
+        context: [],
+        state: {},
+        forwardedProps: {},
+      } as import("@ag-ui/core").RunAgentInput;
+      toolLease = await deps.hiveTools.connect(
+        deps.pool,
+        directory,
+        input.threadId,
+        conversationTools(deps.service, owner, toolInput, {
+          signal: toolAbort.signal,
+          requestKey: `${input.threadId}:${input.runId}`,
+          channelId: binding.channelId,
+        }),
+        toolAbort.signal,
+      );
+    }
     const transcript = buildTranscript(messages);
     const stripped = stripMention(userText, mention);
     // A bare mention ("@hive" and nothing else) still summons the agent;
@@ -591,12 +619,14 @@ async function runOpencodeTurn(ctx: RunContext): Promise<void> {
         sessionID: sessionId,
         directory,
         ...(model ? { model } : {}),
+        ...(toolLease ? { tools: toolLease.flags } : {}),
         parts: [
           {
             type: "text",
             synthetic: true,
             text:
               `[hive context] channel=${binding.channelId} thread=${input.threadId} name=${binding.name}\n` +
+              `${toolLease?.instructions ?? ""}\n` +
               `You were summoned by mention and have not participated until now. ` +
               `The full visible conversation (everyone talking) follows so you can catch up:\n${transcript}`,
           },
@@ -614,6 +644,10 @@ async function runOpencodeTurn(ctx: RunContext): Promise<void> {
       send({ type: "RUN_ERROR", message, code: "OPENCODE_RUN_FAILED" });
       finish();
     }
+  } finally {
+    toolAbort.abort();
+    toolLease?.release();
+    signal.removeEventListener("abort", cancelTools);
   }
 }
 

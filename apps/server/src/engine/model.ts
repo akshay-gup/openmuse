@@ -7,6 +7,7 @@ import type { AgentTask } from "../../../../packages/domain/src/agent.ts";
 import { emailDraftSchema, eventDraftSchema } from "../../../../packages/domain/src/index.ts";
 import { runOpencodeTask } from "../opencode/tasks.ts";
 import type { AgentService } from "./service.ts";
+import { conversationTools } from "./tools.ts";
 import { tanstackAgent } from "./tanstack-agent.ts";
 import type { TaskContext } from "./worker.ts";
 
@@ -25,8 +26,6 @@ export async function executeModelTask(
     };
   // OpenCode backend: tasks run as unattended OpenCode sessions in the
   // channel's workspace directory (allow-all rules; no user to ask).
-  if (service.opencodeRuntime)
-    return runOpencodeTask(service.opencodeRuntime, service, owner, initial, ctx);
   let task = initial;
   let outcome: Partial<AgentTask> | undefined;
   const operations =
@@ -284,6 +283,56 @@ export async function executeModelTask(
       },
     ),
   ];
+  if (service.opencodeRuntime) {
+    const shared = conversationTools(
+      service,
+      owner,
+      {
+        threadId: task.threadId ?? `task:${task.id}`,
+        runId: task.id,
+        messages: [],
+        tools: [],
+        context: [],
+        state: {},
+        forwardedProps: {},
+      },
+      {
+        signal: ctx.signal,
+        requestKey: `task:${task.id}`,
+        channelId: task.originChannelId ?? task.channelId,
+      },
+    );
+    const merged = [
+      ...shared
+        .filter((t) => !tools.some((workerTool) => workerTool.name === t.name))
+        .map((t) => ({
+          ...t,
+          execute: (args: unknown) =>
+            serial(async () => {
+              if (outcome) return { paused: true, status: outcome.status };
+              await ctx.guard();
+              return (t.execute as (args: unknown) => Promise<unknown>)(args);
+            }),
+        })),
+      ...tools,
+    ];
+    const result = await runOpencodeTask(
+      service.opencodeRuntime,
+      service,
+      owner,
+      initial,
+      {
+        ...ctx,
+        checkpoint: async (patch) => {
+          task = await ctx.checkpoint(patch);
+          return task;
+        },
+      },
+      merged,
+      { task: () => task, outcome: () => outcome },
+    );
+    return outcome ?? result;
+  }
   const identity = await service.db.get<{ name: string; tone: string }>(
     owner,
     "agent-settings",

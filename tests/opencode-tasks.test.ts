@@ -83,3 +83,70 @@ test("parseTaskOutcome returns null without markers", () => {
   assert.equal(parseTaskOutcome("TASK_COMPLETE:"), null);
   assert.equal(parseTaskOutcome(""), null);
 });
+
+test("an approved-tool waiting outcome takes precedence over agent completion text", async () => {
+  const { runOpencodeTask } = await import("../apps/server/src/opencode/tasks.ts");
+  const { mkdtemp, rm } = await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const directory = await mkdtemp(`${tmpdir()}/hive-worker-tools-`);
+  let listener: (event: unknown) => void = () => {};
+  const task = {
+    id: "task-test",
+    title: "Review event",
+    prompt: "Create event",
+    state: {},
+    evidence: [],
+    artifactIds: [],
+  };
+  const client = {
+    session: {
+      create: async () => ({ data: { id: "ses-1" } }),
+      promptAsync: async () => {
+        listener(partUpdated("msg-1", "HIVE_TASK_COMPLETE: Done"));
+        listener({ type: "session.idle", properties: {} });
+        return {};
+      },
+    },
+  };
+  try {
+    const result = await runOpencodeTask(
+      {
+        config: { dataDir: directory },
+        pool: { forDirectory: () => client },
+        tracker: {},
+        bus: {
+          track: () => {},
+          onEvent: (_scope: string, next: (event: unknown) => void) => {
+            listener = next;
+            return () => {};
+          },
+          waitForConnection: async () => {},
+          enqueue: async (_scope: string, action: () => unknown) => action(),
+        },
+      } as never,
+      {
+        db: { get: async () => null, list: async () => [] },
+        finish: async () => {
+          assert.fail("Must not finish an action awaiting review");
+        },
+      } as never,
+      "owner",
+      task as never,
+      {
+        signal: new AbortController().signal,
+        event: async () => {},
+        checkpoint: async () => {
+          assert.fail("Must not overwrite the tool's checkpoint");
+        },
+      } as never,
+      [],
+      {
+        task: () => task as never,
+        outcome: () => ({ status: "waiting_approval", actionId: "review-1" }),
+      },
+    );
+    assert.deepEqual(result, { status: "waiting_approval", actionId: "review-1" });
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});

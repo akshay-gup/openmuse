@@ -1,3 +1,4 @@
+import type { HiveTool, HiveToolBridge } from "./hive-tools.ts";
 /**
  * Task-worker execution through OpenCode sessions.
  *
@@ -34,6 +35,7 @@ export interface OpencodeTaskRuntime {
   pool: OpencodeClientPool;
   tracker: PermissionTracker;
   config: Config;
+  hiveTools?: HiveToolBridge;
 }
 
 /** Bound for a task run whose terminal events never arrive. */
@@ -211,6 +213,8 @@ export async function runOpencodeTask(
   owner: string,
   initial: AgentTask,
   ctx: TaskContext,
+  tools: HiveTool[] = [],
+  toolState?: { task: () => AgentTask; outcome: () => Partial<AgentTask> | undefined },
 ): Promise<Partial<AgentTask>> {
   const config = runtime.config;
   let task = initial;
@@ -233,6 +237,7 @@ export async function runOpencodeTask(
   const { sessionId, directory, scope, channelId } = await createTaskSession(runtime, owner, task);
   const client = runtime.pool.forDirectory(directory);
 
+  let toolLease: Awaited<ReturnType<HiveToolBridge["connect"]>> | undefined;
   const collector = new TaskTextCollector();
   let emittedChars = 0;
   let lastCheckpoint = Date.now();
@@ -242,6 +247,7 @@ export async function runOpencodeTask(
     emittedChars = text.length;
     await ctx.event("step", "Agent update", text.slice(-4000)).catch(() => undefined);
     if (Date.now() - lastCheckpoint > 20_000) {
+      task = toolState?.task() ?? task;
       lastCheckpoint = Date.now();
       task = await ctx.checkpoint({ state: { ...task.state, lastUpdate: text } }).catch(() => task);
     }
@@ -327,6 +333,14 @@ export async function runOpencodeTask(
   ctx.signal.addEventListener("abort", onAbort, { once: true });
 
   try {
+    if (runtime.hiveTools)
+      toolLease = await runtime.hiveTools.connect(
+        runtime.pool,
+        directory,
+        scope,
+        tools,
+        ctx.signal,
+      );
     await runtime.bus.waitForConnection();
     const model = parseModelRef(config.model);
     await runtime.bus.enqueue(scope, () =>
@@ -334,11 +348,12 @@ export async function runOpencodeTask(
         sessionID: sessionId,
         directory,
         ...(model ? { model } : {}),
+        ...(toolLease ? { tools: toolLease.flags } : {}),
         parts: [
           {
             type: "text",
             synthetic: true,
-            text: `[hive task context] task=${task.id} channel=${channelId}${task.threadId ? ` thread=${task.threadId}` : ""}`,
+            text: `${toolLease?.instructions ?? ""}\n[hive task context] task=${task.id} channel=${channelId}${task.threadId ? ` thread=${task.threadId}` : ""}`,
           },
           { type: "text", text: buildTaskPrompt(identity, memories, task, originNote) },
         ],
@@ -346,11 +361,15 @@ export async function runOpencodeTask(
     );
     await donePromise;
   } finally {
+    toolLease?.release();
     clearTimeout(timer);
     ctx.signal.removeEventListener("abort", onAbort);
     unsubscribe();
   }
 
+  const mediatedOutcome = toolState?.outcome();
+  if (mediatedOutcome) return mediatedOutcome;
+  task = toolState?.task() ?? task;
   const text = collector.text();
   if (text) {
     task = await ctx.checkpoint({ state: { ...task.state, lastUpdate: text } }).catch(() => task);

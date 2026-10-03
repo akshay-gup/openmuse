@@ -214,6 +214,46 @@ describe("RunTranslator", () => {
     assert.equal(events[3].content, "file.txt");
   });
 
+  it("normalizes bridged Hive tool names for the UI", () => {
+    const { translator, events } = collectTranslator();
+    const toolPart = (status: string, extra: Record<string, unknown> = {}) => ({
+      id: "prt_t",
+      sessionID: "ses_1",
+      messageID: "msg_a",
+      type: "tool",
+      callID: "call_1",
+      tool: "hive_0123456789abcdef_create_issue",
+      state: { status, input: { command: "ls" }, ...extra },
+    });
+    translator.handle({
+      id: "e1",
+      type: "message.part.updated",
+      properties: { sessionID: "ses_1", part: toolPart("running"), time: 1 },
+    });
+    translator.handle({
+      id: "e2",
+      type: "message.part.updated",
+      properties: {
+        sessionID: "ses_1",
+        part: toolPart("completed", { output: "file.txt" }),
+        time: 2,
+      },
+    });
+    translator.handle({ id: "e3", type: "session.idle", properties: { sessionID: "ses_1" } });
+
+    const types = events.map((e) => e.type);
+    assert.deepEqual(types, [
+      "TOOL_CALL_START",
+      "TOOL_CALL_ARGS",
+      "TOOL_CALL_END",
+      "TOOL_CALL_RESULT",
+      "RUN_FINISHED",
+    ]);
+    assert.equal(events[0].toolCallName, "create_issue");
+    assert.equal(events[1].delta, JSON.stringify({ command: "ls" }));
+    assert.equal(events[3].content, "file.txt");
+  });
+
   it("emits RUN_ERROR on session.error", () => {
     const { translator, events, isDone } = collectTranslator();
     translator.handle({

@@ -1,3 +1,4 @@
+import { HiveToolBridge } from "./opencode/hive-tools.ts";
 import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import { readFile, stat } from "node:fs/promises";
@@ -186,6 +187,8 @@ export async function createApp(
     const body = z.object({ code: z.string().min(1) }).parse(await c.req.json());
     return c.json(await google.exchangeLoginCode(body.code));
   });
+  const hiveTools = new HiveToolBridge(`http://127.0.0.1:${config.port}/api/hive-tools`);
+  app.route("/api/hive-tools", hiveTools.routes);
   app.use("/api/*", async (c, next) => {
     const signedRoute =
       /^\/api\/files\/[^/]+\/content$|^\/api\/browsers\/[^/]+\/(?:preview|console)$/.test(
@@ -230,10 +233,10 @@ export async function createApp(
     const tracker = new PermissionTracker();
     const rules = new PermissionRulesStore(config.dataDir);
     bus.start();
-    const shimDeps = { service: agent, bus, pool, config, tracker, rules };
+    const shimDeps = { service: agent, bus, pool, config, tracker, rules, hiveTools };
     app.route("/api/agent/opencode", opencodeShimRoutes(shimDeps));
     app.route("/api/agent/opencode", opencodePermissionRoutes(shimDeps));
-    agent.opencodeRuntime = { bus, pool, tracker, config };
+    agent.opencodeRuntime = { bus, pool, tracker, config, hiveTools };
     opencode = { stop: () => bus.stop() };
   }
   app.get("/api/calendars", async (c) => c.json(await workspace.calendars(c.get("owner"))));
