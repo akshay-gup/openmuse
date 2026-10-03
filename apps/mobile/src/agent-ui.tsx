@@ -117,6 +117,7 @@ export function TaskCard({
   onOpen?: () => void;
 }) {
   const { open } = useWorkspace();
+  const manual = task.kind === "manual";
   const done = task.plan.filter((step) => step.status === "succeeded").length;
   const next = task.plan.find((step) => ["running", "waiting"].includes(step.status));
   const waiting = ["waiting_input", "waiting_approval"].includes(task.status);
@@ -125,8 +126,8 @@ export function TaskCard({
       accessibilityRole="button"
       accessibilityLabel={`Open task: ${task.title}`}
       onPress={() => {
-        onOpen?.();
-        open({ type: "task", taskId: task.id });
+        if (onOpen) onOpen();
+        else open({ type: "task", taskId: task.id });
       }}
     >
       <Card
@@ -149,7 +150,9 @@ export function TaskCard({
           <View style={{ flex: 1, gap: 4 }}>
             <Text style={s.heading}>{task.title}</Text>
             <Text style={s.small}>
-              {statusLabel(task.status)}
+              {manual
+                ? `Manual · ${task.status === "queued" ? "To do" : task.status === "running" ? "In progress" : task.status === "succeeded" ? "Done" : statusLabel(task.status)}`
+                : `Agent · ${statusLabel(task.status)}`}
               {task.plan.length ? ` · ${done}/${task.plan.length} steps` : ""}
             </Text>
           </View>
@@ -184,7 +187,7 @@ export function TaskCard({
 export function ChatWork() {
   const { data } = useAgentWorkspace();
   const tasks = [...(data?.tasks || [])]
-    .filter(activeTask)
+    .filter((task) => task.kind !== "manual" && activeTask(task))
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
     .slice(0, 2);
   if (!tasks.length) return null;
@@ -213,7 +216,9 @@ export function AgentActivityScreen() {
       (projectFilter === "none" ? !task.projectId : task.projectId === projectFilter),
   );
   const tasks = projectTasks.filter(
-    (task) => filter === "All" || (filter === "In progress" ? activeTask(task) : !activeTask(task)),
+    (task) =>
+      filter === "All" ||
+      (filter === "In progress" ? task.status === "running" : !activeTask(task)),
   );
   const selected = selectedId ? allTasks.find((task) => task.id === selectedId) : undefined;
   const managingProject = managingProjectId
@@ -259,7 +264,7 @@ export function AgentActivityScreen() {
             ))}
           </View>
           {tasks.map((task) => (
-            <TaskCard key={task.id} task={task} />
+            <TaskCard key={task.id} task={task} onOpen={() => setSelectedId(task.id)} />
           ))}
           {!tasks.length && (
             <Empty
@@ -444,6 +449,15 @@ export function TaskDetail({ taskId }: { taskId: string }) {
       setBusy(false);
     }
   }
+  if (task?.kind === "manual")
+    return (
+      <IssueDetail
+        task={task}
+        tasks={data?.tasks ?? [task]}
+        projects={data?.projects ?? []}
+        onClose={close}
+      />
+    );
   const missing = Array.isArray(task?.state.missingFields) ? task.state.missingFields : [];
   const fieldNames = missing
     .map((field) =>
