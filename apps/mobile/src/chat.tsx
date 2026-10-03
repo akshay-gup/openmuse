@@ -812,7 +812,7 @@ export function ChatScreen({
                     (channelId || threadParent ? (
                       <ChannelMessage
                         text={text}
-                        author={user ? w.profile.name || "You" : "Hive"}
+                        author={user ? message.name || w.profile.name || "You" : "Hive"}
                         assistant={!user}
                         grouped={grouped}
                         timestamp={timestamp}
@@ -1314,7 +1314,11 @@ export function ChatScreen({
         >
           <ChannelMessage
             text={textOf(replyPanel.parent)}
-            author={replyPanel.parent.role === "user" ? w.profile.name || "You" : "Hive"}
+            author={
+              replyPanel.parent.role === "user"
+                ? replyPanel.parent.name || w.profile.name || "You"
+                : "Hive"
+            }
             assistant={replyPanel.parent.role === "assistant"}
             timestamp={messageTimestamp(replyPanel.parent)}
             onNotify={notify}

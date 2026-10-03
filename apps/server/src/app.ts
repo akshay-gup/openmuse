@@ -9,6 +9,7 @@ import { bodyLimit } from "hono/body-limit";
 import { cors } from "hono/cors";
 import { z } from "zod";
 import { emailDraftSchema, proposalSchema } from "../../../packages/domain/src/index.ts";
+import { ORCHESTRATOR_CHANNEL_ID } from "../../../packages/domain/src/agent.ts";
 import { ActionService } from "./actions.ts";
 import { agentConfigured, makeRuntime } from "./agent.ts";
 import { createAuth } from "./auth.ts";
@@ -301,14 +302,41 @@ export async function createApp(
   });
   app.get("/api/conversation", async (c) => {
     const id = conversationKey(c.req.query("threadId"));
-    return c.json((await db.get(c.get("owner"), "conversations", id)) ?? { messages: [] });
+    const owner = conversationOwner(id, c.get("owner"));
+    return c.json((await db.get(owner, "conversations", id)) ?? { messages: [] });
   });
   app.put("/api/conversation", async (c) => {
     const body = await c.req.json();
-    const messages = z.array(z.unknown()).max(1000).parse(body.messages);
-    for (const message of messages) MessageSchema.parse(message);
+    const incoming = z
+      .array(z.unknown())
+      .max(1000)
+      .parse(body.messages)
+      .map((message) => MessageSchema.parse(message));
     const id = conversationKey(c.req.query("threadId"));
-    await db.put(c.get("owner"), "conversations", { id, messages });
+    const sessionOwner = c.get("owner");
+    const owner = conversationOwner(id, sessionOwner);
+    let messages = incoming;
+    if (owner === "shared") {
+      // Stamp the author's display name on user messages so a shared channel
+      // attributes each message to the person who wrote it.
+      const user = await db.get<{ name?: string }>("system", "users", sessionOwner);
+      const authorName = user?.name ?? sessionOwner;
+      messages = incoming.map((m) =>
+        m.role === "user" && !m.name ? { ...m, name: authorName } : m,
+      );
+      // Merge with the stored transcript by message id so concurrent writers
+      // append without clobbering each other.
+      const stored =
+        (await db.get<{ messages?: unknown[] }>(owner, "conversations", id))?.messages ?? [];
+      const byId = new Map<string, (typeof messages)[number]>();
+      for (const m of stored) {
+        const parsed = MessageSchema.safeParse(m);
+        if (parsed.success) byId.set(parsed.data.id, parsed.data);
+      }
+      for (const m of messages) byId.set(m.id, m);
+      messages = [...byId.values()];
+    }
+    await db.put(owner, "conversations", { id, messages });
     return c.json({ ok: true });
   });
   app.post("/api/files", async (c) => {
@@ -454,6 +482,17 @@ export async function createApp(
 function conversationKey(threadId: string | undefined): string {
   const id = (threadId ?? "").trim().slice(0, 128);
   return id ? id : "default";
+}
+
+/**
+ * Owner a conversation transcript is stored under. Channel chats
+ * (`channel:<id>`) share one transcript across users so a channel reads as a
+ * single conversation; the orchestrator keeps a private transcript per user.
+ */
+function conversationOwner(threadId: string, sessionOwner: string): string {
+  return threadId.startsWith("channel:") && threadId !== `channel:${ORCHESTRATOR_CHANNEL_ID}`
+    ? "shared"
+    : sessionOwner;
 }
 
 function webRootDir(config: Config): string | undefined {
