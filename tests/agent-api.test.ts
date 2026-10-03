@@ -313,7 +313,6 @@ test("live mode rejects sample sources and hides the fixture mutation endpoint",
   const live = await createApp(db, {
     ...config,
     mode: "live",
-    accessKey: "a-private-test-key-with-enough-characters",
   });
   try {
     const response = await live.app.request("/api/agent/sample-page", {

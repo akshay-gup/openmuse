@@ -43,7 +43,7 @@ import { Details } from "./src/details";
 import { BrowserScreen, CalendarScreen, FilesScreen, MailScreen } from "./src/screens";
 import { Sidebar } from "./src/sidebar";
 import { ThreadsProvider, useMuseThread } from "./src/threads";
-import { Button, Card, colors, ErrorNotice, Field, IconButton, Mascot, s } from "./src/ui";
+import { Button, Card, colors, ErrorNotice, IconButton, Mascot, s } from "./src/ui";
 import { type Detail, useWorkspace, WorkspaceContext } from "./src/workspace";
 
 const nav: { id: Section; label: string; icon: LucideIcon }[] = [
@@ -72,14 +72,13 @@ const titles: Partial<Record<Section, { title: string; subtitle: string }>> = {
 };
 export default function App() {
   const [token, setToken] = useState("");
-  const [accessKey, setAccessKey] = useState("");
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState("");
-  const connect = useCallback(async (key?: string) => {
+  const connect = useCallback(async () => {
     setBusy(true);
     setError("");
     try {
-      const session = await createSession(key);
+      const session = await createSession();
       setToken(session.token);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -190,19 +189,11 @@ export default function App() {
             ) : (
               <Card style={{ width: "100%" }}>
                 <ErrorNotice error={error} />
-                <Field
-                  label="Workspace access key"
-                  value={accessKey}
-                  onChangeText={setAccessKey}
-                  secureTextEntry
-                  placeholder="Required for a live workspace"
-                />
-                <Button primary onPress={() => void connect(accessKey || undefined)}>
-                  Open workspace
+                <Button primary onPress={() => void signInWithGoogle()}>
+                  Sign in with Google
                 </Button>
-                <Button onPress={() => void signInWithGoogle()}>Sign in with Google</Button>
                 <Text style={[s.small, { marginTop: 15 }]}>
-                  Local workspaces open without a key. Make sure your Hive server is running at{" "}
+                  Local workspaces open automatically. Make sure your Hive server is running at{" "}
                   {API_URL}.
                 </Text>
               </Card>

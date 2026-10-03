@@ -57,7 +57,6 @@ export interface Config {
   databaseUrl?: string;
   /** Override for the served web UI directory; defaults to apps/mobile/dist/web. */
   webDir?: string;
-  accessKey?: string;
   encryptionKey?: string;
   model?: string;
   jevMode?: "off" | "sample" | "live";
@@ -138,7 +137,6 @@ export function readConfig(): Config {
     dataDir,
     databaseUrl: process.env.DATABASE_URL,
     webDir: process.env.WEB_DIR?.trim() || undefined,
-    accessKey: process.env.HIVE_ACCESS_KEY,
     encryptionKey: process.env.TOKEN_ENCRYPTION_KEY,
     model: process.env.MODEL,
     jevMode,
@@ -164,13 +162,8 @@ export function readConfig(): Config {
       process.env.ALLOWED_ORIGINS ?? "http://localhost:8081,http://127.0.0.1:8081"
     ).split(","),
   };
-  if (
-    mode === "live" &&
-    (!config.accessKey || config.accessKey.length < 24 || !config.encryptionKey)
-  )
-    throw new Error(
-      "Live mode requires HIVE_ACCESS_KEY (24+ characters) and TOKEN_ENCRYPTION_KEY (32-byte base64)",
-    );
+  if (mode === "live" && !config.encryptionKey)
+    throw new Error("Live mode requires TOKEN_ENCRYPTION_KEY (32-byte base64)");
   if (mode === "sample" && !["127.0.0.1", "localhost", "::1"].includes(config.host))
     throw new Error("Sample workspace is local-only. HOST must be a loopback address.");
   return config;

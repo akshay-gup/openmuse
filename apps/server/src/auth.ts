@@ -12,14 +12,13 @@ export class Auth {
     private readonly config: Config,
     private readonly signingKey: string,
   ) {}
-  async session(accessKey?: string) {
-    if (
-      this.config.mode === "live" &&
-      (!accessKey ||
-        !this.config.accessKey ||
-        !timingSafeEqual(digest(accessKey), digest(this.config.accessKey)))
-    )
-      throw new AppError("Access key is incorrect", 401);
+  /**
+   * Keyless session for local/sample mode. Live mode has no key login —
+   * the only way in is Google sign-in (see google-auth.ts).
+   */
+  async session() {
+    if (this.config.mode === "live")
+      throw new AppError("Sign in with Google to open your workspace.", 401);
     return this.sessionForOwner("local-user");
   }
   /** Create a session for any owner (used by Google sign-in). */

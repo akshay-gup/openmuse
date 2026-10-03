@@ -25,7 +25,6 @@ gen() { # gen VAR 'command that prints the value'
   fi
 }
 
-gen HIVE_ACCESS_KEY 'openssl rand -hex 32'
 gen TOKEN_ENCRYPTION_KEY 'openssl rand -base64 32'
 gen OPENCODE_SERVER_PASSWORD 'openssl rand -hex 32'
 
@@ -58,9 +57,6 @@ if [ -z "$(get DATA_DIR)" ]; then
 fi
 
 echo "hive.env ready at $ENV_FILE"
-echo
-echo "Your Hive sign-in key (save this):"
-get HIVE_ACCESS_KEY
 echo
 echo "Still to fill in: MODEL + provider key$([ -n "$PUBLIC_URL" ] || echo ", and PUBLIC_API_URL")."
 
