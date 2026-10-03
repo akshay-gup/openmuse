@@ -1,4 +1,5 @@
-import { Pressable, ScrollView, Text, useWindowDimensions, View } from "react-native";
+import { useState } from "react";
+import { Pressable, ScrollView, Text, View } from "react-native";
 import {
   type AgentTask,
   type TaskColumn,
@@ -38,6 +39,7 @@ export function TaskBoardCard({ task, onPress }: { task: AgentTask; onPress: () 
       onPress={onPress}
       style={({ pressed }) => [
         {
+          flexShrink: 0,
           backgroundColor: "#FFFFFF",
           borderRadius: 16,
           borderWidth: 1,
@@ -90,7 +92,7 @@ export function TaskBoardCard({ task, onPress }: { task: AgentTask; onPress: () 
   );
 }
 
-/** Kanban board: three columns fed by taskColumn(). Tap a card to open detail. */
+/** Columns grow with their cards; narrow containers scroll sideways inside the page. */
 export function TaskBoard({
   tasks,
   onSelect,
@@ -98,49 +100,60 @@ export function TaskBoard({
   tasks: AgentTask[];
   onSelect: (task: AgentTask) => void;
 }) {
-  const { width } = useWindowDimensions();
-  const wide = width >= 900;
+  const [width, setWidth] = useState(0);
+  const wide = width >= 4 * 260 + 3 * 12;
   const byColumn = (column: TaskColumn) => tasks.filter((t) => taskColumn(t.status) === column);
   return (
-    <ScrollView
-      horizontal={!wide}
-      showsHorizontalScrollIndicator={false}
-      contentContainerStyle={{ gap: 12, flexGrow: 1 }}
-    >
-      {columns.map((column) => {
-        const items = byColumn(column.id);
-        return (
-          <View
-            key={column.id}
-            style={{
-              width: wide ? undefined : 300,
-              flex: wide ? 1 : undefined,
-              gap: 10,
-              backgroundColor: "#F4F4F6",
-              borderRadius: 18,
-              padding: 12,
-            }}
-          >
-            <View style={[s.row, { gap: 8, alignItems: "center", paddingHorizontal: 4 }]}>
-              <Text style={[s.text, { fontWeight: "700", fontSize: 14 }]}>{column.title}</Text>
-              <View
-                style={{
-                  backgroundColor: "#FFFFFF",
-                  borderRadius: 10,
-                  paddingHorizontal: 9,
-                  paddingVertical: 3,
-                }}
-              >
-                <Text style={[s.small, { fontWeight: "700" }]}>{items.length}</Text>
+    <View onLayout={(event) => setWidth(event.nativeEvent.layout.width)} style={{ minWidth: 0 }}>
+      <ScrollView
+        horizontal
+        accessibilityLabel="Task board"
+        style={{ flexGrow: 0, flexShrink: 0 }}
+        showsHorizontalScrollIndicator={!wide}
+        contentContainerStyle={{
+          flexDirection: "row",
+          alignItems: "stretch",
+          gap: 12,
+          flexGrow: 1,
+        }}
+      >
+        {columns.map((column) => {
+          const items = byColumn(column.id);
+          return (
+            <View
+              key={column.id}
+              style={{
+                width: wide ? undefined : 260,
+                minWidth: 260,
+                flexShrink: 0,
+                flex: wide ? 1 : undefined,
+                gap: 10,
+                backgroundColor: "#F4F4F6",
+                borderRadius: 18,
+                padding: 12,
+              }}
+            >
+              <View style={[s.row, { gap: 8, alignItems: "center", paddingHorizontal: 4 }]}>
+                <Text style={[s.text, { fontWeight: "700", fontSize: 14 }]}>{column.title}</Text>
+                <View
+                  style={{
+                    backgroundColor: "#FFFFFF",
+                    borderRadius: 10,
+                    paddingHorizontal: 9,
+                    paddingVertical: 3,
+                  }}
+                >
+                  <Text style={[s.small, { fontWeight: "700" }]}>{items.length}</Text>
+                </View>
               </View>
+              {items.map((task) => (
+                <TaskBoardCard key={task.id} task={task} onPress={() => onSelect(task)} />
+              ))}
+              {!items.length && <Text style={[s.small, { padding: 8 }]}>Nothing here.</Text>}
             </View>
-            {items.map((task) => (
-              <TaskBoardCard key={task.id} task={task} onPress={() => onSelect(task)} />
-            ))}
-            {!items.length && <Text style={[s.small, { padding: 8 }]}>Nothing here.</Text>}
-          </View>
-        );
-      })}
-    </ScrollView>
+          );
+        })}
+      </ScrollView>
+    </View>
   );
 }
