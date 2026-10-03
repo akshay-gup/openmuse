@@ -203,6 +203,33 @@ export function TaskDetail({
           Save changes
         </Button>
         <View style={{ gap: 6 }}>
+          <Text style={s.label}>Assignee</Text>
+          <View style={[s.row, { gap: 8, flexWrap: "wrap" }]}>
+            <Button
+              small
+              primary={!task.assignee}
+              disabled={busy}
+              onPress={() => void patch({ assignee: null })}
+            >
+              Unassigned
+            </Button>
+            <Button
+              small
+              primary={task.assignee === "agent"}
+              disabled={busy}
+              onPress={() => void patch({ assignee: "agent" })}
+            >
+              Agent
+            </Button>
+          </View>
+          {manual && !task.assignee && (
+            <Text style={s.small}>Assign to the agent to have it run this issue.</Text>
+          )}
+          {task.assignee === "agent" && (
+            <Text style={s.small}>The agent runs this ticket, grounded in the channel discussion.</Text>
+          )}
+        </View>
+        <View style={{ gap: 6 }}>
           <Text style={s.label}>Move to</Text>
           <View style={[s.row, { gap: 8, flexWrap: "wrap" }]}>
             {transitions.map((status) => (

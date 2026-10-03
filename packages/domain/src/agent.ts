@@ -49,6 +49,12 @@ export interface AgentTask {
   kind: "agent" | "document" | "monitor" | "finance" | "plan" | "manual";
   status: TaskStatus;
   goalId?: string;
+  /**
+   * Who should do the work: null (unassigned) or "agent" (the worker runs it).
+   * Assigning a manual issue to the agent converts it into an executable
+   * agent task; unassigning reverts it to a manual issue.
+   */
+  assignee?: "agent" | null;
   /** Project grouping for the board. Unset tasks sit in "No project". */
   projectId?: string | null;
   /** Manual tasks are human work: no prompt execution, the worker never claims them. */
@@ -235,6 +241,7 @@ export const updateTaskSchema = z.object({
   dueAt: isoDate.nullable().optional(),
   blockedBy: z.array(z.string().trim().min(1).max(80)).max(20).optional(),
   labels: z.array(z.string().trim().min(1).max(40)).max(20).optional(),
+  assignee: z.enum(["agent"]).nullable().optional(),
 });
 export type UpdateTaskInput = z.infer<typeof updateTaskSchema>;
 /** Fixed id of the orchestrator channel: the control-plane surface. */

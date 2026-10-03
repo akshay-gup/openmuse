@@ -244,3 +244,48 @@ test("projects group tasks and survive deletion", async () => {
   assert.equal(after.task.projectId, null);
   await read(`/projects/${doomed.id}`, { name: "x" }, 404, "PATCH");
 });
+
+test("assigning a manual issue to the agent queues it with channel context", async () => {
+  // Seed a shared channel transcript the issue's channel points at.
+  await db.put("shared", "channels", { id: "general", name: "General" });
+  await db.put("shared", "conversations", {
+    id: "channel:general",
+    messages: [
+      { id: "c1", role: "user", name: "Alice", content: "We should launch Tuesday" },
+      { id: "c2", role: "user", name: "Bob", content: "Agreed, I'll draft the notes" },
+    ],
+  });
+  const issue = await read<AgentTask>(
+    "/tasks",
+    { title: "Prep launch", kind: "manual", prompt: "Draft the announcement", channelId: "general" },
+    201,
+  );
+  assert.equal(issue.kind, "manual");
+
+  const assigned = await read<AgentTask>(`/tasks/${issue.id}`, { assignee: "agent" }, 200, "PATCH");
+  assert.equal(assigned.kind, "agent");
+  assert.equal(assigned.status, "queued");
+  assert.equal(assigned.assignee, "agent");
+  // The execution prompt carries the ticket plus the channel discussion.
+  assert.ok(assigned.prompt.includes("Prep launch"));
+  assert.ok(assigned.prompt.includes("Draft the announcement"));
+  assert.ok(assigned.prompt.includes("We should launch Tuesday"));
+  assert.ok(assigned.prompt.includes("Bob: Agreed"));
+
+  // Unassigning restores the manual issue with its original notes.
+  const unassigned = await read<AgentTask>(`/tasks/${issue.id}`, { assignee: null }, 200, "PATCH");
+  assert.equal(unassigned.kind, "manual");
+  assert.equal(unassigned.assignee ?? null, null);
+  assert.equal(unassigned.prompt, "Draft the announcement");
+});
+
+test("assigning a non-manual task to the agent is rejected", async () => {
+  const task = await read<AgentTask>("/tasks", { title: "Agent job", prompt: "do it" }, 201);
+  assert.equal(task.kind, "agent");
+  await read(`/tasks/${task.id}`, { assignee: "agent" }, 422, "PATCH");
+});
+
+test("assignee cannot change together with status", async () => {
+  const issue = await read<AgentTask>("/tasks", { title: "Combo", kind: "manual" }, 201);
+  await read(`/tasks/${issue.id}`, { assignee: "agent", status: "paused" }, 422, "PATCH");
+});

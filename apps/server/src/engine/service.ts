@@ -636,11 +636,99 @@ export class AgentService {
     "failed",
     "cancelled",
   ]);
+  /**
+   * Hand a manual issue to the agent: build an execution prompt from the
+   * ticket plus recent discussion in the channel it came from, then queue it
+   * so the worker claims it like any agent task.
+   */
+  private async assignToAgent(
+    task: AgentTask,
+    patch: Partial<AgentTask>,
+  ): Promise<void> {
+    if (task.kind !== "manual")
+      throw new AppError("Only manual issues can be assigned to the agent", 422);
+    const context = await this.channelContextForTask(task);
+    const parts = [task.title.trim()];
+    if (task.prompt.trim()) parts.push(`\nNotes:\n${task.prompt.trim()}`);
+    if (context)
+      parts.push(
+        `\n---\nRecent discussion in #${context.name}:\n${context.lines}\n---`,
+      );
+    parts.push(
+      "\nCarry out the task above. Use the channel discussion for context on what was decided and who asked for what.",
+    );
+    patch.prompt = parts.join("\n");
+    patch.kind = "agent";
+    patch.status = "queued";
+    patch.assignee = "agent";
+    patch.leaseId = null;
+    patch.leaseUntil = null;
+    patch.input = { ...(task.input ?? {}), manualNotes: task.prompt };
+  }
+
+  /** Take a ticket back from the agent: cancel any in-flight run and restore the manual issue. */
+  private unassignFromAgent(task: AgentTask, patch: Partial<AgentTask>): void {
+    if (task.assignee !== "agent" || task.kind === "manual")
+      throw new AppError("Task is not assigned to the agent", 422);
+    const active = ["queued", "paused", "scheduled", "running", "waiting_approval", "waiting_input"];
+    const { manualNotes, ...restInput } = task.input ?? {};
+    patch.kind = "manual";
+    patch.assignee = null;
+    patch.prompt = typeof manualNotes === "string" ? manualNotes : "";
+    patch.input = restInput;
+    patch.leaseId = null;
+    patch.leaseUntil = null;
+    // A ticket pulled back mid-run is stopped; an untouched one goes back to the to-do column.
+    patch.status = active.includes(task.status) ? "cancelled" : task.status;
+  }
+
+  /** Recent channel discussion to ground an agent-assigned issue. Null when there is nothing useful. */
+  private async channelContextForTask(
+    task: AgentTask,
+  ): Promise<{ name: string; lines: string } | null> {
+    const channelId = task.channelId;
+    if (!channelId || channelId === ORCHESTRATOR_CHANNEL_ID) return null;
+    const [channel, transcript] = await Promise.all([
+      this.db.get<Channel>("shared", "channels", channelId).catch(() => null),
+      this.db
+        .get<{ messages?: { role?: string; name?: string; content?: unknown }[] }>(
+          "shared",
+          "conversations",
+          `channel:${channelId}`,
+        )
+        .catch(() => null),
+    ]);
+    const textOf = (content: unknown): string => {
+      if (typeof content === "string") return content;
+      if (Array.isArray(content))
+        return content
+          .filter((p) => typeof p === "object" && p !== null && (p as { type?: string }).type === "text")
+          .map((p) => String((p as { text?: string }).text ?? ""))
+          .join("");
+      return "";
+    };
+    const lines = (transcript?.messages ?? [])
+      .filter((m) => (m.role === "user" || m.role === "assistant") && textOf(m.content).trim())
+      .slice(-15)
+      .map((m) => {
+        const who = m.role === "user" ? m.name?.trim() || "Someone" : "Hive";
+        return `${who}: ${textOf(m.content).trim().slice(0, 500)}`;
+      });
+    if (!lines.length) return null;
+    return { name: channel?.name ?? channelId, lines: lines.join("\n") };
+  }
+
   /** Update a task's fields. The agent uses this to manage the board. */
   async updateTask(owner: string, id: string, raw: unknown): Promise<AgentTask> {
     const input = updateTaskSchema.parse(raw);
     const task = await this.getTask(owner, id);
     const patch: Partial<AgentTask> = {};
+    if (input.assignee !== undefined && input.assignee !== (task.assignee ?? null)) {
+      if (input.status !== undefined || input.prompt !== undefined)
+        throw new AppError("Cannot change assignee together with status or prompt", 422);
+      if (input.assignee === "agent") await this.assignToAgent(task, patch);
+      else this.unassignFromAgent(task, patch);
+    }
     if (input.title !== undefined) patch.title = input.title;
     if (input.prompt !== undefined) {
       if (task.kind === "manual") throw new AppError("Manual tasks have no prompt", 422);

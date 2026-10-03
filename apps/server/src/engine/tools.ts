@@ -181,7 +181,7 @@ export function conversationTools(
     defineTool({
       name: "update_task",
       description:
-        "Edit any task or issue: retitle, change priority or dates, move it on the board (status), link dependencies, set labels. Manual tasks move freely between queued/running/paused/succeeded/failed/cancelled; worker tasks can only be queued, paused, or cancelled directly — their running and terminal states belong to the worker.",
+        "Edit any task or issue: retitle, change priority or dates, move it on the board (status), link dependencies, set labels, assign. Set assignee to 'agent' to hand a manual issue to the worker — it builds an execution prompt from the ticket plus recent channel discussion and queues it. Set assignee to null to take it back (cancels an in-flight run and restores the manual issue). Manual tasks move freely between queued/running/paused/succeeded/failed/cancelled; worker tasks can only be queued, paused, or cancelled directly — their running and terminal states belong to the worker.",
       parameters: z.object({
         taskId: z.string().min(1),
         title: z.string().trim().min(1).max(160).optional(),
@@ -189,6 +189,7 @@ export function conversationTools(
           .enum(["queued", "running", "paused", "succeeded", "failed", "cancelled"])
           .optional(),
         priority: z.enum(["low", "medium", "high", "urgent"]).optional(),
+        assignee: z.enum(["agent"]).nullable().optional(),
         startAt: z
           .string()
           .trim()
