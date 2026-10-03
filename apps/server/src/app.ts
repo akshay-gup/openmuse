@@ -8,8 +8,8 @@ import { type Context, Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { cors } from "hono/cors";
 import { z } from "zod";
-import { emailDraftSchema, proposalSchema } from "../../../packages/domain/src/index.ts";
 import { ORCHESTRATOR_CHANNEL_ID } from "../../../packages/domain/src/agent.ts";
+import { emailDraftSchema, proposalSchema } from "../../../packages/domain/src/index.ts";
 import { ActionService } from "./actions.ts";
 import { agentConfigured, makeRuntime } from "./agent.ts";
 import { createAuth } from "./auth.ts";
@@ -317,24 +317,7 @@ export async function createApp(
     const owner = conversationOwner(id, sessionOwner);
     let messages = incoming;
     if (owner === "shared") {
-      // Stamp the author's display name on user messages so a shared channel
-      // attributes each message to the person who wrote it.
-      const user = await db.get<{ name?: string }>("system", "users", sessionOwner);
-      const authorName = user?.name ?? sessionOwner;
-      messages = incoming.map((m) =>
-        m.role === "user" && !m.name ? { ...m, name: authorName } : m,
-      );
-      // Merge with the stored transcript by message id so concurrent writers
-      // append without clobbering each other.
-      const stored =
-        (await db.get<{ messages?: unknown[] }>(owner, "conversations", id))?.messages ?? [];
-      const byId = new Map<string, (typeof messages)[number]>();
-      for (const m of stored) {
-        const parsed = MessageSchema.safeParse(m);
-        if (parsed.success) byId.set(parsed.data.id, parsed.data);
-      }
-      for (const m of messages) byId.set(m.id, m);
-      messages = [...byId.values()];
+      messages = await stampChannelAuthors(db, id, sessionOwner, incoming);
     }
     await db.put(owner, "conversations", { id, messages });
     return c.json({ ok: true });
@@ -493,6 +476,65 @@ function conversationOwner(threadId: string, sessionOwner: string): string {
   return threadId.startsWith("channel:") && threadId !== `channel:${ORCHESTRATOR_CHANNEL_ID}`
     ? "shared"
     : sessionOwner;
+}
+
+type ChannelMessage = ReturnType<typeof MessageSchema.parse>;
+
+/**
+ * Attribute shared-channel messages to their writers. A sidecar record tracks
+ * message-id -> owner (first writer wins), then every user message's display
+ * name is set from the author's Google profile. Writers sharing a name are
+ * disambiguated with their email — "Alex (a1@example.com)" — so identical
+ * names never collide in the transcript.
+ */
+async function stampChannelAuthors(
+  db: Store,
+  id: string,
+  sessionOwner: string,
+  incoming: ChannelMessage[],
+): Promise<ChannelMessage[]> {
+  const sidecar =
+    (await db.get<{ authors?: Record<string, string> }>("shared", "conversation-authors", id)) ??
+    {};
+  const authors: Record<string, string> = sidecar.authors ?? {};
+  for (const m of incoming) {
+    if (m.role === "user" && !authors[m.id]) authors[m.id] = sessionOwner;
+  }
+  const owners = [...new Set(Object.values(authors))];
+  const names = new Map<string, string>();
+  const emails = new Map<string, string>();
+  for (const o of owners) {
+    const user = await db.get<{ name?: string; email?: string }>("system", "users", o);
+    names.set(o, user?.name ?? o);
+    emails.set(o, user?.email ?? "");
+  }
+  const nameOwners = new Map<string, string[]>();
+  for (const o of owners) {
+    const list = nameOwners.get(names.get(o) ?? o) ?? [];
+    list.push(o);
+    nameOwners.set(names.get(o) ?? o, list);
+  }
+  const display = (owner: string): string => {
+    const name = names.get(owner) ?? owner;
+    if ((nameOwners.get(name) ?? []).length < 2) return name;
+    const email = emails.get(owner) ?? "";
+    return email ? `${name} (${email})` : `${name} (${owner})`;
+  };
+  // Merge with the stored transcript by message id so concurrent writers
+  // append without clobbering each other.
+  const stored =
+    (await db.get<{ messages?: unknown[] }>("shared", "conversations", id))?.messages ?? [];
+  const byId = new Map<string, ChannelMessage>();
+  for (const m of stored) {
+    const parsed = MessageSchema.safeParse(m);
+    if (parsed.success) byId.set(parsed.data.id, parsed.data);
+  }
+  for (const m of incoming) byId.set(m.id, m);
+  await db.put("shared", "conversation-authors", { id, authors });
+  return [...byId.values()].map((m) => {
+    const owner = m.role === "user" ? authors[m.id] : undefined;
+    return owner ? { ...m, name: display(owner) } : m;
+  });
 }
 
 function webRootDir(config: Config): string | undefined {

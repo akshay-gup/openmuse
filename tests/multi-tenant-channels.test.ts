@@ -167,3 +167,32 @@ test("shared channel transcripts stamp author names across users", async () => {
   const orchByB = (await (await orch(tokenB, "GET")).json()) as Seen;
   assert.deepEqual(orchByB.messages, []);
 });
+
+test("writers with identical names are disambiguated by email", async () => {
+  await db.put("system", "users", { id: "google:aaa", name: "Alex", email: "a1@example.com" });
+  await db.put("system", "users", { id: "google:bbb", name: "Alex", email: "a2@example.com" });
+  const conv = (token: string, method: string, body?: unknown) =>
+    server.app.request("/api/conversation?threadId=channel:names", {
+      method,
+      headers: headers(token),
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    });
+  assert.equal(
+    (await conv(tokenA, "PUT", { messages: [{ id: "n1", role: "user", content: "one" }] })).status,
+    200,
+  );
+  assert.equal(
+    (await conv(tokenB, "PUT", { messages: [{ id: "n2", role: "user", content: "two" }] })).status,
+    200,
+  );
+  const seen = (await (await conv(tokenA, "GET")).json()) as {
+    messages: { id: string; name?: string }[];
+  };
+  assert.deepEqual(
+    seen.messages.map((m) => [m.id, m.name]),
+    [
+      ["n1", "Alex (a1@example.com)"],
+      ["n2", "Alex (a2@example.com)"],
+    ],
+  );
+});
