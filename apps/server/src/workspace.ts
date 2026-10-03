@@ -308,11 +308,20 @@ export class WorkspaceService {
       events = [];
     }
     const tokens = this.config.mode === "live" ? await this.googleAuth.tokens(owner) : null;
+    // Google sign-in records the user's name at login; use it instead of the
+    // generic fallback so messages are attributed to the person, not "You".
+    const user =
+      this.config.mode === "live"
+        ? await this.db.get<{ name?: string; email?: string }>("system", "users", owner)
+        : null;
     return {
       mode: this.config.mode,
       profile: {
-        name: this.config.mode === "sample" ? "Alex" : "You",
-        email: tokens?.account ?? (this.config.mode === "sample" ? "alex@example.com" : ""),
+        name: this.config.mode === "sample" ? "Alex" : (user?.name ?? "You"),
+        email:
+          tokens?.account ??
+          user?.email ??
+          (this.config.mode === "sample" ? "alex@example.com" : ""),
       },
       mail: mail.sort((a, b) => b.date.localeCompare(a.date)),
       events: events.sort((a, b) => a.start.localeCompare(b.start)),
