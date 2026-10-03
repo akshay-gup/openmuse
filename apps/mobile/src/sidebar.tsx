@@ -4,6 +4,7 @@ import {
   FileText,
   Hash,
   Lightbulb,
+  LogOut,
   Monitor,
   PanelsTopLeft,
   Plus,
@@ -69,7 +70,7 @@ export function Sidebar({
   compact?: boolean;
   onNavigate?: () => void;
 }) {
-  const { api, open, section, navigate, workspace } = useWorkspace();
+  const { api, open, section, navigate, workspace, logout } = useWorkspace();
   const { enabled, selection, select, mainId } = useMuseThread();
   const { data } = useAgentWorkspace();
   const [channels, setChannels] = useState<Channel[] | null>(null);
@@ -338,6 +339,17 @@ export function Sidebar({
             {workspace.profile.name || "You"}
           </Text>
           <Text style={s.small}>Signed in</Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Log out"
+            onPress={() => {
+              void logout().catch((e) => setError(String(e)));
+            }}
+            style={[s.row, { gap: 6, paddingVertical: 8 }]}
+          >
+            <LogOut size={14} color={colors.muted} />
+            <Text style={s.small}>Log out</Text>
+          </Pressable>
         </View>
       </View>
     </View>

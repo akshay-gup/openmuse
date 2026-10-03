@@ -15,6 +15,25 @@ export const API_URL = (
   (Platform.OS === "android" ? "http://10.0.2.2:8787" : "http://localhost:8787")
 ).replace(/\/$/, "");
 
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+  }
+}
+
+const sessionKey = `hive:session:${API_URL}`;
+export function savedSession(): string {
+  return typeof window !== "undefined" ? (window.localStorage.getItem(sessionKey) ?? "") : "";
+}
+export function saveSession(token: string) {
+  if (typeof window === "undefined") return;
+  if (token) window.localStorage.setItem(sessionKey, token);
+  else window.localStorage.removeItem(sessionKey);
+}
+
 export class MuseApi {
   constructor(readonly token: string) {}
   async request<T>(path: string, body?: unknown, method?: string): Promise<T> {
@@ -30,8 +49,9 @@ export class MuseApi {
     });
     const payload = await response.json();
     if (!response.ok)
-      throw new Error(
+      throw new ApiError(
         typeof payload.error === "string" ? payload.error : `Request failed (${response.status})`,
+        response.status,
       );
     return payload;
   }

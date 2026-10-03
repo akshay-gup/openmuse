@@ -33,6 +33,7 @@ export interface WorkspaceContextValue {
   close: () => void;
   notify: (message: string) => void;
   ask: (prompt: string) => void;
+  logout: () => Promise<void>;
 }
 export const WorkspaceContext = createContext<WorkspaceContextValue | null>(null);
 export function useWorkspace() {

@@ -35,7 +35,16 @@ import {
   IdeasScreen,
 } from "./src/agent-ui";
 import { AgentWorkspaceProvider, useAgentWorkspace } from "./src/agent-workspace";
-import { API_URL, createSession, exchangeLoginCode, googleLoginUrl, MuseApi } from "./src/api";
+import {
+  API_URL,
+  ApiError,
+  savedSession,
+  saveSession,
+  createSession,
+  exchangeLoginCode,
+  googleLoginUrl,
+  MuseApi,
+} from "./src/api";
 import { ChannelChatBanner, ChatScreen, WorkspaceTools } from "./src/chat";
 import { ComputerEntry } from "./src/computer";
 import { ComputerDraftProvider } from "./src/computer-drafts";
@@ -78,7 +87,19 @@ export default function App() {
     setBusy(true);
     setError("");
     try {
+      const saved = savedSession();
+      if (saved) {
+        try {
+          await new MuseApi(saved).request("/api/auth/session");
+          setToken(saved);
+          return;
+        } catch (e) {
+          if (!(e instanceof ApiError) || e.status !== 401) throw e;
+          saveSession("");
+        }
+      }
       const session = await createSession();
+      saveSession(session.token);
       setToken(session.token);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -91,6 +112,7 @@ export default function App() {
     setError("");
     try {
       const session = await exchangeLoginCode(code);
+      saveSession(session.token);
       setToken(session.token);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -98,6 +120,17 @@ export default function App() {
       setBusy(false);
     }
   }, []);
+  const logout = useCallback(async () => {
+    try {
+      await new MuseApi(token).request("/api/auth/logout", {});
+    } catch (e) {
+      if (!(e instanceof ApiError) || e.status !== 401) throw e;
+    }
+    saveSession("");
+    setToken("");
+    setError("");
+    setBusy(false);
+  }, [token]);
   const signInWithGoogle = useCallback(async () => {
     setBusy(true);
     setError("");
@@ -164,7 +197,7 @@ export default function App() {
           runtimeUrl={`${API_URL}/api/copilotkit`}
           headers={{ Authorization: `Bearer ${token}` }}
         >
-          <WorkspaceApp token={token} />
+          <WorkspaceApp token={token} logout={logout} />
         </CopilotKitProvider>
       ) : (
         <SafeAreaView
@@ -204,7 +237,7 @@ export default function App() {
     </SafeAreaProvider>
   );
 }
-function WorkspaceApp({ token }: { token: string }) {
+function WorkspaceApp({ token, logout }: { token: string; logout: () => Promise<void> }) {
   const api = useMemo(() => new MuseApi(token), [token]);
   const [workspace, setWorkspace] = useState<Workspace>();
   const [section, setSection] = useState<Section>("chat");
@@ -272,7 +305,18 @@ function WorkspaceApp({ token }: { token: string }) {
     );
   return (
     <WorkspaceContext.Provider
-      value={{ workspace, api, section, navigate, refresh, open, close, notify: setToast, ask }}
+      value={{
+        workspace,
+        api,
+        section,
+        navigate,
+        refresh,
+        open,
+        close,
+        notify: setToast,
+        ask,
+        logout,
+      }}
     >
       <AgentWorkspaceProvider>
         <ComputerDraftProvider key={token}>
