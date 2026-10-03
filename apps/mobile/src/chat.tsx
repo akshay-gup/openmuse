@@ -779,10 +779,16 @@ export function ChatScreen({
                 (!previousTimestamp ||
                   new Date(timestamp).toDateString() !==
                     new Date(previousTimestamp).toDateString());
+              const prev = visible[index - 1];
               const grouped =
                 !newDay &&
                 index > 0 &&
-                visible[index - 1].role === message.role &&
+                prev.role === message.role &&
+                // User messages bunch only under the same author, not just the
+                // same role — otherwise two people's texts read as one person's.
+                (message.role !== "user" ||
+                  prev.role !== "user" ||
+                  (prev.name ?? "") === (message.name ?? "")) &&
                 (!timestamp || !previousTimestamp || timestamp - previousTimestamp < 5 * 60000);
               return (
                 <View

@@ -502,24 +502,10 @@ async function stampChannelAuthors(
   }
   const owners = [...new Set(Object.values(authors))];
   const names = new Map<string, string>();
-  const emails = new Map<string, string>();
   for (const o of owners) {
-    const user = await db.get<{ name?: string; email?: string }>("system", "users", o);
+    const user = await db.get<{ name?: string }>("system", "users", o);
     names.set(o, user?.name ?? o);
-    emails.set(o, user?.email ?? "");
   }
-  const nameOwners = new Map<string, string[]>();
-  for (const o of owners) {
-    const list = nameOwners.get(names.get(o) ?? o) ?? [];
-    list.push(o);
-    nameOwners.set(names.get(o) ?? o, list);
-  }
-  const display = (owner: string): string => {
-    const name = names.get(owner) ?? owner;
-    if ((nameOwners.get(name) ?? []).length < 2) return name;
-    const email = emails.get(owner) ?? "";
-    return email ? `${name} (${email})` : `${name} (${owner})`;
-  };
   // Merge with the stored transcript by message id so concurrent writers
   // append without clobbering each other.
   const stored =
@@ -533,7 +519,7 @@ async function stampChannelAuthors(
   await db.put("shared", "conversation-authors", { id, authors });
   return [...byId.values()].map((m) => {
     const owner = m.role === "user" ? authors[m.id] : undefined;
-    return owner ? { ...m, name: display(owner) } : m;
+    return owner ? { ...m, name: names.get(owner) ?? owner } : m;
   });
 }
 

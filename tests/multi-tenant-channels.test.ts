@@ -168,7 +168,7 @@ test("shared channel transcripts stamp author names across users", async () => {
   assert.deepEqual(orchByB.messages, []);
 });
 
-test("writers with identical names are disambiguated by email", async () => {
+test("writers with identical names keep distinct authorship in the database", async () => {
   await db.put("system", "users", { id: "google:aaa", name: "Alex", email: "a1@example.com" });
   await db.put("system", "users", { id: "google:bbb", name: "Alex", email: "a2@example.com" });
   const conv = (token: string, method: string, body?: unknown) =>
@@ -188,11 +188,18 @@ test("writers with identical names are disambiguated by email", async () => {
   const seen = (await (await conv(tokenA, "GET")).json()) as {
     messages: { id: string; name?: string }[];
   };
+  // Same display name, but the sidecar records two distinct writers.
   assert.deepEqual(
     seen.messages.map((m) => [m.id, m.name]),
     [
-      ["n1", "Alex (a1@example.com)"],
-      ["n2", "Alex (a2@example.com)"],
+      ["n1", "Alex"],
+      ["n2", "Alex"],
     ],
   );
+  const sidecar = (await db.get<{ authors?: Record<string, string> }>(
+    "shared",
+    "conversation-authors",
+    "channel:names",
+  )) ?? {};
+  assert.deepEqual(sidecar.authors, { n1: "google:aaa", n2: "google:bbb" });
 });
