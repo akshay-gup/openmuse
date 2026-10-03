@@ -335,3 +335,27 @@ test("live mode rejects sample sources and hides the fixture mutation endpoint",
     await live.agent.stop();
   }
 });
+
+test("saved sessions validate and logout revokes only the current token", async () => {
+  const session = await server.app.request("/api/session", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: "{}",
+  });
+  const separateToken = (await session.json()).token;
+  const authHeaders = { Authorization: `Bearer ${separateToken}` };
+  assert.equal(
+    (await server.app.request("/api/auth/session", { headers: authHeaders })).status,
+    200,
+  );
+  assert.equal((await server.app.request("/api/auth/session")).status, 401);
+  assert.equal(
+    (await server.app.request("/api/auth/logout", { method: "POST", headers: authHeaders })).status,
+    200,
+  );
+  assert.equal(
+    (await server.app.request("/api/auth/session", { headers: authHeaders })).status,
+    401,
+  );
+  assert.equal((await server.app.request("/api/auth/session", { headers: headers() })).status, 200);
+});

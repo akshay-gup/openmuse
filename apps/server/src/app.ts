@@ -198,6 +198,11 @@ export async function createApp(
     c.set("owner", owner);
     await next();
   });
+  app.get("/api/auth/session", (c) => c.json({ authenticated: true }));
+  app.post("/api/auth/logout", async (c) => {
+    await auth.logout(c.req.header("authorization")!);
+    return c.json({ ok: true });
+  });
   app.get("/api/workspace", async (c) => {
     const [snapshot, reachable] = await Promise.all([
       workspace.snapshot(c.get("owner"), c.req.query("q")),
