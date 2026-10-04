@@ -4,9 +4,10 @@ import {
   type AgentTask,
   type TaskColumn,
   type TaskPriority,
+  type TaskStatus,
   taskColumn,
 } from "../../../packages/domain/src/agent";
-import { colors, s } from "./ui";
+import { Button, colors, s } from "./ui";
 
 const columns: { id: TaskColumn; title: string }[] = [
   { id: "todo", title: "To Do" },
@@ -22,6 +23,18 @@ export const priorityColors: Record<TaskPriority, string> = {
   urgent: colors.danger,
 };
 
+const statusMeta: Record<TaskStatus, { label: string; dot: string }> = {
+  queued: { label: "QUEUED", dot: "#9AA3A8" },
+  running: { label: "RUNNING", dot: "#2E9E5B" },
+  waiting_approval: { label: "NEEDS REVIEW", dot: "#D97A2B" },
+  waiting_input: { label: "NEEDS YOU", dot: "#D97A2B" },
+  scheduled: { label: "SCHEDULED", dot: "#9AA3A8" },
+  paused: { label: "PAUSED", dot: "#9AA3A8" },
+  succeeded: { label: "DONE", dot: "#2E9E5B" },
+  failed: { label: "FAILED", dot: colors.danger },
+  cancelled: { label: "CANCELLED", dot: "#9AA3A8" },
+};
+
 function formatDue(dueAt: string | null | undefined): string | null {
   if (!dueAt) return null;
   const date = new Date(`${dueAt}T00:00:00`);
@@ -29,13 +42,66 @@ function formatDue(dueAt: string | null | undefined): string | null {
   return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
-export function TaskBoardCard({ task, onPress }: { task: AgentTask; onPress: () => void }) {
+function ago(iso: string): string {
+  const ms = Date.now() - new Date(iso).getTime();
+  if (!Number.isFinite(ms) || ms < 0) return "";
+  const minutes = Math.floor(ms / 60000);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h`;
+  return `${Math.floor(hours / 24)}d`;
+}
+
+function excerpt(text: string | undefined | null, max = 140): string | null {
+  const clean = (text ?? "").trim().replace(/\s+/g, " ");
+  if (!clean) return null;
+  return clean.length > max ? `${clean.slice(0, max - 1)}…` : clean;
+}
+
+/** Rich worker card: status, current activity, plan progress, and quick actions. */
+export function TaskBoardCard({
+  task,
+  onPress,
+  onControl,
+}: {
+  task: AgentTask;
+  onPress: () => void;
+  onControl?: (taskId: string, action: "pause" | "resume" | "retry") => Promise<void>;
+}) {
+  const [busy, setBusy] = useState(false);
   const manual = task.kind === "manual";
   const due = formatDue(task.dueAt);
+  const meta = statusMeta[task.status];
+  const runningStep = task.plan.find((step) => step.status === "running");
+  const doneSteps = task.plan.filter((step) => step.status === "succeeded").length;
+  const updated = ago(task.updatedAt);
+
+  // What the card leads with under the title: the live step, a question or
+  // error needing attention, or the task's own description.
+  const activity =
+    runningStep?.title ??
+    (task.status === "waiting_input" ? task.question : null) ??
+    (task.status === "failed" ? task.error : null) ??
+    excerpt(task.status === "succeeded" ? task.result : task.prompt, 120);
+
+  async function control(action: "pause" | "resume" | "retry") {
+    if (!onControl || busy) return;
+    setBusy(true);
+    try {
+      await onControl(task.id, action);
+    } finally {
+      setBusy(false);
+    }
+  }
+  const pausable = ["running", "waiting_approval", "waiting_input", "scheduled"].includes(
+    task.status,
+  );
+
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`Open issue: ${task.title}`}
+      accessibilityLabel={`Open ${manual ? "issue" : "task"}: ${task.title}`}
       onPress={onPress}
       style={({ pressed }) => [
         {
@@ -43,26 +109,47 @@ export function TaskBoardCard({ task, onPress }: { task: AgentTask; onPress: () 
           backgroundColor: "#FFFFFF",
           borderRadius: 16,
           borderWidth: 1,
-          borderColor: colors.line,
+          borderColor: task.status === "failed" ? "#F0D5D3" : colors.line,
           padding: 14,
           gap: 10,
           opacity: pressed ? 0.92 : 1,
         },
       ]}
     >
-      <View style={[s.row, { gap: 10 }]}>
-        <View
-          style={{
-            width: 8,
-            height: 8,
-            borderRadius: 4,
-            backgroundColor: priorityColors[task.priority] ?? priorityColors.medium,
-          }}
-        />
-        <Text style={[s.text, { flex: 1, fontSize: 14, lineHeight: 20 }]} numberOfLines={3}>
-          {task.title}
-        </Text>
+      <View style={[s.row, { gap: 8 }]}>
+        <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: meta.dot }} />
+        <Text style={[s.small, { fontWeight: "800", letterSpacing: 0.5 }]}>{meta.label}</Text>
+        <View style={{ flex: 1 }} />
+        {!!updated && <Text style={s.small}>{updated}</Text>}
       </View>
+      <Text style={[s.text, { fontSize: 14, lineHeight: 20, fontWeight: "600" }]} numberOfLines={3}>
+        {task.title}
+      </Text>
+      {!!activity && (
+        <Text style={s.muted} numberOfLines={3}>
+          {activity}
+        </Text>
+      )}
+      {!manual && task.plan.length > 0 && (
+        <View style={{ gap: 4 }}>
+          <View
+            style={{ height: 6, borderRadius: 3, backgroundColor: colors.line, overflow: "hidden" }}
+          >
+            <View
+              style={{
+                height: 6,
+                borderRadius: 3,
+                backgroundColor: meta.dot,
+                width: `${Math.round((doneSteps / task.plan.length) * 100)}%`,
+              }}
+            />
+          </View>
+          <Text style={s.small}>
+            {doneSteps}/{task.plan.length} steps
+            {task.attempts > 1 ? ` · attempt ${task.attempts}` : ""}
+          </Text>
+        </View>
+      )}
       <View style={[s.row, { gap: 6, flexWrap: "wrap" }]}>
         <View
           style={{
@@ -74,6 +161,18 @@ export function TaskBoardCard({ task, onPress }: { task: AgentTask; onPress: () 
         >
           <Text style={[s.small, { fontWeight: "700" }]}>{manual ? "Manual" : "Agent"}</Text>
         </View>
+        {task.assignee === "agent" && (
+          <View
+            style={{
+              backgroundColor: colors.orange,
+              borderRadius: 10,
+              paddingHorizontal: 9,
+              paddingVertical: 4,
+            }}
+          >
+            <Text style={[s.small, { fontWeight: "700" }]}>Assigned</Text>
+          </View>
+        )}
         {!!due && (
           <View
             style={{
@@ -88,6 +187,27 @@ export function TaskBoardCard({ task, onPress }: { task: AgentTask; onPress: () 
         )}
         {!!task.blockedBy.length && <Text style={s.small}>Blocked by {task.blockedBy.length}</Text>}
       </View>
+      {!manual &&
+        onControl &&
+        (pausable || task.status === "paused" || task.status === "failed") && (
+          <View style={[s.row, { gap: 8 }]}>
+            {pausable && (
+              <Button small disabled={busy} onPress={() => void control("pause")}>
+                Pause
+              </Button>
+            )}
+            {task.status === "paused" && (
+              <Button small disabled={busy} onPress={() => void control("resume")}>
+                Resume
+              </Button>
+            )}
+            {task.status === "failed" && (
+              <Button small disabled={busy} onPress={() => void control("retry")}>
+                Retry
+              </Button>
+            )}
+          </View>
+        )}
     </Pressable>
   );
 }
@@ -96,9 +216,11 @@ export function TaskBoardCard({ task, onPress }: { task: AgentTask; onPress: () 
 export function TaskBoard({
   tasks,
   onSelect,
+  onControl,
 }: {
   tasks: AgentTask[];
   onSelect: (task: AgentTask) => void;
+  onControl?: (taskId: string, action: "pause" | "resume" | "retry") => Promise<void>;
 }) {
   const [width, setWidth] = useState(0);
   const wide = width >= 4 * 260 + 3 * 12;
@@ -147,7 +269,12 @@ export function TaskBoard({
                 </View>
               </View>
               {items.map((task) => (
-                <TaskBoardCard key={task.id} task={task} onPress={() => onSelect(task)} />
+                <TaskBoardCard
+                  key={task.id}
+                  task={task}
+                  onPress={() => onSelect(task)}
+                  onControl={onControl}
+                />
               ))}
               {!items.length && <Text style={[s.small, { padding: 8 }]}>Nothing here.</Text>}
             </View>

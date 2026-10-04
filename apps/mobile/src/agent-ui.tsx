@@ -200,7 +200,8 @@ export function ChatWork() {
   );
 }
 export function AgentActivityScreen() {
-  const { data } = useAgentWorkspace();
+  const { data, refresh } = useAgentWorkspace();
+  const { api } = useWorkspace();
   const [filter, setFilter] = useState("All");
   const [view, setView] = useState<"list" | "board" | "timeline">("list");
   const [projectFilter, setProjectFilter] = useState<ProjectSelection>(null);
@@ -276,7 +277,14 @@ export function AgentActivityScreen() {
         </>
       )}
       {view === "board" && (
-        <TaskBoard tasks={projectTasks} onSelect={(task) => setSelectedId(task.id)} />
+        <TaskBoard
+          tasks={projectTasks}
+          onSelect={(task) => setSelectedId(task.id)}
+          onControl={async (taskId, action) => {
+            await api.request(`/api/agent/tasks/${taskId}/control`, { action }, "POST");
+            await refresh();
+          }}
+        />
       )}
       {view === "timeline" && (
         <TaskTimeline tasks={projectTasks} onSelect={(task) => setSelectedId(task.id)} />
