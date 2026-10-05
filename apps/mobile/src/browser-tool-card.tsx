@@ -3,7 +3,6 @@ import { createContext, useContext, useEffect, useState } from "react";
 import { ActivityIndicator, AppState, Image, Text, View } from "react-native";
 import { z } from "zod";
 import type { BrowserSession } from "../../../packages/domain/src";
-import { ApiError } from "./api";
 import { Button, Card, colors, ErrorNotice, fontSize, radius, s } from "./ui";
 import { useWorkspace } from "./workspace";
 
@@ -53,8 +52,6 @@ export function BrowserToolCard({
   const current = workspace.browsers.find((browser) => browser.id === sessionId);
   const [browser, setBrowser] = useState<BrowserSession>();
   const [error, setError] = useState("");
-  // A thread is shared, but a browser session stays with the person whose run opened it.
-  const [notYours, setNotYours] = useState(false);
   const [previewFailed, setPreviewFailed] = useState(false);
   const [retry, setRetry] = useState(0);
 
@@ -63,7 +60,6 @@ export function BrowserToolCard({
     let active = true;
     async function connect() {
       setError("");
-      setNotYours(false);
       setPreviewFailed(false);
       try {
         const session = await api.request<BrowserSession>(
@@ -71,9 +67,7 @@ export function BrowserToolCard({
         );
         if (active) setBrowser(session);
       } catch (e) {
-        if (!active) return;
-        if (e instanceof ApiError && e.status === 404) setNotYours(true);
-        else setError(e instanceof Error ? e.message : String(e));
+        if (active) setError(e instanceof Error ? e.message : String(e));
       }
     }
     void connect();
@@ -165,23 +159,21 @@ export function BrowserToolCard({
             </View>
           ) : visited ? (
             <Text style={s.small}>
-              {notYours
-                ? "This browser session stays with the person who asked for it."
-                : browser && browser.url !== visited.url
-                  ? "Page visited. The browser has moved on."
-                  : browser?.status === "closed"
-                    ? "Session saved. Take control to reopen it."
-                    : browser?.status === "error"
-                      ? "Session needs attention. Take control to reconnect."
-                      : previewFailed
-                        ? "Preview unavailable. You can still take control."
-                        : "Connecting to the saved session…"}
+              {browser && browser.url !== visited.url
+                ? "Page visited. The browser has moved on."
+                : browser?.status === "closed"
+                  ? "Session saved. Take control to reopen it."
+                  : browser?.status === "error"
+                    ? "Session needs attention. Take control to reconnect."
+                    : previewFailed
+                      ? "Preview unavailable. You can still take control."
+                      : "Connecting to the saved session…"}
             </Text>
           ) : null}
         </View>
       )}
       <ErrorNotice error={failure || error} />
-      {!loading && visited && !notYours && (
+      {!loading && visited && (
         <Button
           icon={Hand}
           disabled={!browser || running}
