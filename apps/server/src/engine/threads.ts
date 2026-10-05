@@ -4,6 +4,7 @@ import {
   type ChannelThread,
   ORCHESTRATOR_CHANNEL_ID,
 } from "../../../../packages/domain/src/agent.ts";
+import { SHARED_OWNER } from "../shared.ts";
 
 /** Filesystem-safe channel directory name (also used for permissions.json). */
 export function safeChannelDirName(channelId: string): string {
@@ -14,7 +15,7 @@ export function safeChannelDirName(channelId: string): string {
  * Channels are shared across users; each user's orchestrator is private.
  * Shared channels live under the "shared" owner, orchestrators under their user.
  */
-export const SHARED_OWNER = "shared";
+export { SHARED_OWNER };
 
 /** Which disk owner a channel's files live under. */
 export function diskOwnerForChannel(channelId: string, owner: string): string {

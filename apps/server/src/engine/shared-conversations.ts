@@ -4,7 +4,8 @@ import {
   ORCHESTRATOR_CHANNEL_ID,
 } from "../../../../packages/domain/src/agent.ts";
 import type { Store } from "../db.ts";
-import { SHARED_OWNER, type ThreadBindingStore } from "./threads.ts";
+import { SHARED_OWNER } from "../shared.ts";
+import type { ThreadBindingStore } from "./threads.ts";
 
 export type ChannelMessage = ReturnType<typeof MessageSchema.parse>;
 
@@ -138,4 +139,17 @@ export async function adoptSharedTranscripts(
     transcripts++;
   }
   return transcripts;
+}
+
+/**
+ * Bring what the workspace kept per person into the shared workspace, once, at start: tasks,
+ * boards and reviews (see `Store.adoptShared`), and thread transcripts. Safe to run on every
+ * start.
+ */
+export async function adoptSharedWorkspace(
+  db: Store,
+  threads: ThreadBindingStore,
+): Promise<{ records: Record<string, number>; transcripts: number }> {
+  const records = await db.adoptShared();
+  return { records, transcripts: await adoptSharedTranscripts(db, threads) };
 }

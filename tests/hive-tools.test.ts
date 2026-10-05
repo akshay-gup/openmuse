@@ -87,9 +87,11 @@ test("MCP exposes shared tools and creates five real manual timeline tasks in th
     assert.equal(task.channelId, channel.id);
     assert.equal(task.threadId, thread.threadId);
   }
+  // Tasks are shared by the workspace; the tool files each one under the person running it,
+  // whatever owner the model asks for.
   const tasks = await db.list<AgentTask>("alice", "tasks");
   assert.equal(tasks.length, 5);
-  assert.equal((await db.list("bob", "tasks")).length, 0);
+  assert.ok(tasks.every((task) => task.createdBy === "alice"));
   await rpc("tools/call", {
     name: "create_issue",
     arguments: { title: "Dummy 1", startAt: "2026-10-05", dueAt: "2026-10-16" },

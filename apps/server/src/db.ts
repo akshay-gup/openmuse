@@ -3,12 +3,35 @@ import { dirname } from "node:path";
 import { PGlite } from "@electric-sql/pglite";
 import pg from "pg";
 import { backgroundFailure } from "./log.ts";
+import { SHARED_OWNER } from "./shared.ts";
 
 type Row = { data: Record<string, unknown> };
 interface Database {
   query: (sql: string, params?: unknown[]) => Promise<{ rows: Row[] }>;
   close: () => Promise<void>;
 }
+
+/**
+ * Kinds of record that belong to the whole workspace rather than to whoever made them.
+ *
+ * Hive is a team product: apart from the orchestrator chat and what is tied to one person's own
+ * Google account (mail, calendar, Drive, files, drafts, browser sessions, memories, ideas,
+ * notifications), everything is shared by every signed-in user. Store calls for these kinds
+ * ignore the owner they are given, so a task, a board or a review is one record whoever opens it.
+ * Tasks, reviews and goals carry `createdBy`, which is whose account and files the work runs on.
+ */
+export const SHARED_KINDS: ReadonlySet<string> = new Set([
+  "tasks",
+  "runs",
+  "run-events",
+  "projects",
+  "goals",
+  "monitors",
+  "agent-artifacts",
+  "actions",
+  "activity",
+]);
+const homeOf = (owner: string, kind: string) => (SHARED_KINDS.has(kind) ? SHARED_OWNER : owner);
 
 export class Store {
   constructor(private readonly db: Database) {}
@@ -19,27 +42,40 @@ export class Store {
   ): Promise<T | null> {
     const result = await this.db.query(
       "SELECT data FROM records WHERE owner=$1 AND kind=$2 AND id=$3",
-      [owner, kind, id],
+      [homeOf(owner, kind), kind, id],
     );
     return (result.rows[0]?.data as T | undefined) ?? null;
   }
   async list<T = Record<string, unknown>>(owner: string, kind: string): Promise<T[]> {
     const result = await this.db.query(
       "SELECT data FROM records WHERE owner=$1 AND kind=$2 ORDER BY updated_at DESC,id",
-      [owner, kind],
+      [homeOf(owner, kind), kind],
+    );
+    return result.rows.map((row) => row.data as T);
+  }
+  /** Records whose top-level text field equals `value`, without loading the whole kind. */
+  async listWhere<T = Record<string, unknown>>(
+    owner: string,
+    kind: string,
+    field: string,
+    value: string,
+  ): Promise<T[]> {
+    const result = await this.db.query(
+      "SELECT data FROM records WHERE owner=$1 AND kind=$2 AND data->>$3::text=$4::text ORDER BY updated_at DESC,id",
+      [homeOf(owner, kind), kind, field, value],
     );
     return result.rows.map((row) => row.data as T);
   }
   async put<T extends { id: string }>(owner: string, kind: string, value: T): Promise<T> {
     await this.db.query(
       "INSERT INTO records(owner,kind,id,data) VALUES($1,$2,$3,$4::jsonb) ON CONFLICT(owner,kind,id) DO UPDATE SET data=excluded.data,updated_at=now()",
-      [owner, kind, value.id, JSON.stringify(value)],
+      [homeOf(owner, kind), kind, value.id, JSON.stringify(value)],
     );
     return value;
   }
   async remove(owner: string, kind: string, id: string): Promise<void> {
     await this.db.query("DELETE FROM records WHERE owner=$1 AND kind=$2 AND id=$3", [
-      owner,
+      homeOf(owner, kind),
       kind,
       id,
     ]);
@@ -53,7 +89,7 @@ export class Store {
   ): Promise<T | null> {
     const result = await this.db.query(
       "UPDATE records SET data=data || $5::jsonb,updated_at=now() WHERE owner=$1 AND kind=$2 AND id=$3 AND data @> $4::jsonb RETURNING data",
-      [owner, kind, id, JSON.stringify(expected), JSON.stringify(patch)],
+      [homeOf(owner, kind), kind, id, JSON.stringify(expected), JSON.stringify(patch)],
     );
     return (result.rows[0]?.data as T | undefined) ?? null;
   }
@@ -64,7 +100,7 @@ export class Store {
   ): Promise<T | null> {
     const result = await this.db.query(
       "INSERT INTO records(owner,kind,id,data) VALUES($1,$2,$3,$4::jsonb) ON CONFLICT DO NOTHING RETURNING data",
-      [owner, kind, value.id, JSON.stringify(value)],
+      [homeOf(owner, kind), kind, value.id, JSON.stringify(value)],
     );
     return (result.rows[0]?.data as T | undefined) ?? null;
   }
@@ -92,7 +128,7 @@ export class Store {
          SELECT 1 FROM records task WHERE task.owner=action.owner AND task.kind='tasks'
          AND task.id=action.data->>'taskId' AND task.data->>'status' IN ('running','waiting_approval')
        )) RETURNING data`,
-      [owner, id, now, JSON.stringify(status)],
+      [homeOf(owner, "actions"), id, now, JSON.stringify(status)],
     );
     return (result.rows[0]?.data as T | undefined) ?? null;
   }
@@ -101,10 +137,45 @@ export class Store {
       `UPDATE records SET data=data || '{"status":"outcome_unknown","error":"Server restarted during execution. Check the provider before creating another action."}'::jsonb WHERE kind='actions' AND data->>'status'='executing'`,
     );
   }
+  /**
+   * One-time move of records that used to be kept per person into the shared workspace, so a team
+   * that already has tasks and reviews sees them all after the upgrade. Tasks, goals, reviews and
+   * timeline entries are stamped with `createdBy` (the person whose records they were), which is
+   * whose account and files the work keeps running on; a timeline entry also learns its review's
+   * task, which decides who may see it. Safe on every start: anything already shared stays put,
+   * and when two people hold the same id the most recently updated record is the one adopted.
+   * Returns the number of rows moved per kind.
+   */
+  async adoptShared(): Promise<Record<string, number>> {
+    const moved: Record<string, number> = {};
+    const candidate = `r.kind=$1 AND r.owner NOT IN ('shared','system')
+      AND NOT EXISTS (SELECT 1 FROM records s WHERE s.owner='shared' AND s.kind=r.kind AND s.id=r.id)
+      AND r.owner=(SELECT r2.owner FROM records r2 WHERE r2.kind=r.kind AND r2.id=r.id
+        AND r2.owner NOT IN ('shared','system') ORDER BY r2.updated_at DESC,r2.owner LIMIT 1)`;
+    const stamp = "jsonb_build_object('createdBy',COALESCE(r.data->>'createdBy',r.owner))";
+    const adopt = async (kind: string, data = "r.data") => {
+      const result = await this.db.query(
+        `UPDATE records AS r SET owner='shared',data=${data} WHERE ${candidate} RETURNING r.id`,
+        [kind],
+      );
+      if (result.rows.length) moved[kind] = result.rows.length;
+    };
+    // Timeline entries read their review's task, so they move before the reviews do.
+    await adopt(
+      "activity",
+      `r.data || ${stamp} || COALESCE((SELECT jsonb_build_object('taskId',a.data->>'taskId')
+        FROM records a WHERE a.owner=r.owner AND a.kind='actions' AND a.id=r.data->>'actionId'
+        AND a.data->>'taskId' IS NOT NULL LIMIT 1),'{}'::jsonb)`,
+    );
+    for (const kind of ["actions", "tasks", "goals"]) await adopt(kind, `r.data || ${stamp}`);
+    for (const kind of ["runs", "run-events", "projects", "monitors", "agent-artifacts"])
+      await adopt(kind);
+    return moved;
+  }
   async take<T>(owner: string, kind: string, id: string): Promise<T | null> {
     const result = await this.db.query(
       "DELETE FROM records WHERE owner=$1 AND kind=$2 AND id=$3 RETURNING data",
-      [owner, kind, id],
+      [homeOf(owner, kind), kind, id],
     );
     return (result.rows[0]?.data as T | undefined) ?? null;
   }

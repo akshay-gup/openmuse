@@ -243,8 +243,13 @@ test("concurrent idempotent proposals retain a single persisted review and activ
     service.propose("concurrent-replay", email, "run/tool-1"),
   ]);
   assert.deepEqual(results[0], results[1]);
-  assert.equal((await db.list("concurrent-replay", "actions")).length, 1);
-  assert.equal((await db.list("concurrent-replay", "activity")).length, 1);
+  // Reviews are kept for the whole workspace, so count the ones this person made.
+  const theirs = async (kind: string) =>
+    (await db.list<{ createdBy?: string }>("concurrent-replay", kind)).filter(
+      (record) => record.createdBy === "concurrent-replay",
+    );
+  assert.equal((await theirs("actions")).length, 1);
+  assert.equal((await theirs("activity")).length, 1);
 });
 
 test("an expired stale review cannot overwrite a concurrently executing action", async (t) => {

@@ -6,12 +6,22 @@ import { after, before, test } from "node:test";
 import { createApp } from "../apps/server/src/app.ts";
 import type { Config } from "../apps/server/src/config.ts";
 import { createStore, type Store } from "../apps/server/src/db.ts";
-import { adoptSharedTranscripts } from "../apps/server/src/engine/shared-conversations.ts";
-import type { ChannelThread } from "../packages/domain/src/agent.ts";
+import { adoptSharedWorkspace } from "../apps/server/src/engine/shared-conversations.ts";
+import { TaskWorker } from "../apps/server/src/engine/worker.ts";
+import type {
+  AgentNotification,
+  AgentTask,
+  AgentWorkspace,
+  ChannelThread,
+  Project,
+  RunEvent,
+} from "../packages/domain/src/agent.ts";
+import type { ActionProposal, Workspace } from "../packages/domain/src/index.ts";
 
 /**
- * Hive is a team workspace: channels and threads, with the agent's replies in them, are shared by
- * everyone who is signed in. Only the orchestrator chat stays private.
+ * Hive is a team workspace: channels, threads (and the agent's replies in them), tasks, boards
+ * and the activity around them are shared by everyone who is signed in. Only the orchestrator
+ * chat, and anything tied to one person's own Google account, stays private.
  */
 
 const ALICE = "google:alice";
@@ -183,16 +193,331 @@ test("the orchestrator chat stays private, including its threads", async () => {
   assert.deepEqual((await read<Transcript>(tokenB, "/api/conversation")).messages, []);
 });
 
+let task: AgentTask;
+let project: Project;
+test("tasks, boards and projects are shared", async () => {
+  project = await agent<Project>(tokenA, "/projects", { name: "Launch" }, 201);
+  task = await agent<AgentTask>(
+    tokenA,
+    "/tasks",
+    {
+      title: "Write the changelog",
+      kind: "manual",
+      channelId: "team",
+      threadId: thread.threadId,
+      projectId: project.id,
+    },
+    201,
+  );
+  const snapshot = await agent<AgentWorkspace>(tokenB, "");
+  assert.ok(snapshot.tasks.some((t) => t.id === task.id));
+  assert.ok(snapshot.projects.some((p) => p.id === project.id));
+  assert.ok(
+    (await agent<AgentTask[]>(tokenB, "/channels/team/tasks")).some((t) => t.id === task.id),
+  );
+  assert.ok(
+    (await agent<AgentTask[]>(tokenB, `/threads/${thread.threadId}/tasks`)).some(
+      (t) => t.id === task.id,
+    ),
+  );
+  const detail = await agent<{ task: AgentTask }>(tokenB, `/tasks/${task.id}`);
+  assert.equal(detail.task.title, "Write the changelog");
+});
+
+test("anyone can work a shared task and add to a shared board", async () => {
+  const moved = await agent<AgentTask>(
+    tokenB,
+    `/tasks/${task.id}`,
+    { status: "running" },
+    200,
+    "PATCH",
+  );
+  assert.equal(moved.status, "running");
+  const bobs = await agent<AgentTask>(
+    tokenB,
+    "/tasks",
+    { title: "Review the changelog", kind: "manual", projectId: project.id },
+    201,
+  );
+  const snapshot = await agent<AgentWorkspace>(tokenA, "");
+  assert.equal(snapshot.tasks.find((t) => t.id === task.id)?.status, "running");
+  assert.equal(snapshot.tasks.find((t) => t.id === bobs.id)?.projectId, project.id);
+  assert.equal(bobs.createdBy, BOB);
+  assert.equal(task.createdBy, ALICE);
+});
+
+test("the worker runs a shared task as the person who created it and everyone sees its run", async () => {
+  const mine = await agent<AgentTask>(
+    tokenA,
+    "/tasks",
+    { title: "Summarise the thread", prompt: "Summarise it", kind: "agent", channelId: "team" },
+    201,
+  );
+  const actors: string[] = [];
+  const worker = new TaskWorker(
+    db,
+    async (owner, _task, context) => {
+      actors.push(owner);
+      await context.event("step", "Reading the thread", "three messages");
+      return { status: "succeeded", result: "Summarised" };
+    },
+    { pollMs: 5 },
+  );
+  await worker.tick();
+  assert.deepEqual(actors, [ALICE]);
+  const seen = await agent<{ task: AgentTask; events: RunEvent[] }>(tokenB, `/tasks/${mine.id}`);
+  assert.equal(seen.task.status, "succeeded");
+  assert.ok(seen.events.some((e) => e.title === "Reading the thread"));
+});
+
+test("a task's outcome notifies the person who asked for it", async () => {
+  await agent<AgentTask>(
+    tokenA,
+    "/tasks",
+    { title: "Research venues", prompt: "Find venues", kind: "agent", channelId: "team" },
+    201,
+  );
+  // No model is configured, so the task stops to ask for one: an outcome that wants a person.
+  await server.agent.worker.tick();
+  const titles = (token: string) =>
+    agent<AgentNotification[]>(token, "/notifications").then((list) => list.map((n) => n.title));
+  assert.ok((await titles(tokenA)).includes("Your details are needed"));
+  assert.ok(!(await titles(tokenB)).includes("Your details are needed"));
+});
+
+test("reviews and receipts for the team's tasks are shared; only the account that prepared one can approve it", async () => {
+  const work = await agent<AgentTask>(
+    tokenA,
+    "/tasks",
+    { title: "Book the venue", kind: "manual", channelId: "team" },
+    201,
+  );
+  await agent(tokenA, `/tasks/${work.id}`, { status: "running" }, 200, "PATCH");
+  const now = Date.now();
+  const proposal = await server.actions.propose(
+    ALICE,
+    {
+      kind: "calendar.create",
+      data: {
+        calendarId: "primary",
+        title: "Venue walkthrough",
+        start: new Date(now + 86400000).toISOString(),
+        end: new Date(now + 90000000).toISOString(),
+        allDay: false,
+        timeZone: "UTC",
+        description: "",
+        location: "Main hall",
+        attendees: [],
+      },
+    },
+    "venue-review",
+    work.id,
+  );
+  const bobsView = await read<Workspace>(tokenB, "/api/workspace");
+  assert.ok(
+    bobsView.actions.some((a) => a.id === proposal.id),
+    "Bob sees the pending review",
+  );
+  assert.ok(
+    bobsView.activity.some((a) => a.actionId === proposal.id),
+    "and its timeline entry",
+  );
+
+  const refused = await call(tokenB, `/api/actions/${proposal.id}/decide`, {
+    hash: proposal.hash,
+    decision: "approve",
+  });
+  assert.equal(refused.status, 403);
+  assert.match(((await refused.json()) as { error: string }).error, /only .* can approve/i);
+
+  const approved = await read<ActionProposal>(tokenA, `/api/actions/${proposal.id}/decide`, {
+    hash: proposal.hash,
+    decision: "approve",
+  });
+  assert.equal(approved.status, "succeeded");
+  const receipts = await read<Workspace>(tokenB, "/api/workspace");
+  assert.equal(receipts.actions.find((a) => a.id === proposal.id)?.status, "succeeded");
+});
+
+const calendarReview = (title: string) => ({
+  kind: "calendar.create" as const,
+  data: {
+    calendarId: "primary",
+    title,
+    start: new Date(Date.now() + 86400000).toISOString(),
+    end: new Date(Date.now() + 90000000).toISOString(),
+    allDay: false,
+    timeZone: "UTC",
+    description: "",
+    location: "",
+    attendees: [],
+  },
+});
+
+test("anyone can decline a review", async () => {
+  const work = await agent<AgentTask>(
+    tokenA,
+    "/tasks",
+    { title: "Send the invite", kind: "manual", channelId: "team" },
+    201,
+  );
+  await agent(tokenA, `/tasks/${work.id}`, { status: "running" }, 200, "PATCH");
+  const proposal = await server.actions.propose(
+    ALICE,
+    calendarReview("Kickoff"),
+    "kickoff-review",
+    work.id,
+  );
+  const declined = await read<ActionProposal>(tokenB, `/api/actions/${proposal.id}/decide`, {
+    hash: proposal.hash,
+    decision: "deny",
+  });
+  assert.equal(declined.status, "denied");
+});
+
+test("cancelling a task declines its pending review, whoever cancels it", async () => {
+  const work = await agent<AgentTask>(
+    tokenA,
+    "/tasks",
+    { title: "Order the cake", kind: "manual", channelId: "team" },
+    201,
+  );
+  await agent(tokenA, `/tasks/${work.id}`, { status: "running" }, 200, "PATCH");
+  const proposal = await server.actions.propose(
+    ALICE,
+    calendarReview("Cake pickup"),
+    "cake-review",
+    work.id,
+  );
+  await db.compareAndSwap(ALICE, "tasks", work.id, {}, { actionId: proposal.id });
+  await agent(tokenB, `/tasks/${work.id}/control`, { action: "cancel" });
+  const after = await read<Workspace>(tokenA, "/api/workspace");
+  assert.equal(after.actions.find((a) => a.id === proposal.id)?.status, "denied");
+});
+
+test("a review someone prepared for themselves, outside any task, stays theirs", async () => {
+  const now = Date.now();
+  const personal = await server.actions.propose(ALICE, {
+    kind: "calendar.create",
+    data: {
+      calendarId: "primary",
+      title: "Dentist",
+      start: new Date(now + 86400000).toISOString(),
+      end: new Date(now + 90000000).toISOString(),
+      allDay: false,
+      timeZone: "UTC",
+      description: "",
+      location: "",
+      attendees: [],
+    },
+  });
+  assert.ok(
+    (await read<Workspace>(tokenA, "/api/workspace")).actions.some((a) => a.id === personal.id),
+  );
+  const bobsView = await read<Workspace>(tokenB, "/api/workspace");
+  assert.ok(!bobsView.actions.some((a) => a.id === personal.id));
+  assert.ok(!bobsView.activity.some((a) => a.actionId === personal.id));
+  const poke = await call(tokenB, `/api/actions/${personal.id}/decide`, {
+    hash: personal.hash,
+    decision: "deny",
+  });
+  assert.equal(poke.status, 404);
+});
+
+test("things tied to one person stay with that person", async () => {
+  await read(
+    tokenA,
+    "/api/drafts",
+    { to: ["x@example.com"], cc: [], bcc: [], subject: "Hi", body: "Draft", attachmentIds: [] },
+    201,
+  );
+  assert.deepEqual(await read<unknown[]>(tokenB, "/api/drafts"), []);
+  await agent(tokenA, "/memories", { text: "Prefers short answers" }, 201);
+  assert.equal((await agent<AgentWorkspace>(tokenA, "")).memories.length, 1);
+  assert.equal((await agent<AgentWorkspace>(tokenB, "")).memories.length, 0);
+  await agent(tokenA, "/identity", { name: "Sky", tone: "concise" });
+  assert.equal((await agent<AgentWorkspace>(tokenB, "")).identity.name, "Hive");
+});
+
 type RawDb = { query(sql: string, params?: unknown[]): Promise<{ rows: unknown[] }> };
-async function legacy(owner: string, kind: string, id: string, data: Record<string, unknown>) {
-  // Written the way threads used to be saved: under whoever ran them.
+async function legacy(
+  owner: string,
+  kind: string,
+  id: string,
+  data: Record<string, unknown>,
+  updatedAt = "2026-01-01T00:00:00Z",
+) {
+  // Written the way the workspace used to: under the person, whatever the kind.
   await (db as unknown as { db: RawDb }).db.query(
-    "INSERT INTO records(owner,kind,id,data) VALUES($1,$2,$3,$4::jsonb)",
-    [owner, kind, id, JSON.stringify({ id, ...data })],
+    "INSERT INTO records(owner,kind,id,data,updated_at) VALUES($1,$2,$3,$4::jsonb,$5::timestamptz)",
+    [owner, kind, id, JSON.stringify({ id, ...data }), updatedAt],
   );
 }
 
-test("threads saved under whoever ran them are adopted once; orchestrator threads stay put", async () => {
+test("what the workspace kept per person before is adopted, once, with its requester remembered", async () => {
+  const at = "2026-01-01T00:00:00.000Z";
+  const task = {
+    prompt: "",
+    kind: "manual",
+    status: "queued",
+    priority: "medium",
+    blockedBy: [],
+    labels: [],
+    plan: [],
+    evidence: [],
+    input: {},
+    state: {},
+    createdAt: at,
+    updatedAt: at,
+    attempts: 0,
+    artifactIds: [],
+    channelId: "team",
+  };
+  await legacy(ALICE, "tasks", "old-a", { ...task, title: "Alice's old task" });
+  await legacy(BOB, "tasks", "old-b", { ...task, title: "Bob's old task" });
+  await legacy(ALICE, "run-events", "old-event", {
+    taskId: "old-a",
+    kind: "status",
+    date: at,
+    title: "Started working",
+    detail: "",
+  });
+  await legacy(ALICE, "projects", "old-project", { name: "Legacy", createdAt: at, updatedAt: at });
+  const review = {
+    title: "Send it",
+    kind: "calendar.create",
+    data: {},
+    status: "succeeded",
+    hash: "h",
+    createdAt: at,
+    expiresAt: at,
+  };
+  await legacy(ALICE, "actions", "old-review", { ...review, taskId: "old-a" });
+  await legacy(ALICE, "activity", "old-entry", {
+    actionId: "old-review",
+    title: "Send it",
+    detail: "Sent",
+    date: at,
+    status: "succeeded",
+  });
+  await legacy(ALICE, "actions", "old-personal", review);
+  await legacy(ALICE, "activity", "old-personal-entry", {
+    actionId: "old-personal",
+    title: "Send it",
+    detail: "Sent",
+    date: at,
+    status: "succeeded",
+  });
+  // Two people holding the same id: the more recent record is the one adopted.
+  await legacy(ALICE, "projects", "dup", { name: "Older", createdAt: at, updatedAt: at });
+  await legacy(
+    BOB,
+    "projects",
+    "dup",
+    { name: "Newer", createdAt: at, updatedAt: at },
+    "2026-02-01T00:00:00Z",
+  );
+  // A thread in a shared channel saved the old way, and an orchestrator thread that must stay put.
   const oldThread = await server.agent.registerThread(ALICE, "team", "Old thread");
   await legacy(ALICE, "conversations", oldThread.threadId, {
     messages: [
@@ -205,10 +530,39 @@ test("threads saved under whoever ran them are adopted once; orchestrator thread
     messages: [{ id: "bp1", role: "user", content: "mine" }],
   });
 
-  assert.equal(await adoptSharedTranscripts(db, server.agent.threads), 1);
-  const adopted = await transcript(tokenB, oldThread.threadId);
+  const first = await adoptSharedWorkspace(db, server.agent.threads);
+  assert.deepEqual(first.records, {
+    activity: 2,
+    actions: 2,
+    tasks: 2,
+    "run-events": 1,
+    projects: 2,
+  });
+  assert.equal(first.transcripts, 1);
+
+  const seen = await agent<AgentWorkspace>(tokenB, "");
+  assert.equal(seen.tasks.find((t) => t.id === "old-a")?.createdBy, ALICE);
+  assert.equal(seen.tasks.find((t) => t.id === "old-b")?.createdBy, BOB);
+  assert.equal(seen.projects.find((p) => p.id === "dup")?.name, "Newer");
+  assert.ok(seen.projects.some((p) => p.id === "old-project"));
+  const detail = await agent<{ events: RunEvent[] }>(tokenB, "/tasks/old-a");
   assert.deepEqual(
-    adopted.messages.map((m) => [m.id, m.name]),
+    detail.events.map((e) => e.title),
+    ["Started working"],
+  );
+
+  const bobs = await read<Workspace>(tokenB, "/api/workspace");
+  assert.ok(bobs.actions.some((a) => a.id === "old-review"));
+  assert.ok(!bobs.actions.some((a) => a.id === "old-personal"));
+  assert.equal(bobs.activity.find((a) => a.id === "old-entry")?.taskId, "old-a");
+  assert.ok(!bobs.activity.some((a) => a.id === "old-personal-entry"));
+  const alices = await read<Workspace>(tokenA, "/api/workspace");
+  assert.ok(alices.actions.some((a) => a.id === "old-personal"));
+  assert.ok(alices.activity.some((a) => a.id === "old-personal-entry"));
+
+  const oldMessages = await transcript(tokenB, oldThread.threadId);
+  assert.deepEqual(
+    oldMessages.messages.map((m) => [m.id, m.name]),
     [
       ["lu1", "Alice"],
       ["la1", undefined],
@@ -216,5 +570,7 @@ test("threads saved under whoever ran them are adopted once; orchestrator thread
   );
   assert.equal((await transcript(tokenB, "bob-private")).messages.length, 1);
   assert.deepEqual((await transcript(tokenA, "bob-private")).messages, []);
-  assert.equal(await adoptSharedTranscripts(db, server.agent.threads), 0);
+
+  const again = await adoptSharedWorkspace(db, server.agent.threads);
+  assert.deepEqual(again, { records: {}, transcripts: 0 });
 });

@@ -94,7 +94,7 @@ test("the main Rich Thread survives reopening and concurrent initialization", as
   assert.equal(await db.get("other-user", "conversation-settings", "main"), null);
 });
 
-test("task detail and controls stay scoped to the authenticated owner", async () => {
+test("task detail and controls are shared with everyone who is signed in", async () => {
   const task = await read<AgentTask>(
     "/tasks",
     { prompt: "Plan the week", owner: "other-user" },
@@ -102,15 +102,18 @@ test("task detail and controls stay scoped to the authenticated owner", async ()
   );
   assert.equal(task.status, "queued");
   assert.ok(task.plan.length > 0);
-  const hidden = await server.agent.createTask("other-user", { prompt: "Private task" });
-  assert.equal((await request(`/tasks/${hidden.id}`)).status, 404);
-  assert.equal((await request(`/tasks/${hidden.id}/control`, { action: "cancel" })).status, 404);
-  assert.equal((await request(`/tasks/${hidden.id}/input`, { answer: "Private" })).status, 404);
+  // A teammate's task is the same workspace's task: visible, and open to the same controls.
+  const theirs = await server.agent.createTask("other-user", { prompt: "A teammate's task" });
+  assert.equal((await request(`/tasks/${theirs.id}`)).status, 200);
+  assert.equal((await request(`/tasks/${theirs.id}/input`, { answer: "Hello" })).status, 409);
   const snapshot = await read<AgentWorkspace>("");
   assert.ok(snapshot.tasks.some((item) => item.id === task.id));
-  assert.ok(!snapshot.tasks.some((item) => item.id === hidden.id));
-  assert.equal((await server.agent.getTask("other-user", hidden.id)).status, "queued");
-  await server.agent.control("other-user", hidden.id, "cancel");
+  assert.ok(snapshot.tasks.some((item) => item.id === theirs.id));
+  assert.equal((await server.agent.getTask("other-user", theirs.id)).status, "queued");
+  assert.equal(
+    (await read<AgentTask>(`/tasks/${theirs.id}/control`, { action: "cancel" })).status,
+    "cancelled",
+  );
   assert.equal(
     (await read<AgentTask>(`/tasks/${task.id}/control`, { action: "pause" })).status,
     "paused",
@@ -172,10 +175,15 @@ test("goal updates validate milestones and pausing a goal pauses its task", asyn
   assert.equal(saved.status, "paused");
   assert.equal(saved.milestones[0].done, true);
   assert.equal((await read<{ task: AgentTask }>(`/tasks/${task.id}`)).task.status, "paused");
-  const hidden = await server.agent.createGoal("other-user", { title: "Private goal" });
-  assert.equal((await request(`/goals/${hidden.id}`, { status: "completed" })).status, 404);
+  // Goals are shared like tasks, so a teammate's goal can be updated and linked to.
+  const theirs = await server.agent.createGoal("other-user", { title: "A teammate's goal" });
+  assert.equal((await request(`/goals/${theirs.id}`, { status: "completed" })).status, 200);
   assert.equal(
-    (await request("/tasks", { prompt: "Link private goal", goalId: hidden.id })).status,
+    (await request("/tasks", { prompt: "Link their goal", goalId: theirs.id })).status,
+    201,
+  );
+  assert.equal(
+    (await request("/tasks", { prompt: "Link a missing goal", goalId: "missing" })).status,
     404,
   );
 });

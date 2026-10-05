@@ -121,7 +121,11 @@ export class TaskWorker {
         eligible.push(record);
         if (eligible.length === 3) break;
       }
-      await Promise.all(eligible.map(({ owner, value }) => this.run(owner, value)));
+      // Tasks are shared, but each runs as the person who asked for it: their Google account,
+      // files and browser. Records from before tasks were shared carry no requester.
+      await Promise.all(
+        eligible.map(({ owner, value }) => this.run(value.createdBy ?? owner, value)),
+      );
     } finally {
       this.ticking = false;
     }

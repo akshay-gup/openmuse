@@ -11,13 +11,14 @@ import type {
 } from "../../../packages/domain/src/index.ts";
 import { type DriveFile, GoogleClient } from "../../../packages/integrations/src/google.ts";
 import { createSamplePdf } from "../../../packages/integrations/src/pdf.ts";
-import type { ActionService } from "./actions.ts";
+import { type ActionService, reviewVisibleTo } from "./actions.ts";
 import { agentConfigured } from "./agent.ts";
 import type { Config } from "./config.ts";
 import type { Store } from "./db.ts";
 import { AppError } from "./errors.ts";
 import type { Files } from "./files.ts";
 import type { GoogleAuth } from "./google-auth.ts";
+import { requesterNames, withRequester } from "./requesters.ts";
 
 export class WorkspaceService {
   private seeding = new Map<string, Promise<void>>();
@@ -307,6 +308,13 @@ export class WorkspaceService {
       mail = [];
       events = [];
     }
+    const reviews = (await this.db.list<ActionProposal>(owner, "actions")).filter((action) =>
+      reviewVisibleTo(owner, action),
+    );
+    const names = await requesterNames(
+      this.db,
+      reviews.map((review) => review.createdBy),
+    );
     const tokens = this.config.mode === "live" ? await this.googleAuth.tokens(owner) : null;
     // Google sign-in records the user's name at login; use it instead of the
     // generic fallback so messages are attributed to the person, not "You".
@@ -317,6 +325,7 @@ export class WorkspaceService {
     return {
       mode: this.config.mode,
       profile: {
+        id: owner,
         name: this.config.mode === "sample" ? "Alex" : (user?.name ?? "You"),
         email:
           tokens?.account ??
@@ -327,8 +336,10 @@ export class WorkspaceService {
       events: events.sort((a, b) => a.start.localeCompare(b.start)),
       files: await this.files.list(owner),
       browsers: await this.db.list<BrowserSession>(owner, "browsers"),
-      actions: await this.db.list<ActionProposal>(owner, "actions"),
-      activity: await this.db.list<ActivityEntry>(owner, "activity"),
+      actions: reviews.map((review) => withRequester(review, names)),
+      activity: (await this.db.list<ActivityEntry>(owner, "activity")).filter((entry) =>
+        reviewVisibleTo(owner, entry),
+      ),
       connections: [
         {
           id: "google",

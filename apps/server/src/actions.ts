@@ -28,6 +28,13 @@ interface Options {
   connection?: (owner: string) => Promise<{ id: string; account: string } | null>;
   now?: () => number;
 }
+/**
+ * Reviews a task prepared belong to the workspace, so everyone sees what is waiting and what was
+ * done. One a person prepared for themselves, outside any task, stays theirs.
+ */
+export function reviewVisibleTo(owner: string, review: { taskId?: string; createdBy?: string }) {
+  return Boolean(review.taskId) || review.createdBy === owner;
+}
 export class ActionService {
   private readonly now: () => number;
   constructor(
@@ -42,13 +49,16 @@ export class ActionService {
     idempotencyKey?: string,
     taskId?: string,
   ): Promise<ActionProposal> {
-    const id =
-      idempotencyKey === undefined
-        ? randomUUID()
-        : createHash("sha256").update(idempotencyKey).digest("hex");
+    // Reviews are stored for the whole workspace, but an idempotency key only ever identifies the
+    // review of the person who used it, so two people reusing a key still get a review each.
+    const digest = (value: string) => createHash("sha256").update(value).digest("hex");
+    const id = idempotencyKey === undefined ? randomUUID() : digest(`${owner}\n${idempotencyKey}`);
     if (idempotencyKey !== undefined) {
       const existing = await this.db.get<ActionProposal>(owner, "actions", id);
       if (existing) return existing;
+      // Reviews saved before they were shared were keyed by the idempotency key alone.
+      const earlier = await this.db.get<ActionProposal>(owner, "actions", digest(idempotencyKey));
+      if (earlier?.createdBy === owner) return earlier;
     }
     const parsed = proposalSchema.parse(raw);
     const connection = await this.options.connection?.(owner);
@@ -71,6 +81,7 @@ export class ActionService {
       data: input.data,
       account: connection?.account,
       connectionId: connection?.id,
+      createdBy: owner,
       target: prepared?.target,
       targetVersion: prepared?.targetVersion,
       status: "awaiting_review",
@@ -106,10 +117,19 @@ export class ActionService {
     decision: "approve" | "deny",
   ): Promise<ActionProposal> {
     const proposal = await this.db.get<ActionProposal>(owner, "actions", id);
-    if (!proposal) throw new AppError("Action not found", 404);
+    if (!proposal || !reviewVisibleTo(owner, proposal)) throw new AppError("Action not found", 404);
     if (proposal.hash !== hash)
       throw new AppError("This proposal changed. Open its latest review before deciding.", 409);
     if (proposal.status !== "awaiting_review") return proposal;
+    // Anyone can decline a review, but approving sends or changes things on the Google account
+    // it was prepared for, so only that person can.
+    if (decision === "approve" && proposal.createdBy && proposal.createdBy !== owner) {
+      const requester = await this.db.get<{ name?: string }>("system", "users", proposal.createdBy);
+      throw new AppError(
+        `Only ${requester?.name ?? "the person who asked for it"} can approve this review, because it runs on their Google account.`,
+        403,
+      );
+    }
     if (decision === "approve" && proposal.taskId) {
       const task = await this.db.get<{ status: string }>(owner, "tasks", proposal.taskId);
       if (!task || !["running", "waiting_approval"].includes(task.status))
@@ -197,6 +217,8 @@ export class ActionService {
       detail,
       date: new Date(this.now()).toISOString(),
       status: action.status,
+      createdBy: action.createdBy ?? owner,
+      ...(action.taskId ? { taskId: action.taskId } : {}),
     });
   }
 }

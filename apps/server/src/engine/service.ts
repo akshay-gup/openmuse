@@ -41,6 +41,7 @@ import { AppError } from "../errors.ts";
 import type { Files } from "../files.ts";
 import { backgroundFailure } from "../log.ts";
 import type { OpencodeTaskRuntime } from "../opencode/index.ts";
+import { requesterNames, withRequester } from "../requesters.ts";
 import type { WorkspaceService } from "../workspace.ts";
 import { ChannelManager } from "./channels.ts";
 import { analyzeSpending } from "./finance.ts";
@@ -113,7 +114,7 @@ export class AgentService {
     try {
       // Recover publications if the process exited after committing an outcome.
       for (const { owner, value } of await this.db.scan<AgentTask>("tasks"))
-        await this.publishOutcome(owner, value);
+        await this.publishOutcome(value.createdBy ?? owner, value);
       for (const { owner, value } of await this.db.scan<Monitor>("monitors"))
         await this.activateMonitor(owner, value);
       for (const { owner, value } of await this.db.scan<Idea>("ideas"))
@@ -352,13 +353,17 @@ export class AgentService {
       .filter((t) => t.threadId === threadId)
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   }
-  /** Tasks visible in a channel: owned by it, or delegated elsewhere but requested here. */
+  /**
+   * Tasks visible in a channel: owned by it, or delegated elsewhere but requested here. Everyone
+   * sees a shared channel's work; the orchestrator is each person's own, so it lists theirs.
+   */
   async channelTasks(owner: string, channelId: string): Promise<AgentTask[]> {
     const tasks = await this.db.list<AgentTask>(owner, "tasks");
     return tasks.filter(
       (t) =>
-        (t.channelId ?? ORCHESTRATOR_CHANNEL_ID) === channelId ||
-        (t.originChannelId ?? ORCHESTRATOR_CHANNEL_ID) === channelId,
+        ((t.channelId ?? ORCHESTRATOR_CHANNEL_ID) === channelId ||
+          (t.originChannelId ?? ORCHESTRATOR_CHANNEL_ID) === channelId) &&
+        (channelId !== ORCHESTRATOR_CHANNEL_ID || (t.createdBy ?? owner) === owner),
     );
   }
   /**
@@ -416,6 +421,10 @@ export class AgentService {
         this.db.list<AgentNotification>(owner, "notifications"),
         this.db.get<AgentIdentity>(owner, "agent-settings", "identity"),
       ]);
+    const names = await requesterNames(
+      this.db,
+      tasks.map((task) => task.createdBy),
+    );
     const heartbeat =
       (await this.db.get<{ lastTickAt: string }>("system", "worker-status", "tasks")) ??
       (await this.db.get<{ lastTickAt: string }>(
@@ -424,7 +433,7 @@ export class AgentService {
         `tasks:${ORCHESTRATOR_CHANNEL_ID}`,
       ));
     return {
-      tasks,
+      tasks: tasks.map((task) => withRequester(task, names)),
       goals,
       projects,
       monitors,
@@ -448,22 +457,28 @@ export class AgentService {
   }
   async detail(owner: string, id: string) {
     const task = await this.getTask(owner, id);
-    const files = (await this.db.list<Artifact>(owner, "files")).filter((file) =>
+    // Anyone can open a task, so anyone can see what it produced. Those files and browser
+    // sessions live with the person who asked for the work; a teammate gets the preview of a
+    // session but never the console that would let them drive it.
+    const requester = task.createdBy ?? owner;
+    const files = (await this.db.list<Artifact>(requester, "files")).filter((file) =>
       task.artifactIds.includes(file.id),
     );
-    const browsers = (await this.db.list<BrowserSession>(owner, "browsers")).filter((browser) =>
+    const browsers = (await this.db.list<BrowserSession>(requester, "browsers")).filter((browser) =>
       [task.state.browserId, task.state.sessionId].includes(browser.id),
     );
+    const names = await requesterNames(this.db, [task.createdBy]);
     return {
-      task,
-      files: files.map((file) => this.files.signed(owner, file)),
-      browsers: browsers.map((browser) => this.browser.decorate(owner, browser)),
-      events: (await this.db.list<RunEvent>(owner, "run-events"))
-        .filter((e) => e.taskId === id)
-        .sort((a, b) => a.date.localeCompare(b.date) || (a.sequence ?? 0) - (b.sequence ?? 0)),
-      artifacts: (await this.db.list<AgentArtifact>(owner, "agent-artifacts")).filter(
-        (a) => a.taskId === id,
+      task: withRequester(task, names),
+      files: files.map((file) => this.files.signed(requester, file)),
+      browsers: browsers.map((browser) => {
+        const decorated = this.browser.decorate(requester, browser);
+        return requester === owner ? decorated : { ...decorated, consoleUrl: undefined };
+      }),
+      events: (await this.db.listWhere<RunEvent>(owner, "run-events", "taskId", id)).sort(
+        (a, b) => a.date.localeCompare(b.date) || (a.sequence ?? 0) - (b.sequence ?? 0),
       ),
+      artifacts: await this.db.listWhere<AgentArtifact>(owner, "agent-artifacts", "taskId", id),
     };
   }
   async createTask(owner: string, raw: unknown, idempotencyKey?: string, held = false) {
@@ -479,8 +494,9 @@ export class AgentService {
     if (existing) return existing;
     if (input.blockedBy.length) await this.checkBlockedBy(owner, id, input.blockedBy);
     if (
-      (await this.db.list<AgentTask>(owner, "tasks")).filter((t) => !terminal.has(t.status))
-        .length >= 100
+      (await this.db.list<AgentTask>(owner, "tasks")).filter(
+        (t) => !terminal.has(t.status) && (t.createdBy ?? owner) === owner,
+      ).length >= 100
     )
       throw new AppError("Finish or cancel some tasks before adding more", 409);
     const titles =
@@ -518,6 +534,7 @@ export class AgentService {
       originChannelId: channelId,
       delegatedTo: null,
       threadId: input.threadId,
+      createdBy: owner,
       status: held ? "paused" : "queued",
       plan: isManual ? [] : titles.map((title, i) => ({ id: String(i), title, status: "pending" })),
       evidence: [],
@@ -868,6 +885,7 @@ export class AgentService {
       status: "active",
       milestones: input.milestones.map((title) => ({ id: randomUUID(), title, done: false })),
       createdAt: date(),
+      createdBy: owner,
     };
     await this.db.insertIfAbsent(owner, "goals", goal);
     return (await this.db.get<Goal>(owner, "goals", goal.id)) ?? goal;
@@ -1094,7 +1112,12 @@ export class AgentService {
     );
     const completedSources = new Set(
       (await this.db.list<AgentTask>(owner, "tasks"))
-        .filter((task) => task.status === "succeeded" && typeof task.input.messageId === "string")
+        .filter(
+          (task) =>
+            task.status === "succeeded" &&
+            typeof task.input.messageId === "string" &&
+            (task.createdBy ?? owner) === owner,
+        )
         .map((task) => `${task.kind}:${task.input.messageId}`),
     );
     const obsolete = (kind: AgentTask["kind"], messageId: unknown) =>
@@ -1153,7 +1176,11 @@ export class AgentService {
       } satisfies Idea);
     }
     for (const goal of await this.db.list<Goal>(owner, "goals"))
-      if (goal.status === "active" && !goal.milestones.length) {
+      if (
+        goal.status === "active" &&
+        !goal.milestones.length &&
+        (goal.createdBy ?? owner) === owner
+      ) {
         const id = hash(`goal:${goal.id}:${goal.description}`);
         await this.db.insertIfAbsent(owner, "ideas", {
           id,

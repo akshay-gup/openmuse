@@ -153,6 +153,13 @@ export interface ActionProposal {
   expiresAt: string;
   result?: string;
   error?: string;
+  /**
+   * Whose Google account this runs on, so only they can approve it. Reviews prepared by a task are
+   * visible to the whole workspace; one a person prepared themselves stays theirs.
+   */
+  createdBy?: string;
+  /** Display name for `createdBy`, filled in when the review is sent to a client. */
+  createdByName?: string;
 }
 export interface ActivityEntry {
   id: string;
@@ -161,6 +168,9 @@ export interface ActivityEntry {
   date: string;
   status: string;
   actionId?: string;
+  /** The task behind the review. Entries for task work are visible to the whole workspace. */
+  taskId?: string;
+  createdBy?: string;
 }
 export interface Connection {
   id: string;
@@ -171,7 +181,8 @@ export interface Connection {
 }
 export interface Workspace {
   mode: WorkspaceMode;
-  profile: { name: string; email: string };
+  /** `id` is the signed-in person, to tell their own work from the rest of the workspace's. */
+  profile: { id?: string; name: string; email: string };
   mail: Mail[];
   events: CalendarEvent[];
   files: Artifact[];

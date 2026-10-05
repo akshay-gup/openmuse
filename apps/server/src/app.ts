@@ -19,12 +19,12 @@ import type { Store } from "./db.ts";
 import { agentRoutes } from "./engine/routes.ts";
 import { AgentService } from "./engine/service.ts";
 import {
-  adoptSharedTranscripts,
+  adoptSharedWorkspace,
   channelAuthors,
   conversationHome,
   saveSharedConversation,
 } from "./engine/shared-conversations.ts";
-import { LocalDiskThreadStore, SHARED_OWNER, type ThreadBindingStore } from "./engine/threads.ts";
+import { LocalDiskThreadStore, type ThreadBindingStore } from "./engine/threads.ts";
 import { AppError } from "./errors.ts";
 import { Files } from "./files.ts";
 import { GoogleAuth } from "./google-auth.ts";
@@ -38,6 +38,7 @@ import {
   PermissionRulesStore,
   PermissionTracker,
 } from "./opencode/index.ts";
+import { SHARED_OWNER } from "./shared.ts";
 import { WorkspaceService } from "./workspace.ts";
 
 export async function createApp(
@@ -66,10 +67,18 @@ export async function createApp(
     browser,
     options.threads ?? new LocalDiskThreadStore(config.dataDir),
   );
-  // Thread transcripts used to be kept with whoever ran the thread. Threads are shared now, so
-  // adopt what is already there before anything is served.
-  const adopted = await adoptSharedTranscripts(db, agent.threads);
-  if (adopted) console.log(`[Hive] Shared ${adopted} thread transcripts with the workspace`);
+  // Tasks, boards, reviews and thread transcripts used to be kept per person. Everything but the
+  // orchestrator chat is shared now, so adopt what is already there before anything is served.
+  const adopted = await adoptSharedWorkspace(db, agent.threads);
+  const adoptedCount =
+    Object.values(adopted.records).reduce((sum, n) => sum + n, 0) + adopted.transcripts;
+  if (adoptedCount)
+    console.log(
+      `[Hive] Shared with the workspace: ${[
+        ...Object.entries(adopted.records).map(([kind, n]) => `${n} ${kind}`),
+        ...(adopted.transcripts ? [`${adopted.transcripts} thread transcripts`] : []),
+      ].join(", ")}`,
+    );
   // CopilotKit Intelligence is optional: without a key the runtime runs in
   // local-only mode and thread state lives in the local stores.
   const intelligence = config.intelligenceApiKey

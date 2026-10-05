@@ -65,7 +65,8 @@ test("task transcripts persist streamed text, tool states and full final message
     assert.equal(records.find((r) => r.kind === "tool")?.toolState, "completed");
     assert.equal(records.find((r) => r.kind === "tool")?.toolName, "create_issue");
     assert.ok(records.some((r) => r.detail.includes("TASK_COMPLETE:")));
-    assert.equal((await db.list("bob", "run-events")).length, 0);
+    // Run transcripts belong to the workspace, so a teammate reads the same events.
+    assert.equal((await db.list("bob", "run-events")).length, 3);
     active = false;
     log.handle(part("late", "text", { text: "Must not persist after cancellation" }));
     await assert.rejects(log.close(), /Lost lease/);
