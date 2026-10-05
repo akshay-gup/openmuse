@@ -652,19 +652,13 @@ export class AgentService {
    * ticket plus recent discussion in the channel it came from, then queue it
    * so the worker claims it like any agent task.
    */
-  private async assignToAgent(
-    task: AgentTask,
-    patch: Partial<AgentTask>,
-  ): Promise<void> {
+  private async assignToAgent(task: AgentTask, patch: Partial<AgentTask>): Promise<void> {
     if (task.kind !== "manual")
       throw new AppError("Only manual issues can be assigned to the agent", 422);
     const context = await this.channelContextForTask(task);
     const parts = [task.title.trim()];
     if (task.prompt.trim()) parts.push(`\nNotes:\n${task.prompt.trim()}`);
-    if (context)
-      parts.push(
-        `\n---\nRecent discussion in #${context.name}:\n${context.lines}\n---`,
-      );
+    if (context) parts.push(`\n---\nRecent discussion in #${context.name}:\n${context.lines}\n---`);
     parts.push(
       "\nCarry out the task above. Use the channel discussion for context on what was decided and who asked for what.",
     );
@@ -681,7 +675,14 @@ export class AgentService {
   private unassignFromAgent(task: AgentTask, patch: Partial<AgentTask>): void {
     if (task.assignee !== "agent" || task.kind === "manual")
       throw new AppError("Task is not assigned to the agent", 422);
-    const active = ["queued", "paused", "scheduled", "running", "waiting_approval", "waiting_input"];
+    const active = [
+      "queued",
+      "paused",
+      "scheduled",
+      "running",
+      "waiting_approval",
+      "waiting_input",
+    ];
     const { manualNotes, ...restInput } = task.input ?? {};
     patch.kind = "manual";
     patch.assignee = null;
@@ -713,7 +714,9 @@ export class AgentService {
       if (typeof content === "string") return content;
       if (Array.isArray(content))
         return content
-          .filter((p) => typeof p === "object" && p !== null && (p as { type?: string }).type === "text")
+          .filter(
+            (p) => typeof p === "object" && p !== null && (p as { type?: string }).type === "text",
+          )
           .map((p) => String((p as { text?: string }).text ?? ""))
           .join("");
       return "";
