@@ -50,6 +50,7 @@ import {
   ErrorNotice,
   Field,
   LinkRow,
+  radius,
   resultSummary,
   SectionHeading,
   Sheet,
@@ -140,7 +141,7 @@ function MailDetail({ mail: m }: { mail: Mail }) {
     >
       {loading && (
         <View style={[s.row, { gap: 10, paddingBottom: 20 }]}>
-          <ActivityIndicator color={colors.blueDark} />
+          <ActivityIndicator color={colors.primary} />
           <Text style={s.muted}>Loading the conversation…</Text>
         </View>
       )}
@@ -533,7 +534,7 @@ function EventEditor({
         placeholder="Anything else to keep in mind?"
       />
       {!!conflicts.length && (
-        <Card style={{ backgroundColor: colors.orange, marginBottom: 16 }}>
+        <Card style={{ backgroundColor: colors.warningBg, marginBottom: 16 }}>
           <Text style={s.heading}>This time overlaps</Text>
           {conflicts.map((c) => (
             <Text key={c.id} style={s.muted}>
@@ -621,14 +622,14 @@ function ReviewDetail({ initial }: { initial: ActionProposal }) {
       onClose={close}
     >
       <View style={[s.row, { gap: 12, marginBottom: 20 }]}>
-        <View style={[s.iconBox, { backgroundColor: colors.lavender }]}>
+        <View style={[s.iconBox, { backgroundColor: colors.primarySoft }]}>
           <ShieldCheck size={22} color={colors.text} />
         </View>
         <View style={{ flex: 1, gap: 4 }}>
           <Text style={s.heading}>{action.title}</Text>
           <Text style={s.small}>{action.kind.replace(".", " · ")}</Text>
         </View>
-        <Chip tint={pending ? colors.lavender : colors.green}>
+        <Chip tint={pending ? colors.warningBg : colors.successBg}>
           {action.status.replace(/_/g, " ")}
         </Chip>
       </View>
@@ -703,7 +704,7 @@ function ReviewDetail({ initial }: { initial: ActionProposal }) {
       </Card>
       <ErrorNotice error={error || action.error} />
       {!!action.result && (
-        <Card style={{ marginTop: 16, backgroundColor: colors.green }}>
+        <Card style={{ marginTop: 16, backgroundColor: colors.successBg }}>
           <Text selectable style={s.text}>
             {resultSummary(action.result)}
           </Text>
@@ -983,7 +984,7 @@ function BrowserDetail({ initial }: { initial: BrowserSession }) {
       <ErrorNotice error={error} />
       {loading ? (
         <View style={[s.row, { gap: 12, paddingVertical: 32, justifyContent: "center" }]}>
-          <ActivityIndicator color={colors.blueDark} />
+          <ActivityIndicator color={colors.primary} />
           <Text style={s.muted}>Connecting to your browser…</Text>
         </View>
       ) : error ? (
@@ -1004,7 +1005,7 @@ function BrowserDetail({ initial }: { initial: BrowserSession }) {
             aspectRatio: 16 / 10,
             maxHeight: 520,
             backgroundColor: colors.canvas,
-            borderRadius: 16,
+            borderRadius: radius.xl,
           }}
           resizeMode="contain"
         />

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { ActivityIndicator, Platform, Pressable, ScrollView, Text, View } from "react-native";
 import type { AgentTask, RunEvent } from "../../../packages/domain/src/agent";
 import { AssistantResponse } from "./assistant-response";
-import { colors, ErrorNotice, s } from "./ui";
+import { colors, ErrorNotice, fontSize, radius, s } from "./ui";
 import { useWorkspace } from "./workspace";
 
 function publicText(text: string) {
@@ -13,7 +13,12 @@ function ToolActivity({ event }: { event: RunEvent }) {
   const running = ["pending", "running"].includes(event.toolState ?? "");
   return (
     <View
-      style={{ borderWidth: 1, borderColor: colors.line, borderRadius: 12, overflow: "hidden" }}
+      style={{
+        borderWidth: 1,
+        borderColor: colors.line,
+        borderRadius: radius.lg,
+        overflow: "hidden",
+      }}
     >
       <Pressable
         accessibilityRole="button"
@@ -22,11 +27,13 @@ function ToolActivity({ event }: { event: RunEvent }) {
         style={[s.row, { gap: 10, padding: 12 }]}
       >
         {running ? (
-          <ActivityIndicator size="small" color={colors.blueDark} />
+          <ActivityIndicator size="small" color={colors.primary} />
         ) : (
           <Text style={s.small}>{event.toolState === "error" ? "!" : "✓"}</Text>
         )}
-        <Text style={[s.text, { flex: 1, fontSize: 14 }]}>{event.toolName ?? event.title}</Text>
+        <Text style={[s.text, { flex: 1, fontSize: fontSize.ui }]}>
+          {event.toolName ?? event.title}
+        </Text>
         <Text style={s.small}>
           {event.toolState ?? "completed"} · {expanded ? "Hide" : "Details"}
         </Text>
@@ -38,7 +45,7 @@ function ToolActivity({ event }: { event: RunEvent }) {
             padding: 12,
             borderTopWidth: 1,
             borderTopColor: colors.line,
-            backgroundColor: "#F4F4F6",
+            backgroundColor: colors.surfaceMuted,
           }}
         >
           {event.toolInput !== undefined && (
@@ -55,7 +62,7 @@ function ToolActivity({ event }: { event: RunEvent }) {
               style={[
                 s.text,
                 {
-                  fontSize: 13,
+                  fontSize: fontSize.small,
                   lineHeight: 19,
                   fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
                 },
@@ -117,7 +124,7 @@ export function TaskRunView({ task }: { task: AgentTask }) {
         <Text style={[s.heading, { flex: 1 }]}>Agent run</Text>
         {live && (
           <>
-            <ActivityIndicator size="small" color={colors.blueDark} />
+            <ActivityIndicator size="small" color={colors.primary} />
             <Text style={s.small}>
               {current.status === "running" ? "Live" : "Waiting to start"}
             </Text>
@@ -130,7 +137,7 @@ export function TaskRunView({ task }: { task: AgentTask }) {
           onPress={() => setCollapsed(!collapsed)}
           style={{ paddingVertical: 8, paddingHorizontal: 6 }}
         >
-          <Text style={[s.small, { color: colors.blueDark }]}>
+          <Text style={[s.small, { color: colors.primary }]}>
             {collapsed ? "Show output" : "Hide output"}
           </Text>
         </Pressable>
@@ -145,7 +152,7 @@ export function TaskRunView({ task }: { task: AgentTask }) {
           flexGrow: 0,
           borderWidth: 1,
           borderColor: colors.line,
-          borderRadius: 14,
+          borderRadius: radius.lg,
         }}
         contentContainerStyle={{ gap: 16, padding: 12 }}
       >
@@ -186,7 +193,14 @@ export function TaskRunView({ task }: { task: AgentTask }) {
         )}
       </ScrollView>
       {!!current.result && (
-        <View style={{ gap: 8, padding: 16, borderRadius: 14, backgroundColor: colors.green }}>
+        <View
+          style={{
+            gap: 8,
+            padding: 16,
+            borderRadius: radius.lg,
+            backgroundColor: colors.successBg,
+          }}
+        >
           <Text style={s.heading}>Final response</Text>
           <AssistantResponse content={publicText(current.result)} />
         </View>

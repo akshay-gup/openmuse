@@ -12,7 +12,7 @@ import DateOnlyField from "./DateOnlyField";
 import { TaskAttention } from "./task-attention";
 import { priorityColors } from "./task-board";
 import { TaskRunView } from "./task-run";
-import { Button, ErrorNotice, Field, Segmented, Sheet, s } from "./ui";
+import { Button, colors, ErrorNotice, Field, Segmented, Sheet, s } from "./ui";
 import { useWorkspace } from "./workspace";
 
 const manualTransitions: TaskStatus[] = ["queued", "running", "succeeded", "failed"];
@@ -201,7 +201,7 @@ export function TaskDetail({
           />
         </View>
 
-        <View style={{ height: 1, backgroundColor: "#EEEEF0" }} />
+        <View style={{ height: 1, backgroundColor: colors.line }} />
 
         <View style={{ gap: 4 }}>
           <Text style={s.label}>Details</Text>

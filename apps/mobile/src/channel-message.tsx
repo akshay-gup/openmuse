@@ -1,16 +1,24 @@
 import { Copy, type LucideIcon, MessageSquare, Share2 } from "lucide-react-native";
 import { useState } from "react";
-import { Platform, Pressable, Share, Text, useWindowDimensions, View } from "react-native";
+import { Platform, Pressable, Share, Text, View } from "react-native";
 import { useAgentWorkspace } from "./agent-workspace";
 import { AssistantResponse } from "./assistant-response";
-import { colors, Mascot, s, type WebPressState } from "./ui";
+import {
+  avatarTints,
+  colors,
+  fontSize,
+  Mascot,
+  radius,
+  s,
+  useDense,
+  type WebPressState,
+} from "./ui";
 
-const authorTints = [colors.lavender, colors.green, colors.orange, colors.sky, "#F6EAF4"];
 /** A stable tint per person, so a busy channel is easier to scan than a wall of identical tiles. */
 function authorTint(name: string): string {
   let hash = 0;
   for (const char of name) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
-  return authorTints[hash % authorTints.length];
+  return avatarTints[hash % avatarTints.length];
 }
 
 function clock(timestamp: number, withPeriod = true): string {
@@ -44,14 +52,16 @@ function ActionPill({
           gap: 6,
           minHeight: 36,
           paddingHorizontal: 12,
-          borderRadius: 999,
-          backgroundColor: pressed ? colors.blue : "#F1F2F3",
+          borderRadius: radius.md,
+          backgroundColor: pressed ? colors.primarySoftStrong : colors.surfaceMuted,
           opacity: disabled ? 0.4 : 1,
         },
       ]}
     >
       <Icon size={15} color={colors.text} />
-      <Text style={{ fontSize: 13, fontWeight: "600", color: colors.text }}>{label}</Text>
+      <Text style={{ fontSize: fontSize.small, fontWeight: "600", color: colors.text }}>
+        {label}
+      </Text>
     </Pressable>
   );
 }
@@ -84,11 +94,10 @@ export function ChannelMessage({
   const [hovered, setHovered] = useState(false);
   const [focused, setFocused] = useState(false);
   const [expanded, setExpanded] = useState(false);
-  const { width } = useWindowDimensions();
   const { data } = useAgentWorkspace();
   // Pointer devices get a hover toolbar. Touch layouts tap a message to reveal its actions
   // inline, because a floating toolbar on every message covers the text it belongs to.
-  const hoverUi = Platform.OS === "web" && width >= 900;
+  const hoverUi = useDense();
   const toolbarVisible = hovered || focused;
   const webCopy = Platform.OS === "web";
   async function copy() {
@@ -121,16 +130,20 @@ export function ChannelMessage({
       }}
       style={{
         paddingHorizontal: 12,
-        paddingVertical: grouped ? 4 : 12,
-        borderRadius: 12,
-        backgroundColor: selected ? colors.sky : hovered ? "#F4F5F7" : "transparent",
+        paddingVertical: grouped ? 1 : 6,
+        borderRadius: radius.lg,
+        backgroundColor: selected
+          ? colors.primarySoft
+          : hovered
+            ? colors.surfaceMuted
+            : "transparent",
       }}
     >
-      <View style={{ flexDirection: "row", gap: 12 }}>
+      <View style={{ flexDirection: "row", gap: 10 }}>
         <View style={{ width: 36, alignItems: "center" }}>
           {grouped ? (
             showGutterTime && (
-              <Text style={[s.small, { fontSize: 10, lineHeight: 22 }]}>
+              <Text style={[s.small, { fontSize: fontSize.micro, lineHeight: 22 }]}>
                 {clock(timestamp, false)}
               </Text>
             )
@@ -141,7 +154,7 @@ export function ChannelMessage({
               style={{
                 width: 36,
                 height: 36,
-                borderRadius: 12,
+                borderRadius: radius.lg,
                 backgroundColor: authorTint(author),
                 alignItems: "center",
                 justifyContent: "center",
@@ -153,17 +166,17 @@ export function ChannelMessage({
             </View>
           )}
         </View>
-        <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
+        <View style={{ flex: 1, minWidth: 0 }}>
           {!grouped && (
             <View style={[s.row, { gap: 8 }]}>
-              <Text style={[s.text, { fontWeight: "700" }]}>{author}</Text>
-              {!!timestamp && <Text style={s.small}>{clock(timestamp)}</Text>}
+              <Text style={[s.text, { fontWeight: "700", lineHeight: 20 }]}>{author}</Text>
+              {!!timestamp && <Text style={[s.small, { lineHeight: 20 }]}>{clock(timestamp)}</Text>}
             </View>
           )}
           {assistant ? (
             <AssistantResponse content={text} />
           ) : (
-            <Text selectable style={s.text}>
+            <Text selectable style={[s.text, { lineHeight: 22 }]}>
               {text}
             </Text>
           )}
@@ -175,9 +188,9 @@ export function ChannelMessage({
               }
               disabled={replyDisabled}
               onPress={onReply}
-              style={{ alignSelf: "flex-start", paddingVertical: 8 }}
+              style={{ alignSelf: "flex-start", paddingVertical: 4 }}
             >
-              <Text style={{ color: colors.blueDark, fontSize: 13, fontWeight: "600" }}>
+              <Text style={{ color: colors.primary, fontSize: fontSize.small, fontWeight: "600" }}>
                 {replyCount
                   ? `${replyCount} ${replyCount === 1 ? "reply" : "replies"}`
                   : hasThread
@@ -224,10 +237,10 @@ export function ChannelMessage({
               top: -16,
               opacity: toolbarVisible ? 1 : 0,
               zIndex: 1,
-              backgroundColor: "#FFFFFF",
+              backgroundColor: colors.surface,
               borderWidth: 1,
               borderColor: colors.line,
-              borderRadius: 10,
+              borderRadius: radius.md,
               padding: 2,
             },
           ]}
@@ -240,9 +253,13 @@ export function ChannelMessage({
               onPress={onReply}
               style={({ pressed, hovered: over }: WebPressState) => ({
                 padding: 7,
-                borderRadius: 8,
+                borderRadius: radius.sm,
                 opacity: replyDisabled ? 0.4 : 1,
-                backgroundColor: pressed ? colors.blue : over ? "#F1F2F3" : "#FFFFFF",
+                backgroundColor: pressed
+                  ? colors.primarySoftStrong
+                  : over
+                    ? colors.surfaceMuted
+                    : colors.surface,
               })}
             >
               <MessageSquare size={16} color={colors.muted} />
@@ -254,8 +271,12 @@ export function ChannelMessage({
             onPress={() => void copy()}
             style={({ pressed, hovered: over }: WebPressState) => ({
               padding: 7,
-              borderRadius: 8,
-              backgroundColor: pressed ? colors.blue : over ? "#F1F2F3" : "#FFFFFF",
+              borderRadius: radius.sm,
+              backgroundColor: pressed
+                ? colors.primarySoftStrong
+                : over
+                  ? colors.surfaceMuted
+                  : colors.surface,
             })}
           >
             <Copy size={16} color={colors.muted} />

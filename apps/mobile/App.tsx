@@ -52,7 +52,19 @@ import { Details } from "./src/details";
 import { BrowserScreen, CalendarScreen, FilesScreen, MailScreen } from "./src/screens";
 import { Sidebar } from "./src/sidebar";
 import { ThreadsProvider, useMuseThread } from "./src/threads";
-import { Button, Card, colors, ErrorNotice, IconButton, Mascot, s } from "./src/ui";
+import {
+  Button,
+  Card,
+  colors,
+  ErrorNotice,
+  fontSize,
+  IconButton,
+  layout,
+  Mascot,
+  radius,
+  s,
+  shadow,
+} from "./src/ui";
 import { type Detail, useWorkspace, WorkspaceContext } from "./src/workspace";
 
 const nav: { id: Section; label: string; icon: LucideIcon }[] = [
@@ -212,13 +224,18 @@ export default function App() {
           <View style={{ width: "100%", maxWidth: 420, gap: 22, alignItems: "center" }}>
             <Mascot size={72} />
             <Text
-              style={{ fontSize: 32, color: colors.text, letterSpacing: -1, fontWeight: "500" }}
+              style={{
+                fontSize: fontSize.display,
+                color: colors.text,
+                letterSpacing: -1,
+                fontWeight: "500",
+              }}
             >
               Welcome to Hive.
             </Text>
             <Text style={[s.muted, { textAlign: "center" }]}>A little room for your day.</Text>
             {busy ? (
-              <ActivityIndicator color={colors.blueDark} />
+              <ActivityIndicator color={colors.primary} />
             ) : (
               <Card style={{ width: "100%" }}>
                 <ErrorNotice error={error} />
@@ -297,7 +314,7 @@ function WorkspaceApp({ token, logout }: { token: string; logout: () => Promise<
           </>
         ) : (
           <>
-            <ActivityIndicator color={colors.blueDark} />
+            <ActivityIndicator color={colors.primary} />
             <Text style={s.muted}>Opening your workspace…</Text>
           </>
         )}
@@ -407,11 +424,11 @@ function WorkspaceShell({
             <View style={{ flex: 1, width: "100%", maxWidth: "100%" }}>
               <View
                 style={{
-                  height: 76,
+                  height: layout.headerHeight,
                   flexDirection: "row",
                   alignItems: "center",
                   gap: 12,
-                  paddingHorizontal: desktop ? 24 : 14,
+                  paddingHorizontal: desktop ? 20 : 12,
                   borderBottomWidth: 1,
                   borderBottomColor: colors.line,
                 }}
@@ -433,9 +450,11 @@ function WorkspaceShell({
                       onPress={() => navigate("activity")}
                       style={[s.row, { gap: 10 }]}
                     >
-                      <Mascot size={38} variant={data?.identity.avatar} />
+                      <Mascot size={32} variant={data?.identity.avatar} />
                       <View style={{ flex: 1 }}>
-                        <Text style={[s.heading, { fontSize: 17 }]}>{agentName}</Text>
+                        <Text style={[s.heading, { fontSize: fontSize.heading, lineHeight: 20 }]}>
+                          {agentName}
+                        </Text>
                         <Text style={s.small} numberOfLines={1}>
                           {status}
                         </Text>
@@ -443,7 +462,9 @@ function WorkspaceShell({
                     </Pressable>
                   ) : (
                     <View>
-                      <Text style={[s.heading, { fontSize: 18 }]}>{title?.title}</Text>
+                      <Text style={[s.heading, { fontSize: fontSize.heading, lineHeight: 22 }]}>
+                        {title?.title}
+                      </Text>
                       <Text style={s.small} numberOfLines={1}>
                         {title?.subtitle}
                       </Text>
@@ -470,15 +491,15 @@ function WorkspaceShell({
                         right: 3,
                         alignItems: "center",
                         justifyContent: "center",
-                        backgroundColor: colors.blueDark,
+                        backgroundColor: colors.primary,
                         borderWidth: 2,
-                        borderColor: "#FFFFFF",
+                        borderColor: colors.canvas,
                       }}
                     >
                       <Text
                         style={{
-                          color: "#FFFFFF",
-                          fontSize: 10,
+                          color: colors.onPrimary,
+                          fontSize: fontSize.micro,
                           lineHeight: 12,
                           fontWeight: "700",
                         }}
@@ -496,7 +517,7 @@ function WorkspaceShell({
                     showsVerticalScrollIndicator={false}
                     contentContainerStyle={{
                       paddingHorizontal: desktop ? 32 : 22,
-                      paddingTop: 24,
+                      paddingTop: 20,
                       paddingBottom: 28,
                       width: "100%",
                       maxWidth: 1040,
@@ -522,11 +543,11 @@ function WorkspaceShell({
                     display: section === "chat" ? "flex" : "none",
                     flex: 1,
                     width: "100%",
-                    maxWidth: channelChat ? undefined : 940,
+                    maxWidth: channelChat ? undefined : 820,
                     alignSelf: "center",
                     paddingHorizontal: channelChat ? 0 : desktop ? 32 : 17,
-                    paddingTop: channelChat ? 0 : 14,
-                    paddingBottom: desktop ? 18 : 0,
+                    paddingTop: channelChat ? 0 : 8,
+                    paddingBottom: desktop ? 12 : 0,
                   }}
                 >
                   {!channelChat && <AgentStatus />}
@@ -536,7 +557,7 @@ function WorkspaceShell({
                       {threadsError ? (
                         <Button onPress={retryThreads}>Retry main chat</Button>
                       ) : threadsLoading ? (
-                        <ActivityIndicator color={colors.blueDark} />
+                        <ActivityIndicator color={colors.primary} />
                       ) : null}
                       {!threadsLoading && selection.id !== mainId && (
                         <Text style={[s.small, { textAlign: "center", marginBottom: 8 }]}>
@@ -594,7 +615,7 @@ function WorkspaceShell({
                 style={{
                   display: desktop ? "none" : "flex",
                   paddingHorizontal: 22,
-                  paddingTop: 10,
+                  paddingTop: 6,
                   paddingBottom: desktop ? 22 : 7,
                   alignItems: "center",
                 }}
@@ -606,15 +627,11 @@ function WorkspaceShell({
                     width: "100%",
                     maxWidth: 370,
                     padding: 5,
-                    backgroundColor: "#FFF",
-                    borderRadius: 40,
-                    shadowColor: "#132631",
-                    shadowOffset: { width: 0, height: 2 },
-                    shadowOpacity: 0.07,
-                    shadowRadius: 18,
-                    elevation: 3,
+                    backgroundColor: colors.surface,
+                    borderRadius: radius.pill,
+                    boxShadow: shadow.raised,
                     borderWidth: 1,
-                    borderColor: "#F8F8F8",
+                    borderColor: colors.line,
                   }}
                 >
                   {nav.map((item) => {
@@ -632,19 +649,19 @@ function WorkspaceShell({
                           gap: 3,
                           alignItems: "center",
                           justifyContent: "center",
-                          backgroundColor: active ? "#F0F1F2" : "transparent",
-                          borderRadius: 26,
+                          backgroundColor: active ? colors.primarySoft : "transparent",
+                          borderRadius: radius.pill,
                         }}
                       >
                         <item.icon
                           size={21}
                           strokeWidth={active ? 2 : 1.8}
-                          color={active ? colors.text : colors.muted}
+                          color={active ? colors.primary : colors.muted}
                         />
                         <Text
                           numberOfLines={1}
                           style={{
-                            fontSize: 10,
+                            fontSize: fontSize.micro,
                             lineHeight: 12,
                             fontWeight: active ? "700" : "500",
                             color: active ? colors.text : colors.muted,
@@ -679,21 +696,23 @@ function WorkspaceShell({
                 {
                   gap: 10,
                   padding: 14,
-                  backgroundColor: colors.text,
-                  borderRadius: 20,
+                  backgroundColor: colors.inverse,
+                  borderRadius: radius.lg,
                   maxWidth: 560,
                 },
               ]}
             >
-              <Check size={16} color={colors.blue} />
-              <Text style={{ color: "#FFF", fontSize: 13, flexShrink: 1 }}>{toast}</Text>
+              <Check size={16} color={colors.onInverse} />
+              <Text style={{ color: colors.onInverse, fontSize: fontSize.small, flexShrink: 1 }}>
+                {toast}
+              </Text>
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Dismiss notification"
                 hitSlop={12}
                 onPress={clearToast}
               >
-                <X size={16} color="#FFF" />
+                <X size={16} color={colors.onInverse} />
               </Pressable>
             </View>
           </View>
@@ -704,8 +723,10 @@ function WorkspaceShell({
           animationType="fade"
           onRequestClose={() => setThreadsOpen(false)}
         >
-          <View style={{ flex: 1, flexDirection: "row", backgroundColor: "rgba(17,25,28,0.24)" }}>
-            <SafeAreaView style={{ width: 310, maxWidth: "86%", backgroundColor: "#FAFBFC" }}>
+          <View style={{ flex: 1, flexDirection: "row", backgroundColor: colors.scrim }}>
+            <SafeAreaView
+              style={{ width: 310, maxWidth: "86%", backgroundColor: colors.surfaceMuted }}
+            >
               <Sidebar compact onNavigate={() => setThreadsOpen(false)} />
             </SafeAreaView>
             <Pressable

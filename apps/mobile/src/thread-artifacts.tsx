@@ -5,7 +5,7 @@ import type { Artifact, BrowserSession } from "../../../packages/domain/src";
 import type { AgentArtifact, AgentTask } from "../../../packages/domain/src/agent";
 import { ArtifactCard, TaskCard } from "./agent-ui";
 import { BrowserThreadCard } from "./computer";
-import { Button, Card, colors, ErrorNotice, s } from "./ui";
+import { Button, brand, Card, colors, ErrorNotice, fontSize, radius, s } from "./ui";
 import { useWorkspace } from "./workspace";
 
 export function FileThreadCard({ file }: { file: Artifact }) {
@@ -17,9 +17,13 @@ export function FileThreadCard({ file }: { file: Artifact }) {
       onPress={() => open({ type: "file", file })}
       style={{ width: "100%", maxWidth: 440 }}
     >
-      <Card style={{ padding: 18, backgroundColor: "#F0F1F2", gap: 18 }}>
-        <View style={{ borderRadius: 12, padding: 22, backgroundColor: "#FFF", gap: 14 }}>
-          <Text style={[s.heading, { fontSize: 18 }]}>{file.name.replace(/\.pdf$/i, "")}</Text>
+      <Card style={{ padding: 18, backgroundColor: colors.surfaceMuted, gap: 18 }}>
+        <View
+          style={{ borderRadius: radius.lg, padding: 22, backgroundColor: colors.surface, gap: 14 }}
+        >
+          <Text style={[s.heading, { fontSize: fontSize.title }]}>
+            {file.name.replace(/\.pdf$/i, "")}
+          </Text>
           {file.fields?.length ? (
             file.fields.slice(0, 4).map((field) => (
               <View
@@ -32,7 +36,7 @@ export function FileThreadCard({ file }: { file: Artifact }) {
                 }}
               >
                 <Text style={s.label}>{field.name.replace(/_/g, " ").toUpperCase()}</Text>
-                <Text style={[s.text, { fontSize: 13 }]}>{field.value || "—"}</Text>
+                <Text style={[s.text, { fontSize: fontSize.small }]}>{field.value || "—"}</Text>
               </View>
             ))
           ) : (
@@ -42,8 +46,8 @@ export function FileThreadCard({ file }: { file: Artifact }) {
           )}
         </View>
         <View style={[s.row, { gap: 13 }]}>
-          <View style={{ backgroundColor: "#FC2359", padding: 9, borderRadius: 9 }}>
-            <FileText size={23} color="#FFF" />
+          <View style={{ backgroundColor: brand.pdf, padding: 9, borderRadius: radius.md }}>
+            <FileText size={23} color={colors.onPrimary} />
           </View>
           <View style={{ flex: 1, gap: 3 }}>
             <Text numberOfLines={2} style={s.heading}>

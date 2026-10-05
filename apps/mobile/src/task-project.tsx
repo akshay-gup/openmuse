@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import type { Project } from "../../../packages/domain/src/agent";
 import { useAgentWorkspace } from "./agent-workspace";
-import { Button, colors, ErrorNotice, Field, Sheet, s } from "./ui";
+import { Button, colors, ErrorNotice, Field, radius, Sheet, s } from "./ui";
 import { useWorkspace } from "./workspace";
 
 /** null = All projects, "none" = No project, otherwise a project id. */
@@ -29,12 +29,14 @@ export function ProjectSwitcher({
       accessibilityLabel={label}
       onPress={onPress}
       style={{
-        borderRadius: 999,
+        borderRadius: radius.md,
         paddingHorizontal: 16,
         paddingVertical: 10,
         minHeight: 40,
         justifyContent: "center",
-        backgroundColor: active ? colors.blue : "#EDEDEF",
+        backgroundColor: active ? colors.primarySoft : colors.surfaceMuted,
+        borderWidth: 1,
+        borderColor: active ? colors.primary : "transparent",
       }}
     >
       <Text
@@ -58,12 +60,14 @@ export function ProjectSwitcher({
             onLongPress={() => onManage(project)}
             delayLongPress={500}
             style={{
-              borderRadius: 999,
+              borderRadius: radius.md,
               paddingHorizontal: 16,
               paddingVertical: 10,
               minHeight: 40,
               justifyContent: "center",
-              backgroundColor: selected === project.id ? colors.blue : "#EDEDEF",
+              backgroundColor: selected === project.id ? colors.primarySoft : colors.surfaceMuted,
+              borderWidth: 1,
+              borderColor: selected === project.id ? colors.primary : "transparent",
             }}
           >
             <Text

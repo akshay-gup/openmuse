@@ -130,7 +130,7 @@ export function ThreadsSheet({ onClose }: { onClose: () => void }) {
             {mainError ? (
               <Button onPress={retry}>Retry main chat</Button>
             ) : (
-              <ActivityIndicator color={colors.blueDark} />
+              <ActivityIndicator color={colors.primary} />
             )}
           </>
         ) : enabled ? (

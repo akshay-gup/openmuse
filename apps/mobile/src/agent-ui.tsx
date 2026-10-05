@@ -66,14 +66,18 @@ import {
   Empty,
   ErrorNotice,
   Field,
+  financeArt,
+  fontSize,
   LinkRow,
   Mascot,
+  radius,
   resultSummary,
   SearchField,
   SectionHeading,
   Segmented,
   Sheet,
   s,
+  shadow,
   type WebPressState,
 } from "./ui";
 import { useWorkspace } from "./workspace";
@@ -116,7 +120,7 @@ export function AgentStatus() {
       )}
       {!data && !error && (
         <View style={[s.row, { gap: 10, paddingVertical: 16, justifyContent: "center" }]}>
-          <ActivityIndicator color={colors.blueDark} />
+          <ActivityIndicator color={colors.primary} />
           <Text style={s.muted}>Checking the agent…</Text>
         </View>
       )}
@@ -158,12 +162,20 @@ export function TaskCard({
         }
       }}
       style={({ pressed, hovered }: WebPressState) => ({
-        gap: 10,
-        padding: compact ? 14 : 18,
-        borderRadius: 18,
+        gap: 8,
+        padding: compact ? 12 : 14,
+        borderRadius: radius.lg,
         borderWidth: 1,
-        borderColor: task.status === "failed" ? "#F0D5D3" : waiting ? "#EBDDB5" : colors.line,
-        backgroundColor: pressed ? "#F4F5F6" : hovered ? "#FAFBFC" : "#FFFFFF",
+        borderColor:
+          task.status === "failed"
+            ? colors.dangerLine
+            : waiting
+              ? colors.warningLine
+              : hovered
+                ? colors.lineStrong
+                : colors.line,
+        backgroundColor: pressed ? colors.surfaceMuted : colors.surface,
+        boxShadow: hovered ? shadow.raised : shadow.card,
       })}
     >
       <View style={[s.row, { gap: 8 }]}>
@@ -206,13 +218,13 @@ export function TaskCard({
       {(waiting || !!due) && (
         <View style={[s.row, { gap: 6, flexWrap: "wrap" }]}>
           {waiting && (
-            <Chip tint={colors.orange} color={colors.text}>
+            <Chip tint={colors.warningBg} color={colors.text}>
               {task.status === "waiting_approval" ? "Review requested" : "Your input is needed"}
             </Chip>
           )}
           {!!due && (
             <Chip
-              tint={overdue ? "#FBEFED" : "#F4F4F6"}
+              tint={overdue ? colors.dangerBg : colors.surfaceMuted}
               color={overdue ? colors.danger : undefined}
             >
               {overdue ? `Overdue · ${due}` : `Due ${due}`}
@@ -346,9 +358,11 @@ export function AgentActivityScreen() {
       )}
       {view === "list" && (
         <>
-          {tasks.map((task) => (
-            <TaskCard key={task.id} task={task} onSelect={() => setSelectedId(task.id)} />
-          ))}
+          <View style={{ gap: 10 }}>
+            {tasks.map((task) => (
+              <TaskCard key={task.id} task={task} onSelect={() => setSelectedId(task.id)} />
+            ))}
+          </View>
           {!tasks.length &&
             (projectTasks.length ? (
               <Empty
@@ -412,7 +426,7 @@ export function EvidenceList({ items }: { items: Evidence[] }) {
       {items.map((item) => (
         <View
           key={item.id}
-          style={{ borderLeftWidth: 2, borderLeftColor: colors.blue, paddingLeft: 12, gap: 4 }}
+          style={{ borderLeftWidth: 2, borderLeftColor: colors.primary, paddingLeft: 12, gap: 4 }}
         >
           <Text style={[s.small, { color: colors.text, fontWeight: "600" }]}>{item.title}</Text>
           <Text selectable style={s.small}>
@@ -523,7 +537,7 @@ export function TaskDetail({ taskId }: { taskId: string }) {
       <ErrorNotice error={error} />
       {!task ? (
         <View style={[s.row, { gap: 10, paddingVertical: 32, justifyContent: "center" }]}>
-          <ActivityIndicator color={colors.blueDark} />
+          <ActivityIndicator color={colors.primary} />
           <Text style={s.muted}>Loading saved progress…</Text>
         </View>
       ) : (
@@ -586,7 +600,7 @@ export function TaskDetail({ taskId }: { taskId: string }) {
                   <Text
                     style={[
                       s.text,
-                      { color: step.status === "succeeded" ? colors.blueDark : colors.muted },
+                      { color: step.status === "succeeded" ? colors.primary : colors.muted },
                     ]}
                   >
                     {step.status === "succeeded" ? "✓" : `${index + 1}.`}
@@ -611,7 +625,7 @@ export function TaskDetail({ taskId }: { taskId: string }) {
                 <Image
                   accessibilityLabel="Agent browser preview"
                   source={{ uri: api.url(browser.previewUrl) }}
-                  style={{ width: "100%", aspectRatio: 1.6, borderRadius: 16 }}
+                  style={{ width: "100%", aspectRatio: 1.6, borderRadius: radius.xl }}
                 />
               )}
               <Button
@@ -684,7 +698,7 @@ export function ArtifactCard({ artifact }: { artifact: AgentArtifact }) {
   if (artifact.kind === "finance") return <FinanceArtifact artifact={artifact} />;
   const rows = Object.entries(artifact.data);
   return (
-    <Card style={{ gap: 13, backgroundColor: colors.card }}>
+    <Card style={{ gap: 13, backgroundColor: colors.surface }}>
       <View style={s.between}>
         <Text style={s.heading}>{artifact.title}</Text>
         <Chip>{statusLabel(artifact.kind)}</Chip>
@@ -775,7 +789,13 @@ function FinanceArtifact({ artifact }: { artifact: AgentArtifact }) {
   const period = record(artifact.data.period);
   return (
     <Card
-      style={{ gap: 12, padding: 12, backgroundColor: "#EEEEF0", maxWidth: 440, width: "100%" }}
+      style={{
+        gap: 12,
+        padding: 12,
+        backgroundColor: colors.surfaceMuted,
+        maxWidth: 440,
+        width: "100%",
+      }}
     >
       <Pressable
         accessibilityRole="button"
@@ -786,9 +806,9 @@ function FinanceArtifact({ artifact }: { artifact: AgentArtifact }) {
         <View
           style={{
             minHeight: 200,
-            borderRadius: 16,
+            borderRadius: radius.xl,
             overflow: "hidden",
-            backgroundColor: "#080B10",
+            backgroundColor: financeArt.card,
             padding: 20,
           }}
         >
@@ -796,15 +816,22 @@ function FinanceArtifact({ artifact }: { artifact: AgentArtifact }) {
             <Svg width="100%" height="100%">
               <Defs>
                 <LinearGradient id="finance" x1="0" y1="0" x2="0.5" y2="1">
-                  <Stop offset="0" stopColor="#281066" />
-                  <Stop offset="0.5" stopColor="#163BBF" />
-                  <Stop offset="1" stopColor="#148CE8" />
+                  <Stop offset="0" stopColor={financeArt.gradient[0]} />
+                  <Stop offset="0.5" stopColor={financeArt.gradient[1]} />
+                  <Stop offset="1" stopColor={financeArt.gradient[2]} />
                 </LinearGradient>
               </Defs>
               <Rect width="100%" height="100%" fill="url(#finance)" />
             </Svg>
           </View>
-          <Text style={{ color: "#D4DCFC", fontSize: 12, lineHeight: 19, marginBottom: 20 }}>
+          <Text
+            style={{
+              color: financeArt.intro,
+              fontSize: fontSize.caption,
+              lineHeight: 19,
+              marginBottom: 20,
+            }}
+          >
             Read from your imported transactions.{"\n"}
             {String(period?.from ?? "")} — {String(period?.to ?? "")}
             {"\n"}
@@ -820,24 +847,29 @@ function FinanceArtifact({ artifact }: { artifact: AgentArtifact }) {
             ).map(([label, key]) => (
               <View
                 key={key}
-                style={{ flex: 1, padding: 14, borderRadius: 12, backgroundColor: "#1D2025" }}
+                style={{
+                  flex: 1,
+                  padding: 14,
+                  borderRadius: radius.lg,
+                  backgroundColor: financeArt.panel,
+                }}
               >
-                <Text style={{ color: "#A4A7AD", fontSize: 11 }}>{label}</Text>
+                <Text style={{ color: financeArt.label, fontSize: fontSize.micro }}>{label}</Text>
                 <Text
                   selectable
                   numberOfLines={1}
                   adjustsFontSizeToFit
                   minimumFontScale={0.65}
                   style={{
-                    fontSize: 20,
+                    fontSize: fontSize.title,
                     fontWeight: "600",
-                    color: key === "saved" ? "#58D3AE" : "#FFF",
+                    color: key === "saved" ? financeArt.positive : colors.onInverse,
                     marginTop: 6,
                   }}
                 >
                   {amount(artifact.data[key])}
                 </Text>
-                <Text style={{ color: "#7E8289", fontSize: 11, marginTop: 4 }}>
+                <Text style={{ color: financeArt.note, fontSize: fontSize.micro, marginTop: 4 }}>
                   source currency
                 </Text>
               </View>
@@ -845,7 +877,7 @@ function FinanceArtifact({ artifact }: { artifact: AgentArtifact }) {
           </View>
         </View>
         <View style={[s.row, { gap: 12, paddingHorizontal: 12, paddingVertical: 12 }]}>
-          <Text style={{ fontSize: 25 }}>💸</Text>
+          <Text style={{ fontSize: fontSize.display }}>💸</Text>
           <View style={{ flex: 1, gap: 2 }}>
             <Text style={[s.text, { fontWeight: "600" }]}>Finance tracker</Text>
             <Text style={s.small}>Spending, savings, and a plan for what’s next.</Text>
@@ -865,13 +897,13 @@ function FinanceArtifact({ artifact }: { artifact: AgentArtifact }) {
                   <Text style={s.text}>{String(row.name)}</Text>
                   <Text style={s.text}>{amount(row.amount)}</Text>
                 </View>
-                <View style={{ height: 6, backgroundColor: "#DFE8EB", borderRadius: 6 }}>
+                <View style={{ height: 6, backgroundColor: colors.line, borderRadius: radius.sm }}>
                   <View
                     style={{
                       width: `${Math.min(100, (Number(row.amount) / spending) * 100)}%`,
                       height: 6,
-                      backgroundColor: colors.blueDark,
-                      borderRadius: 6,
+                      backgroundColor: colors.primary,
+                      borderRadius: radius.sm,
                     }}
                   />
                 </View>
@@ -1101,7 +1133,7 @@ export function IdeasScreen() {
           {started.map((idea) => (
             <Card key={idea.id} style={{ gap: 10 }}>
               <Text style={s.heading}>{idea.title}</Text>
-              <Chip tint={colors.green}>Started</Chip>
+              <Chip tint={colors.successBg}>Started</Chip>
               {!!idea.taskId && <TaskLink taskId={idea.taskId} />}
             </Card>
           ))}
@@ -1156,11 +1188,11 @@ function IdeaCard({ idea }: { idea: Idea }) {
         style={({ hovered }: WebPressState) => ({
           flexDirection: "row",
           gap: 14,
-          borderRadius: 12,
-          backgroundColor: hovered ? "#F7F8F9" : "transparent",
+          borderRadius: radius.lg,
+          backgroundColor: hovered ? colors.surfaceMuted : "transparent",
         })}
       >
-        <Text style={{ fontSize: 27, width: 34, paddingTop: 3 }}>
+        <Text style={{ fontSize: fontSize.display, width: 34, paddingTop: 3 }}>
           {/document|permission|form/i.test(idea.title)
             ? "📋"
             : /money|spend|saving/i.test(idea.title)
@@ -1172,7 +1204,9 @@ function IdeaCard({ idea }: { idea: Idea }) {
                   : "💡"}
         </Text>
         <View style={{ flex: 1, gap: 5 }}>
-          <Text style={[s.heading, { fontSize: 16, lineHeight: 23 }]}>{idea.title}</Text>
+          <Text style={[s.heading, { fontSize: fontSize.heading, lineHeight: 23 }]}>
+            {idea.title}
+          </Text>
           <Text style={s.muted}>{idea.reason}</Text>
           {!expanded && idea.evidence.length > 0 && (
             <Text style={s.small}>
@@ -1235,8 +1269,8 @@ export function GoalsScreen() {
                 height: 16,
                 borderRadius: 8,
                 borderWidth: 5,
-                borderColor: "#D9F1E2",
-                backgroundColor: "#24A46B",
+                borderColor: colors.successBg,
+                backgroundColor: colors.success,
               }}
             />
             <Text style={s.heading}>Tracking</Text>
@@ -1259,8 +1293,8 @@ export function GoalsScreen() {
                   gap: 12,
                   paddingVertical: 12,
                   paddingHorizontal: 8,
-                  borderRadius: 12,
-                  backgroundColor: hovered ? "#F7F8F9" : "transparent",
+                  borderRadius: radius.lg,
+                  backgroundColor: hovered ? colors.surfaceMuted : "transparent",
                 },
               ]}
             >
@@ -1269,10 +1303,10 @@ export function GoalsScreen() {
                   s.iconBox,
                   {
                     backgroundColor: failing
-                      ? "#FBEFED"
+                      ? colors.dangerBg
                       : item.status === "active"
-                        ? colors.green
-                        : "#F1F2F3",
+                        ? colors.successBg
+                        : colors.surfaceMuted,
                   },
                 ]}
               >
@@ -1318,8 +1352,8 @@ export function GoalsScreen() {
               height: 16,
               borderRadius: 8,
               borderWidth: 5,
-              borderColor: "#D7E9FA",
-              backgroundColor: "#3D9BDE",
+              borderColor: colors.primarySoftStrong,
+              backgroundColor: colors.primary,
             }}
           />
           <Text style={s.heading}>Goals</Text>
@@ -1340,16 +1374,21 @@ export function GoalsScreen() {
                   gap: 12,
                   paddingVertical: 12,
                   paddingHorizontal: 8,
-                  borderRadius: 12,
-                  backgroundColor: hovered ? "#F7F8F9" : "transparent",
+                  borderRadius: radius.lg,
+                  backgroundColor: hovered ? colors.surfaceMuted : "transparent",
                 },
               ]}
             >
-              <View style={[s.iconBox, { backgroundColor: completed ? colors.green : colors.sky }]}>
+              <View
+                style={[
+                  s.iconBox,
+                  { backgroundColor: completed ? colors.successBg : colors.primarySoft },
+                ]}
+              >
                 {completed ? (
-                  <CircleCheck size={19} color="#2E7D52" />
+                  <CircleCheck size={19} color={colors.successText} />
                 ) : (
-                  <Target size={19} color={colors.blueDark} />
+                  <Target size={19} color={colors.primary} />
                 )}
               </View>
               <View style={{ flex: 1, gap: 4 }}>
@@ -1361,7 +1400,7 @@ export function GoalsScreen() {
                     <View
                       style={{
                         height: 5,
-                        borderRadius: 3,
+                        borderRadius: radius.sm,
                         backgroundColor: colors.line,
                         overflow: "hidden",
                       }}
@@ -1369,9 +1408,9 @@ export function GoalsScreen() {
                       <View
                         style={{
                           height: 5,
-                          borderRadius: 3,
+                          borderRadius: radius.sm,
                           width: `${Math.round((reached / total) * 100)}%`,
-                          backgroundColor: completed ? "#2E9E5B" : colors.blueDark,
+                          backgroundColor: completed ? colors.success : colors.primary,
                         }}
                       />
                     </View>
@@ -1410,9 +1449,9 @@ export function GoalsScreen() {
           onPress={() => setAdding(item.name)}
           style={[s.row, { gap: 12, minHeight: 44, paddingVertical: 8 }]}
         >
-          <item.icon size={23} color="#989C9F" />
-          <Text style={[s.text, { flex: 1, color: "#666A6D" }]}>{item.name}</Text>
-          <Plus size={18} color="#989C9F" />
+          <item.icon size={23} color={colors.subtle} />
+          <Text style={[s.text, { flex: 1, color: colors.muted }]}>{item.name}</Text>
+          <Plus size={18} color={colors.subtle} />
         </Pressable>
       ))}
       {adding && (
@@ -1537,7 +1576,7 @@ function GoalCard({ goal, onOpenTask }: { goal: Goal; onOpenTask?: () => void })
     <Card style={{ gap: 12 }}>
       <View style={s.between}>
         <Text style={[s.heading, { flex: 1 }]}>{goal.title}</Text>
-        <Chip tint={goal.status === "completed" ? colors.green : colors.sky}>
+        <Chip tint={goal.status === "completed" ? colors.successBg : colors.primarySoft}>
           {statusLabel(goal.status)}
         </Chip>
       </View>
@@ -1721,7 +1760,7 @@ function MonitorCard({ monitor, onOpenTask }: { monitor: Monitor; onOpenTask?: (
     <Card style={{ gap: 12 }}>
       <View style={s.between}>
         <Text style={[s.heading, { flex: 1 }]}>{monitor.title}</Text>
-        <Chip tint={colors.sky}>{statusLabel(monitor.status)}</Chip>
+        <Chip tint={colors.primarySoft}>{statusLabel(monitor.status)}</Chip>
       </View>
       <Text selectable style={s.small}>
         {monitor.url.startsWith("sample:") ? "Built-in availability page" : monitor.url}
@@ -1795,7 +1834,7 @@ export function NotificationsSheet() {
         {data?.notifications.map((item) => (
           <Card
             key={item.id}
-            style={{ gap: 10, backgroundColor: item.read ? colors.card : colors.sky }}
+            style={{ gap: 10, backgroundColor: item.read ? colors.surface : colors.primarySoft }}
           >
             <View style={s.between}>
               <Text style={s.heading}>{item.title}</Text>
@@ -1894,7 +1933,13 @@ export function AppsScreen() {
       <ConnectionsScreen query={query} />
       <View style={{ gap: 10 }}>
         <Text style={[s.label, { marginLeft: 16 }]}>On your computer</Text>
-        <Card style={{ paddingHorizontal: 16, paddingVertical: 8, backgroundColor: "#F4F5F6" }}>
+        <Card
+          style={{
+            paddingHorizontal: 16,
+            paddingVertical: 8,
+            backgroundColor: colors.surfaceMuted,
+          }}
+        >
           {shortcuts
             .filter((item) =>
               `${item.title} ${item.detail}`.toLowerCase().includes(query.toLowerCase()),
@@ -1929,8 +1974,8 @@ export function AppsScreen() {
                   onPress={() => setAvatar(item)}
                   style={{
                     padding: 10,
-                    borderRadius: 24,
-                    backgroundColor: avatar === item ? colors.sky : colors.canvas,
+                    borderRadius: radius.xl,
+                    backgroundColor: avatar === item ? colors.primarySoft : colors.canvas,
                   }}
                 >
                   <Mascot size={62} variant={item} />

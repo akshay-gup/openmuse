@@ -92,7 +92,7 @@ export function TaskAttention({
 
   if (task.status === "waiting_approval")
     return (
-      <Card style={{ backgroundColor: colors.lavender, gap: 12 }}>
+      <Card style={{ backgroundColor: colors.primarySoft, gap: 12 }}>
         <Text style={s.heading}>Ready for your review</Text>
         <Text style={s.muted}>Review the exact action and account before it proceeds.</Text>
         <ErrorNotice error={error} />
@@ -102,7 +102,7 @@ export function TaskAttention({
       </Card>
     );
   return (
-    <Card style={{ backgroundColor: colors.sky, gap: 12 }}>
+    <Card style={{ backgroundColor: colors.primarySoft, gap: 12 }}>
       <Text style={s.heading}>{task.question || "A detail from you will help"}</Text>
       {fieldNames.map((name) =>
         missing.some(

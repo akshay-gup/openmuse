@@ -1,7 +1,7 @@
 import { ArrowUp } from "lucide-react-native";
 import { useRef, useState } from "react";
 import { KeyboardAvoidingView, Platform, Pressable, Text, TextInput, View } from "react-native";
-import { colors, composingText, ErrorNotice, s } from "./ui";
+import { colors, composingText, ErrorNotice, radius, s } from "./ui";
 
 /** Opening a reply is local draft state. Only submitting it creates a thread. */
 export function DraftReply({
@@ -41,8 +41,8 @@ export function DraftReply({
               padding: 8,
               borderWidth: 1,
               borderColor: colors.line,
-              borderRadius: 18,
-              backgroundColor: "#FFFFFF",
+              borderRadius: radius.xl,
+              backgroundColor: colors.surface,
               gap: 8,
             },
           ]}
@@ -79,14 +79,14 @@ export function DraftReply({
             style={{
               width: 44,
               height: 44,
-              borderRadius: 24,
+              borderRadius: radius.xl,
               alignItems: "center",
               justifyContent: "center",
-              backgroundColor: value.trim() ? colors.blue : colors.line,
+              backgroundColor: value.trim() ? colors.primary : colors.surfaceMuted,
               opacity: busy ? 0.5 : 1,
             }}
           >
-            <ArrowUp size={24} color={colors.text} />
+            <ArrowUp size={24} color={value.trim() ? colors.onPrimary : colors.subtle} />
           </Pressable>
         </View>
         <Text style={[s.small, { paddingTop: 8, paddingHorizontal: 8 }]}>

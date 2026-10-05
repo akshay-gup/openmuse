@@ -1,7 +1,7 @@
 import { ScrollView, Text, View } from "react-native";
 import type { AgentTask } from "../../../packages/domain/src/agent";
 import { TaskBoardCard } from "./task-board";
-import { colors, s } from "./ui";
+import { chart, colors, fontSize, s } from "./ui";
 
 const DAY_MS = 86_400_000;
 const DAY_WIDTH = 26;
@@ -86,16 +86,16 @@ export function TaskTimeline({
           {placed.map((t) => {
             const barColor =
               t.task.status === "succeeded"
-                ? "#7FB98A"
+                ? chart.done
                 : t.task.status === "failed"
                   ? colors.danger
                   : t.task.kind === "manual"
-                    ? "#8E8BD8"
-                    : colors.blueDark;
+                    ? chart.manual
+                    : chart.agent;
             return (
               <View key={t.task.id} style={[s.row, { minHeight: 48, alignItems: "center" }]}>
                 <Text
-                  style={[s.text, { width: LABEL_WIDTH, fontSize: 14, lineHeight: 20 }]}
+                  style={[s.text, { width: LABEL_WIDTH, fontSize: fontSize.ui, lineHeight: 20 }]}
                   numberOfLines={2}
                 >
                   {t.task.title}
@@ -138,7 +138,7 @@ export function TaskTimeline({
       </ScrollView>
       {!!unscheduled.length && (
         <View style={{ gap: 12 }}>
-          <Text style={[s.text, { fontWeight: "700", fontSize: 14 }]}>
+          <Text style={[s.text, { fontWeight: "700", fontSize: fontSize.ui }]}>
             Unscheduled ({unscheduled.length})
           </Text>
           {unscheduled.map((task) => (

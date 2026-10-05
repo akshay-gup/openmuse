@@ -4,7 +4,18 @@ import { AppState, Image, Pressable, Text, View } from "react-native";
 import type { BrowserSession } from "../../../packages/domain/src";
 import { browserAddress } from "./browser-address";
 import { useComputerDraft } from "./computer-drafts";
-import { Button, Card, colors, ErrorNotice, Field, LinkRow, Sheet, s } from "./ui";
+import {
+  Button,
+  Card,
+  colors,
+  ErrorNotice,
+  Field,
+  fontSize,
+  LinkRow,
+  radius,
+  Sheet,
+  s,
+} from "./ui";
 import { useWorkspace } from "./workspace";
 
 export function ComputerEntry() {
@@ -25,13 +36,13 @@ export function ComputerEntry() {
           gap: 8,
           paddingHorizontal: 14,
           paddingVertical: 10,
-          borderRadius: 999,
-          backgroundColor: "#F1F3F4",
+          borderRadius: radius.pill,
+          backgroundColor: colors.surfaceMuted,
         },
       ]}
     >
       <Monitor size={14} color={colors.muted} />
-      <Text style={{ fontSize: 13, color: colors.muted }}>
+      <Text style={{ fontSize: fontSize.small, color: colors.muted }}>
         Computer
         {!available ? " · offline" : active ? " · take control" : " · ready"}
       </Text>
@@ -39,8 +50,8 @@ export function ComputerEntry() {
         style={{
           width: 5,
           height: 5,
-          borderRadius: 3,
-          backgroundColor: available ? "#57AD85" : "#ACB0B5",
+          borderRadius: radius.sm,
+          backgroundColor: available ? colors.success : colors.neutral,
         }}
       />
     </Pressable>
@@ -54,11 +65,17 @@ export function BrowserThreadCard({ browser }: { browser: BrowserSession }) {
   }, [browser.previewUrl, browser.updatedAt]);
   return (
     <Card
-      style={{ padding: 13, backgroundColor: "#EEEEF0", gap: 12, maxWidth: 440, width: "100%" }}
+      style={{
+        padding: 13,
+        backgroundColor: colors.surfaceMuted,
+        gap: 12,
+        maxWidth: 440,
+        width: "100%",
+      }}
     >
       <View style={[s.row, { gap: 10 }]}>
-        <View style={[s.iconBox, { width: 36, height: 36, borderRadius: 9 }]}>
-          <Globe2 size={21} color={colors.blueDark} />
+        <View style={[s.iconBox, { width: 36, height: 36, borderRadius: radius.md }]}>
+          <Globe2 size={21} color={colors.primary} />
         </View>
         <View style={{ flex: 1 }}>
           <Text style={[s.text, { fontWeight: "600" }]}>Browser</Text>
@@ -75,7 +92,12 @@ export function BrowserThreadCard({ browser }: { browser: BrowserSession }) {
         <Image
           accessibilityLabel={`Browser preview: ${browser.title}`}
           source={{ uri: browser.previewUrl }}
-          style={{ width: "100%", aspectRatio: 1.6, borderRadius: 11, backgroundColor: "#FFF" }}
+          style={{
+            width: "100%",
+            aspectRatio: 1.6,
+            borderRadius: radius.md,
+            backgroundColor: colors.surface,
+          }}
           resizeMode="contain"
           onError={() => setFailed(true)}
         />
@@ -83,8 +105,8 @@ export function BrowserThreadCard({ browser }: { browser: BrowserSession }) {
         <View
           style={{
             padding: 24,
-            borderRadius: 12,
-            backgroundColor: "#FFF",
+            borderRadius: radius.lg,
+            backgroundColor: colors.surface,
             alignItems: "center",
             gap: 10,
           }}
@@ -152,9 +174,17 @@ export function ComputerSheet() {
       <View style={{ gap: 20 }}>
         {tab === "Browser" && (
           <View
-            style={[s.row, { gap: 12, padding: 18, borderRadius: 20, backgroundColor: colors.sky }]}
+            style={[
+              s.row,
+              {
+                gap: 12,
+                padding: 18,
+                borderRadius: radius.xl,
+                backgroundColor: colors.primarySoft,
+              },
+            ]}
           >
-            <Monitor size={28} color={colors.blueDark} />
+            <Monitor size={28} color={colors.primary} />
             <View style={{ flex: 1 }}>
               <Text style={s.heading}>{available ? "Browser connected" : "Browser offline"}</Text>
               <Text style={s.muted}>

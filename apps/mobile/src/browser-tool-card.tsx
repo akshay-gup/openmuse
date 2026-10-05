@@ -3,7 +3,7 @@ import { createContext, useContext, useEffect, useState } from "react";
 import { ActivityIndicator, AppState, Image, Text, View } from "react-native";
 import { z } from "zod";
 import type { BrowserSession } from "../../../packages/domain/src";
-import { Button, Card, colors, ErrorNotice, s } from "./ui";
+import { Button, Card, colors, ErrorNotice, fontSize, radius, s } from "./ui";
 import { useWorkspace } from "./workspace";
 
 export const BrowserRunContext = createContext({ running: false, active: false });
@@ -93,15 +93,21 @@ export function BrowserToolCard({
       : "";
   return (
     <Card
-      style={{ padding: 13, backgroundColor: "#EEEEF0", gap: 12, width: "100%", maxWidth: 440 }}
+      style={{
+        padding: 13,
+        backgroundColor: colors.surfaceMuted,
+        gap: 12,
+        width: "100%",
+        maxWidth: 440,
+      }}
     >
       <View style={[s.row, { gap: 10 }]}>
-        <View style={[s.iconBox, { width: 36, height: 36, borderRadius: 10 }]}>
-          <Globe2 size={21} color={colors.blueDark} />
+        <View style={[s.iconBox, { width: 36, height: 36, borderRadius: radius.md }]}>
+          <Globe2 size={21} color={colors.primary} />
         </View>
         <View style={{ flex: 1, gap: 1 }}>
           <Text style={[s.text, { fontWeight: "600" }]}>Browser</Text>
-          <Text numberOfLines={1} style={[s.small, { fontSize: 12 }]}>
+          <Text numberOfLines={1} style={[s.small, { fontSize: fontSize.caption }]}>
             {working
               ? "Reading the page…"
               : loading
@@ -112,22 +118,29 @@ export function BrowserToolCard({
           </Text>
         </View>
         {working ? (
-          <ActivityIndicator size="small" color={colors.blueDark} />
+          <ActivityIndicator size="small" color={colors.primary} />
         ) : visited ? (
-          <Check size={17} color="#47896C" accessibilityLabel="Page read" />
+          <Check size={17} color={colors.success} accessibilityLabel="Page read" />
         ) : null}
       </View>
       {preview ? (
         <Image
           accessibilityLabel={`Browser preview: ${visited?.title}`}
           source={{ uri: api.url(preview) }}
-          style={{ width: "100%", aspectRatio: 1.7, borderRadius: 12, backgroundColor: "#FFF" }}
+          style={{
+            width: "100%",
+            aspectRatio: 1.7,
+            borderRadius: radius.lg,
+            backgroundColor: colors.surface,
+          }}
           resizeMode="contain"
           onError={() => setPreviewFailed(true)}
         />
       ) : (
-        <View style={{ backgroundColor: "#FAFAFB", borderRadius: 12, padding: 21, gap: 12 }}>
-          <Text numberOfLines={2} style={[s.text, { fontSize: 14 }]}>
+        <View
+          style={{ backgroundColor: colors.surface, borderRadius: radius.lg, padding: 21, gap: 12 }}
+        >
+          <Text numberOfLines={2} style={[s.text, { fontSize: fontSize.ui }]}>
             {visited?.title || siteLabel(url)}
           </Text>
           {working ? (
@@ -135,7 +148,12 @@ export function BrowserToolCard({
               {(["90%", "74%", "84%"] as const).map((width) => (
                 <View
                   key={width}
-                  style={{ height: 7, width, borderRadius: 4, backgroundColor: "#E3E9ED" }}
+                  style={{
+                    height: 7,
+                    width,
+                    borderRadius: radius.sm,
+                    backgroundColor: colors.line,
+                  }}
                 />
               ))}
             </View>
@@ -160,7 +178,7 @@ export function BrowserToolCard({
           icon={Hand}
           disabled={!browser || running}
           onPress={() => browser && open({ type: "browser", browser })}
-          style={{ backgroundColor: "#F9F9FA" }}
+          style={{ backgroundColor: colors.surface }}
         >
           Take control
         </Button>

@@ -1,5 +1,5 @@
 import { Text, View } from "react-native";
-import { colors, s, webFontFamily } from "./ui";
+import { colors, fontFamily, fontSize, radius, s } from "./ui";
 
 interface DateOnlyFieldProps {
   label: string;
@@ -18,12 +18,12 @@ export default function DateOnlyField({ label, value, onChange }: DateOnlyFieldP
         onChange={(event) => onChange(event.target.value)}
         style={{
           border: `1px solid ${colors.line}`,
-          borderRadius: 16,
+          borderRadius: radius.xl,
           padding: "12px 16px",
-          fontSize: 16,
+          fontSize: fontSize.heading,
           color: colors.text,
-          background: "#FFF",
-          fontFamily: webFontFamily,
+          background: colors.surface,
+          fontFamily: fontFamily.web,
           width: "100%",
           boxSizing: "border-box",
           minHeight: 48,

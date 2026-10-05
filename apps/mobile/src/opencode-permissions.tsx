@@ -2,7 +2,17 @@ import { Hash, ShieldCheck } from "lucide-react-native";
 import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import type { Channel } from "../../../packages/domain/src/agent";
-import { Button, Card, colors, Empty, ErrorNotice, SectionHeading, s } from "./ui";
+import {
+  Button,
+  Card,
+  colors,
+  Empty,
+  ErrorNotice,
+  fontSize,
+  radius,
+  SectionHeading,
+  s,
+} from "./ui";
 import { useWorkspace } from "./workspace";
 
 interface PendingRequest {
@@ -81,15 +91,18 @@ export function PendingApprovals({ threadId }: { threadId: string }) {
             gap: 10,
             paddingHorizontal: 14,
             paddingVertical: 14,
-            backgroundColor: "#FFF8E7",
-            borderRadius: 16,
+            backgroundColor: colors.warningBg,
+            borderRadius: radius.xl,
             borderWidth: 1,
-            borderColor: "#F0DFAE",
+            borderColor: colors.warningLine,
           }}
         >
           <View style={[s.row, { gap: 8, alignItems: "center" }]}>
             <ShieldCheck size={16} color={colors.text} />
-            <Text selectable style={[s.text, { flex: 1, fontSize: 14, fontWeight: "600" }]}>
+            <Text
+              selectable
+              style={[s.text, { flex: 1, fontSize: fontSize.ui, fontWeight: "600" }]}
+            >
               {requestSummary(request)}
             </Text>
           </View>
@@ -194,7 +207,7 @@ export function PermissionModeSelector({
     return error ? (
       <ErrorNotice error={error} />
     ) : (
-      <ActivityIndicator color={colors.blueDark} style={{ paddingVertical: 20 }} />
+      <ActivityIndicator color={colors.primary} style={{ paddingVertical: 20 }} />
     );
   const inheritDetail = channelMode
     ? `Channel: ${channelMode === "auto" ? "Auto-approve" : "Ask"}`
@@ -220,14 +233,19 @@ export function PermissionModeSelector({
                 alignItems: "center",
                 paddingVertical: 12,
                 paddingHorizontal: 14,
-                borderRadius: 14,
+                borderRadius: radius.lg,
                 borderWidth: 1,
-                borderColor: active ? colors.blueDark : colors.line,
-                backgroundColor: active ? "#EFF6FF" : "transparent",
+                borderColor: active ? colors.primary : colors.line,
+                backgroundColor: active ? colors.primarySoft : "transparent",
               },
             ]}
           >
-            <Text style={[s.text, { flex: 1, fontSize: 14, fontWeight: active ? "600" : "400" }]}>
+            <Text
+              style={[
+                s.text,
+                { flex: 1, fontSize: fontSize.ui, fontWeight: active ? "600" : "400" },
+              ]}
+            >
               {option.label}
             </Text>
             <Text style={s.small}>{option.detail}</Text>
@@ -238,7 +256,7 @@ export function PermissionModeSelector({
         <Text style={[s.small, { color: colors.muted }]}>Explicit deny rules still apply.</Text>
       )}
       <ErrorNotice error={error} />
-      {saving && <ActivityIndicator color={colors.blueDark} />}
+      {saving && <ActivityIndicator color={colors.primary} />}
     </View>
   );
 }
@@ -298,7 +316,7 @@ export function PermissionsSettings() {
       </Text>
       <ErrorNotice error={error} />
       {channels === null ? (
-        <ActivityIndicator color={colors.blueDark} style={{ paddingVertical: 20 }} />
+        <ActivityIndicator color={colors.primary} style={{ paddingVertical: 20 }} />
       ) : !channels.length ? (
         <Empty icon={Hash} title="No channels yet" detail="Create a channel to set its rules." />
       ) : (

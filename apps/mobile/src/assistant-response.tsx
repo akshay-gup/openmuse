@@ -2,52 +2,80 @@ import { useCallback, useState } from "react";
 import { Linking, ScrollView, Text, type TextStyle, View, type ViewStyle } from "react-native";
 import Markdown, { type MarkdownStyles, type RenderRules } from "react-native-markdown-renderer";
 import { assistantMarkdown, isSafeAssistantUrl } from "./assistant-markdown";
-import { colors, ErrorNotice } from "./ui";
+import { colors, ErrorNotice, fontSize, monoFont, radius } from "./ui";
 
-const textStyle = { color: colors.text, fontSize: 16, lineHeight: 24 };
+const textStyle = { color: colors.text, fontSize: fontSize.body, lineHeight: 22 };
 const style: Partial<MarkdownStyles> = {
   text: textStyle,
   paragraph: { marginTop: 0, marginBottom: 6 },
   list: { marginBottom: 6 },
-  headingContainer: { marginTop: 8, marginBottom: 4 },
-  heading1: { fontSize: 21, lineHeight: 27 },
-  heading2: { fontSize: 19, lineHeight: 25 },
-  heading3: { fontSize: 17, lineHeight: 23 },
-  link: { color: colors.blueDark, textDecorationLine: "underline" },
-  codeInline: { backgroundColor: "#E2E4E7", color: colors.text },
-  codeBlock: { backgroundColor: "#E2E4E7", color: colors.text },
+  headingContainer: { marginTop: 8, marginBottom: 2 },
+  heading1: { fontSize: fontSize.title, lineHeight: 24, fontWeight: "700" },
+  heading2: { fontSize: fontSize.heading, lineHeight: 23, fontWeight: "700" },
+  heading3: { fontSize: fontSize.body, lineHeight: 22, fontWeight: "700" },
+  link: { color: colors.primary, textDecorationLine: "underline" },
+  codeInline: {
+    backgroundColor: colors.surfaceHover,
+    color: colors.text,
+    fontFamily: monoFont,
+    fontSize: fontSize.small,
+  },
+  codeBlock: {
+    // The wrapper in renderCodeBlock draws the box; clear the renderer's own default box.
+    backgroundColor: "transparent",
+    borderWidth: 0,
+    borderRadius: 0,
+    padding: 0,
+    color: colors.text,
+    fontFamily: monoFont,
+    fontSize: fontSize.small,
+    lineHeight: 19,
+  },
   table: {
     borderWidth: 1,
-    borderColor: "#D2D6DA",
-    borderRadius: 8,
+    borderColor: colors.lineStrong,
+    borderRadius: radius.sm,
     overflow: "hidden",
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.surface,
   },
-  tableHeader: { backgroundColor: "#F3F4F6" },
+  tableHeader: { backgroundColor: colors.surfaceMuted },
   tableHeaderCell: {
     flex: 1,
-    minWidth: 68,
+    minWidth: 72,
     paddingVertical: 7,
-    paddingHorizontal: 10,
+    paddingHorizontal: 8,
     borderWidth: 0,
     borderRightWidth: 1,
-    borderColor: "#E3E6E9",
+    borderColor: colors.line,
   },
-  tableRow: { borderBottomWidth: 1, borderColor: "#E3E6E9", flexDirection: "row" },
+  tableRow: { borderBottomWidth: 1, borderColor: colors.line, flexDirection: "row" },
   tableRowCell: {
     flex: 1,
-    minWidth: 68,
+    minWidth: 72,
     paddingVertical: 7,
-    paddingHorizontal: 10,
+    paddingHorizontal: 8,
     borderWidth: 0,
     borderRightWidth: 1,
-    borderColor: "#E3E6E9",
+    borderColor: colors.line,
   },
 };
 const renderCodeBlock: RenderRules["fence"] = (node, _children, _parent, styles) => (
-  <Text key={node.key} selectable style={styles.codeBlock as TextStyle}>
-    {node.content.replace(/\n$/, "")}
-  </Text>
+  <View
+    key={node.key}
+    style={{
+      backgroundColor: colors.surfaceMuted,
+      borderRadius: radius.sm,
+      borderWidth: 1,
+      borderColor: colors.line,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      marginVertical: 4,
+    }}
+  >
+    <Text selectable style={styles.codeBlock as TextStyle}>
+      {node.content.replace(/\n$/, "")}
+    </Text>
+  </View>
 );
 const rules: RenderRules = {
   textgroup: (node, children) => (
@@ -75,12 +103,12 @@ const rules: RenderRules = {
   ),
   th: (node, children, _parent, styles) => (
     <View key={node.key} style={styles.tableHeaderCell as ViewStyle}>
-      <Text style={{ fontWeight: "700", fontSize: 14, lineHeight: 20 }}>{children}</Text>
+      <Text style={{ fontWeight: "700", fontSize: fontSize.ui, lineHeight: 20 }}>{children}</Text>
     </View>
   ),
   td: (node, children, _parent, styles) => (
     <View key={node.key} style={styles.tableRowCell as ViewStyle}>
-      <Text style={{ fontSize: 14, lineHeight: 20 }}>{children}</Text>
+      <Text style={{ fontSize: fontSize.ui, lineHeight: 20 }}>{children}</Text>
     </View>
   ),
 };

@@ -10,7 +10,7 @@ import {
   type TaskStatus,
 } from "../../../packages/domain/src/agent";
 import { ThreadPermissionRules } from "./opencode-permissions";
-import { colors, s } from "./ui";
+import { colors, fontSize, radius, s } from "./ui";
 import { useWorkspace } from "./workspace";
 
 function taskLabel(status: TaskStatus): string {
@@ -120,7 +120,7 @@ export function ChannelThreadBanner({
     };
   }, [api, threadId, mainId]);
 
-  if (binding === undefined) return <ActivityIndicator color={colors.blueDark} />;
+  if (binding === undefined) return <ActivityIndicator color={colors.primary} />;
   if (binding === null) return null;
 
   return (
@@ -154,8 +154,8 @@ export function ChannelThreadBanner({
             gap: 2,
             paddingHorizontal: 12,
             paddingVertical: 8,
-            backgroundColor: "#F4F4F6",
-            borderRadius: 14,
+            backgroundColor: colors.surfaceMuted,
+            borderRadius: radius.lg,
           }}
         >
           <Text style={s.small}>Work from this thread</Text>
@@ -167,7 +167,7 @@ export function ChannelThreadBanner({
               onPress={() => open({ type: "task", taskId: task.id })}
               style={[s.row, { gap: 8, paddingVertical: 4 }]}
             >
-              <Text style={[s.text, { flex: 1, fontSize: 14 }]} numberOfLines={1}>
+              <Text style={[s.text, { flex: 1, fontSize: fontSize.ui }]} numberOfLines={1}>
                 {task.title}
               </Text>
               <Text style={[s.small, { color: colors.muted }]}>{taskLabel(task.status)}</Text>

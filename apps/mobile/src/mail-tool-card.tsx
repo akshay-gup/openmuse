@@ -45,7 +45,7 @@ export function MailToolCard({
     return (
       <View style={[s.row, { gap: 10, padding: 14 }]}>
         {active ? (
-          <ActivityIndicator size="small" color={colors.blueDark} />
+          <ActivityIndicator size="small" color={colors.primary} />
         ) : (
           <Mail size={16} color={colors.muted} />
         )}
@@ -80,11 +80,17 @@ export function MailToolCard({
   if (!message) return <Text style={s.muted}>No messages in this thread.</Text>;
   return (
     <Card
-      style={{ padding: 18, gap: 14, backgroundColor: "#F0EFF2", maxWidth: 440, width: "100%" }}
+      style={{
+        padding: 18,
+        gap: 14,
+        backgroundColor: colors.surfaceMuted,
+        maxWidth: 440,
+        width: "100%",
+      }}
     >
       <View style={[s.row, { gap: 10 }]}>
-        <View style={[s.iconBox, { backgroundColor: "#E9F5FC" }]}>
-          <Mail size={20} color={colors.blueDark} />
+        <View style={[s.iconBox, { backgroundColor: colors.primarySoft }]}>
+          <Mail size={20} color={colors.primary} />
         </View>
         <View style={{ flex: 1 }}>
           <Text style={[s.text, { fontWeight: "600" }]}>{message.sender}</Text>

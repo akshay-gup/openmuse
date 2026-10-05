@@ -24,8 +24,11 @@ import {
   colors,
   ErrorNotice,
   Field,
+  fontSize,
   IconButton,
+  layout,
   Mascot,
+  radius,
   s,
   type WebPressState,
 } from "./ui";
@@ -37,12 +40,14 @@ function SidebarRow({
   active,
   onPress,
   accessibilityLabel,
+  dense,
 }: {
   icon: typeof Bot;
   label: string;
   active?: boolean;
   onPress: () => void;
   accessibilityLabel?: string;
+  dense?: boolean;
 }) {
   return (
     <Pressable
@@ -51,16 +56,27 @@ function SidebarRow({
       onPress={onPress}
       style={({ pressed, hovered }: WebPressState) => ({
         flexDirection: "row",
-        gap: 12,
+        gap: dense ? 10 : 12,
         alignItems: "center",
-        paddingVertical: 12,
+        paddingVertical: dense ? 7 : 12,
         paddingHorizontal: 12,
-        borderRadius: 12,
-        backgroundColor: active ? "#E8EDF0" : hovered || pressed ? "#F0F2F4" : "transparent",
+        borderRadius: dense ? 8 : 12,
+        backgroundColor: active
+          ? colors.primarySoft
+          : hovered || pressed
+            ? colors.surfaceHover
+            : "transparent",
       })}
     >
-      <Icon size={17} color={active ? colors.text : colors.muted} />
-      <Text style={[s.text, { flex: 1, fontWeight: active ? "600" : "400" }]} numberOfLines={1}>
+      <Icon size={dense ? 16 : 17} color={active ? colors.primary : colors.muted} />
+      <Text
+        style={[
+          s.text,
+          dense && { fontSize: fontSize.ui, lineHeight: 20 },
+          { flex: 1, fontWeight: active ? "600" : "400" },
+        ]}
+        numberOfLines={1}
+      >
         {label}
       </Text>
     </Pressable>
@@ -184,22 +200,22 @@ export function Sidebar({
         flex: compact ? 1 : undefined,
         borderRightWidth: 1,
         borderRightColor: colors.line,
-        backgroundColor: "#FAFBFC",
+        backgroundColor: colors.surfaceMuted,
       }}
     >
       <View
         style={[
           s.row,
           {
-            paddingHorizontal: 18,
-            height: 76,
+            paddingHorizontal: 16,
+            height: layout.headerHeight,
             gap: 10,
             borderBottomWidth: 1,
             borderBottomColor: colors.line,
           },
         ]}
       >
-        <Mascot size={34} variant={data?.identity.avatar} />
+        <Mascot size={28} variant={data?.identity.avatar} />
         <View style={{ flex: 1 }}>
           <Text style={s.heading}>{data?.identity.name || "Hive"}</Text>
           <Text style={s.small}>Your workspace</Text>
@@ -208,10 +224,11 @@ export function Sidebar({
       </View>
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingHorizontal: 12, paddingVertical: 16, gap: 4 }}
+        contentContainerStyle={{ paddingHorizontal: 12, paddingVertical: 10, gap: compact ? 4 : 1 }}
       >
-        <Text style={[s.label, { paddingHorizontal: 12, marginBottom: 8 }]}>Direct messages</Text>
+        <Text style={[s.label, { paddingHorizontal: 12, marginBottom: 4 }]}>Direct messages</Text>
         <SidebarRow
+          dense={!compact}
           icon={Bot}
           label={data?.identity.name || "Hive"}
           active={section === "chat" && isMainActive}
@@ -220,7 +237,7 @@ export function Sidebar({
         <View
           style={[
             s.row,
-            { alignItems: "center", marginTop: 16, marginBottom: 4, paddingHorizontal: 12 },
+            { alignItems: "center", marginTop: 12, marginBottom: 0, paddingHorizontal: 12 },
           ]}
         >
           <Text style={[s.label, { flex: 1 }]}>Channels</Text>
@@ -237,10 +254,11 @@ export function Sidebar({
         </View>
         <ErrorNotice error={error} />
         {loading && !channels ? (
-          <ActivityIndicator color={colors.blueDark} style={{ marginTop: 8 }} />
+          <ActivityIndicator color={colors.primary} style={{ marginTop: 8 }} />
         ) : (
           userChannels.map((channel) => (
             <SidebarRow
+              dense={!compact}
               key={channel.id}
               icon={Hash}
               label={channel.name}
@@ -294,13 +312,14 @@ export function Sidebar({
             ]}
           >
             <Plus size={16} color={colors.muted} />
-            <Text style={[s.text, { fontSize: 14 }]}>New channel</Text>
+            <Text style={[s.text, { fontSize: fontSize.ui }]}>New channel</Text>
           </Pressable>
         )}
-        <View style={[s.divider, { marginVertical: 16 }]} />
-        <Text style={[s.label, { paddingHorizontal: 12, marginBottom: 8 }]}>Workspace</Text>
+        <View style={[s.divider, { marginVertical: 8 }]} />
+        <Text style={[s.label, { paddingHorizontal: 12, marginBottom: 4 }]}>Workspace</Text>
         {workspaceLinks.map((item) => (
           <SidebarRow
+            dense={!compact}
             key={item.id}
             icon={item.icon}
             label={item.label}
@@ -308,8 +327,9 @@ export function Sidebar({
             onPress={() => go(item.id)}
           />
         ))}
-        <View style={[s.divider, { marginVertical: 16 }]} />
+        <View style={[s.divider, { marginVertical: 8 }]} />
         <SidebarRow
+          dense={!compact}
           icon={Plus}
           label="Delegate task"
           onPress={() => {
@@ -318,6 +338,7 @@ export function Sidebar({
           }}
         />
         <SidebarRow
+          dense={!compact}
           icon={Monitor}
           label="Agent computer"
           onPress={() => {
@@ -327,14 +348,14 @@ export function Sidebar({
         />
       </ScrollView>
       <View
-        style={[s.row, { borderTopWidth: 1, borderTopColor: colors.line, padding: 16, gap: 12 }]}
+        style={[s.row, { borderTopWidth: 1, borderTopColor: colors.line, padding: 12, gap: 12 }]}
       >
         <View
           style={{
             width: 36,
             height: 36,
-            borderRadius: 12,
-            backgroundColor: colors.lavender,
+            borderRadius: radius.lg,
+            backgroundColor: colors.primarySoft,
             alignItems: "center",
             justifyContent: "center",
           }}
@@ -344,7 +365,7 @@ export function Sidebar({
           </Text>
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={[s.text, { fontSize: 14, fontWeight: "500" }]} numberOfLines={1}>
+          <Text style={[s.text, { fontSize: fontSize.ui, fontWeight: "500" }]} numberOfLines={1}>
             {workspace.profile.name || "You"}
           </Text>
           <Text style={s.small} numberOfLines={1}>

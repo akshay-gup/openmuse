@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { type Channel, ORCHESTRATOR_CHANNEL_ID } from "../../../packages/domain/src/agent";
 import { useMuseThread } from "./threads";
-import { Button, colors, Empty, ErrorNotice, Field, s } from "./ui";
+import { Button, colors, Empty, ErrorNotice, Field, radius, s } from "./ui";
 import { useWorkspace } from "./workspace";
 
 /**
@@ -68,7 +68,7 @@ export function ChannelsSection({ onClose }: { onClose: () => void }) {
       </View>
       <ErrorNotice error={error} />
       {loading && !channels ? (
-        <ActivityIndicator color={colors.blueDark} />
+        <ActivityIndicator color={colors.primary} />
       ) : userChannels.length === 0 ? (
         <Empty icon={Hash} title="No channels yet" detail="Create one to start chatting." />
       ) : (
@@ -96,8 +96,8 @@ export function ChannelsSection({ onClose }: { onClose: () => void }) {
                       alignItems: "center",
                       paddingVertical: 10,
                       paddingHorizontal: 12,
-                      borderRadius: 12,
-                      backgroundColor: isActive ? "#E8EDF0" : "transparent",
+                      borderRadius: radius.lg,
+                      backgroundColor: isActive ? colors.primarySoft : "transparent",
                     },
                   ]}
                 >

@@ -3,7 +3,7 @@ import { Text, View } from "react-native";
 import { type TaskPriority, taskPriorities } from "../../../packages/domain/src/agent";
 import { useAgentWorkspace } from "./agent-workspace";
 import { priorityColors } from "./task-board";
-import { Button, ErrorNotice, Field, Sheet, s } from "./ui";
+import { Button, ErrorNotice, Field, fontSize, Sheet, s } from "./ui";
 
 const datePattern = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -85,7 +85,7 @@ export function TaskCreate({ onClose }: { onClose: () => void }) {
                       backgroundColor: priorityColors[item],
                     }}
                   />
-                  <Text style={[s.text, { fontSize: 14 }]}>
+                  <Text style={[s.text, { fontSize: fontSize.ui }]}>
                     {item[0].toUpperCase() + item.slice(1)}
                   </Text>
                 </View>

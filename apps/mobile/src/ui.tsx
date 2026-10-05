@@ -19,134 +19,121 @@ import {
   type ViewStyle,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-/** The system font stack react-native-web gives Text and TextInput. Raw web <input> elements need it spelled out. */
-export const webFontFamily =
-  '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
+import { colors, fontFamily, fontSize, mascotTints, radius, shadow, sp, type } from "./theme";
+
+export {
+  avatarTints,
+  brand,
+  chart,
+  colors,
+  eventColors,
+  financeArt,
+  fontFamily,
+  fontSize,
+  layout,
+  mascotTints,
+  radius,
+  shadow,
+  sp,
+  type,
+} from "./theme";
+
+/** The code font for this platform. Courier, the default on web, is thin and hard to read. */
+export const monoFont = Platform.select({
+  ios: fontFamily.monoIos,
+  android: fontFamily.monoAndroid,
+  default: fontFamily.mono,
+});
+/** True on a wide web window with a pointer. Touch layouts keep large targets; desktop gets denser rows. */
+export function useDense(): boolean {
+  const { width } = useWindowDimensions();
+  return Platform.OS === "web" && width >= 900;
+}
 /** react-native-web also passes hover and focus state to Pressable style callbacks; React Native's types only declare `pressed`. */
 export type WebPressState = { pressed: boolean; hovered?: boolean; focused?: boolean };
-/** Spacing scale: everything in the app should be a multiple of 4. */
-export const sp = {
-  xs: 4,
-  sm: 8,
-  md: 12,
-  lg: 16,
-  xl: 20,
-  xxl: 24,
-  xxxl: 32,
-} as const;
-/** Type scale. body is the default reading size; small is the smallest
- *  running text anywhere; label is reserved for section/field eyebrows. */
-export const type = {
-  display: { fontSize: 32, lineHeight: 40 },
-  title: { fontSize: 24, lineHeight: 30, fontWeight: "600", letterSpacing: -0.6 },
-  heading: { fontSize: 16, lineHeight: 22, fontWeight: "600", letterSpacing: -0.25 },
-  body: { fontSize: 15, lineHeight: 23 },
-  sub: { fontSize: 13, lineHeight: 20 },
-  caption: { fontSize: 12, lineHeight: 17 },
-  micro: { fontSize: 11, lineHeight: 15 },
-  label: {
-    fontSize: 11,
-    lineHeight: 15,
-    fontWeight: "700",
-    letterSpacing: 1.2,
-    textTransform: "uppercase",
-  },
-} as const;
-export const colors = {
-  canvas: "#FCFCFC",
-  card: "#FFFFFF",
-  text: "#11191C",
-  muted: "#697176",
-  line: "#EEEEF0",
-  blue: "#C8E7FF",
-  blueDark: "#1473C8",
-  sky: "#EDF7FD",
-  green: "#E3F3E8",
-  lavender: "#F0EEFA",
-  orange: "#FDF0DF",
-  danger: "#AA4A45",
-};
 export const s = StyleSheet.create({
   row: { flexDirection: "row", alignItems: "center" },
   between: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  text: { color: colors.text, fontSize: 15, lineHeight: 23 },
-  muted: { color: colors.muted, fontSize: 14, lineHeight: 21 },
-  small: { color: colors.muted, fontSize: 12, lineHeight: 17 },
-  label: {
-    color: colors.muted,
-    fontSize: 11,
-    fontWeight: "700",
-    letterSpacing: 1.2,
-    textTransform: "uppercase",
-  },
-  title: { color: colors.text, fontSize: 24, fontWeight: "600", letterSpacing: -0.6 },
-  heading: { color: colors.text, fontSize: 16, fontWeight: "600", letterSpacing: -0.25 },
+  text: { color: colors.text, ...type.body },
+  muted: { color: colors.muted, ...type.ui },
+  small: { color: colors.muted, ...type.caption },
+  label: { color: colors.muted, ...type.label },
+  title: { color: colors.text, ...type.title },
+  heading: { color: colors.text, ...type.heading },
   card: {
-    backgroundColor: colors.card,
-    borderRadius: 20,
-    borderWidth: 0,
-    borderColor: colors.line,
-    padding: 20,
-  },
-  divider: { height: 1, backgroundColor: colors.line, marginVertical: 20 },
-  input: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
     borderWidth: 1,
     borderColor: colors.line,
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    color: colors.text,
-    fontSize: 16,
-    backgroundColor: "#FFF",
-    minHeight: 48,
+    padding: sp.lg,
+    boxShadow: shadow.card,
   },
-  field: { gap: 8, marginBottom: 20 },
+  divider: { height: 1, backgroundColor: colors.line, marginVertical: sp.xl },
+  input: {
+    borderWidth: 1,
+    borderColor: colors.lineStrong,
+    borderRadius: radius.md,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    color: colors.text,
+    fontSize: fontSize.heading,
+    backgroundColor: colors.surface,
+    minHeight: 44,
+  },
+  field: { gap: sp.sm, marginBottom: sp.xl },
   button: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 8,
-    paddingHorizontal: 18,
-    minHeight: 46,
+    gap: sp.sm,
+    paddingHorizontal: 16,
+    minHeight: 44,
     paddingVertical: 10,
-    borderRadius: 999,
+    borderRadius: radius.md,
   },
-  primary: { backgroundColor: colors.blue },
-  secondary: { backgroundColor: "#F1F2F3" },
-  buttonText: { fontSize: 15, fontWeight: "600" },
+  primary: { backgroundColor: colors.primary },
+  secondary: { backgroundColor: colors.surfaceMuted, borderWidth: 1, borderColor: colors.line },
+  buttonText: { fontSize: fontSize.body, fontWeight: "600" },
   chip: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: radius.sm,
     alignSelf: "flex-start",
-    backgroundColor: colors.canvas,
+    backgroundColor: colors.surfaceMuted,
   },
-  chipText: { fontSize: 11, fontWeight: "600", color: colors.muted },
+  chipText: { fontSize: fontSize.caption, fontWeight: "600", color: colors.muted },
   iconBox: {
-    width: 42,
-    height: 42,
-    borderRadius: 14,
+    width: 40,
+    height: 40,
+    borderRadius: radius.md,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: colors.sky,
+    backgroundColor: colors.primarySoft,
   },
-  error: { padding: 16, borderRadius: 14, backgroundColor: "#FBEFED", marginVertical: 10, gap: 4 },
+  error: {
+    padding: sp.lg,
+    borderRadius: radius.md,
+    backgroundColor: colors.dangerBg,
+    marginVertical: 10,
+    gap: 4,
+  },
   modalShade: {
     flex: 1,
-    backgroundColor: "rgba(35,48,44,0.25)",
+    backgroundColor: colors.scrim,
     justifyContent: "center",
     alignItems: "center",
-    padding: 20,
+    padding: sp.xl,
   },
   sheet: {
     backgroundColor: colors.canvas,
-    borderRadius: 28,
+    borderRadius: radius.lg,
     width: "100%",
     maxWidth: 790,
     maxHeight: "94%",
     overflow: "hidden",
     borderWidth: 1,
     borderColor: colors.line,
+    boxShadow: shadow.popover,
   },
 });
 export function Button({
@@ -172,7 +159,8 @@ export function Button({
   danger?: boolean;
   style?: ViewStyle;
 }) {
-  const color = danger ? colors.danger : colors.text;
+  const color = danger ? colors.danger : primary ? colors.onPrimary : colors.text;
+  const dense = useDense();
   return (
     <Pressable
       accessibilityRole="button"
@@ -180,12 +168,19 @@ export function Button({
       disabled={disabled || busy}
       accessibilityState={{ disabled: !!(disabled || busy), busy: !!busy }}
       onPress={onPress}
-      style={({ pressed }) => [
+      style={({ pressed, hovered }: WebPressState) => [
         s.button,
         primary ? s.primary : s.secondary,
-        small && { minHeight: 40, paddingVertical: 8, paddingHorizontal: 14 },
+        (pressed || hovered) && {
+          backgroundColor: primary ? colors.primaryPressed : colors.surfaceHover,
+        },
+        dense && { minHeight: 40, paddingVertical: 8 },
+        small && {
+          minHeight: dense ? 34 : 40,
+          paddingVertical: dense ? 6 : 8,
+          paddingHorizontal: 14,
+        },
         (disabled || busy) && { opacity: 0.5 },
-        pressed && { transform: [{ scale: 0.98 }] },
         style,
       ]}
     >
@@ -212,14 +207,14 @@ export function IconButton({
       accessibilityRole="button"
       accessibilityLabel={label}
       onPress={onPress}
-      style={({ pressed }) => [
+      style={({ pressed, hovered }: WebPressState) => [
         {
           width: 44,
           height: 44,
           alignItems: "center",
           justifyContent: "center",
           borderRadius: 22,
-          backgroundColor: pressed ? colors.line : "#FFFFFF",
+          backgroundColor: pressed || hovered ? colors.surfaceHover : colors.surface,
         },
       ]}
     >
@@ -259,6 +254,7 @@ export function Segmented<T extends string>({
   onChange: (id: T) => void;
   disabled?: boolean;
 }) {
+  const dense = useDense();
   return (
     <ScrollView
       horizontal
@@ -272,8 +268,8 @@ export function Segmented<T extends string>({
         style={{
           flexDirection: "row",
           padding: 3,
-          borderRadius: 999,
-          backgroundColor: "#F1F2F3",
+          borderRadius: radius.md,
+          backgroundColor: colors.surfaceMuted,
           opacity: disabled ? 0.6 : 1,
         }}
       >
@@ -292,15 +288,15 @@ export function Segmented<T extends string>({
                 alignItems: "center",
                 justifyContent: "center",
                 gap: 6,
-                minHeight: 38,
-                paddingHorizontal: 14,
-                borderRadius: 999,
+                minHeight: dense ? 32 : 38,
+                paddingHorizontal: dense ? 12 : 14,
+                borderRadius: radius.sm + 1,
                 borderWidth: 1,
                 borderColor: selected ? colors.line : "transparent",
                 backgroundColor: selected
-                  ? "#FFFFFF"
+                  ? colors.surface
                   : hovered || pressed
-                    ? "#E7E9EB"
+                    ? colors.surfaceHover
                     : "transparent",
               })}
             >
@@ -312,8 +308,8 @@ export function Segmented<T extends string>({
               <Text
                 numberOfLines={1}
                 style={{
-                  fontSize: 14,
-                  fontWeight: selected ? "700" : "500",
+                  fontSize: fontSize.ui,
+                  fontWeight: selected ? "600" : "500",
                   color: selected ? colors.text : colors.muted,
                 }}
               >
@@ -326,11 +322,16 @@ export function Segmented<T extends string>({
     </ScrollView>
   );
 }
+/** The browser's own focus ring is replaced by the teal border and halo drawn on focus. */
+const noOutline = (Platform.OS === "web" ? { outlineStyle: "none" } : undefined) as
+  | TextStyle
+  | undefined;
 export function Field({
   label,
   compact,
   ...props
 }: TextInputProps & { label: string; compact?: boolean }) {
+  const [focused, setFocused] = useState(false);
   return (
     <View style={[s.field, compact && { marginBottom: 0 }]}>
       <Text style={[s.small, { fontWeight: "600", color: colors.text }]}>{label}</Text>
@@ -338,8 +339,18 @@ export function Field({
         placeholderTextColor={colors.muted}
         accessibilityLabel={label}
         {...props}
+        onFocus={(event) => {
+          setFocused(true);
+          props.onFocus?.(event);
+        }}
+        onBlur={(event) => {
+          setFocused(false);
+          props.onBlur?.(event);
+        }}
         style={[
           s.input,
+          noOutline,
+          focused && { borderColor: colors.primary, boxShadow: shadow.focus },
           props.multiline && { minHeight: 120, textAlignVertical: "top" },
           props.style,
         ]}
@@ -368,11 +379,12 @@ export function SearchField({
         s.row,
         {
           gap: 9,
-          backgroundColor: "#FFF",
+          backgroundColor: colors.surface,
           borderWidth: 1,
-          borderColor: focused ? colors.blueDark : colors.line,
-          borderRadius: 12,
+          borderColor: focused ? colors.primary : colors.lineStrong,
+          borderRadius: radius.md,
           paddingHorizontal: 14,
+          ...(focused ? { boxShadow: shadow.focus } : null),
         },
         style,
       ]}
@@ -389,8 +401,8 @@ export function SearchField({
         returnKeyType="search"
         autoCorrect={false}
         style={[
-          { flex: 1, paddingVertical: 12, fontSize: 15, color: colors.text },
-          Platform.OS === "web" ? ({ outlineStyle: "none" } as unknown as TextStyle) : null,
+          { flex: 1, paddingVertical: 12, fontSize: fontSize.body, color: colors.text },
+          noOutline,
         ]}
       />
       {!!value && (
@@ -418,9 +430,9 @@ export function Empty({
   children?: ReactNode;
 }) {
   return (
-    <View style={{ alignItems: "center", padding: 48, gap: 16 }}>
-      <View style={[s.iconBox, { width: 56, height: 56, borderRadius: 18 }]}>
-        <Icon size={24} color={colors.blueDark} />
+    <View style={{ alignItems: "center", padding: 32, gap: 14 }}>
+      <View style={[s.iconBox, { width: 56, height: 56, borderRadius: radius.lg }]}>
+        <Icon size={24} color={colors.primary} />
       </View>
       <Text style={s.heading}>{title}</Text>
       <Text style={[s.muted, { textAlign: "center", maxWidth: 360 }]}>{detail}</Text>
@@ -460,6 +472,8 @@ export function Sheet({
             s.sheet,
             wide && { maxWidth: 1050 },
             compact && {
+              borderTopLeftRadius: radius.xl,
+              borderTopRightRadius: radius.xl,
               borderBottomLeftRadius: 0,
               borderBottomRightRadius: 0,
               paddingBottom: Math.max(insets.bottom, 12),
@@ -473,8 +487,8 @@ export function Sheet({
                 alignSelf: "center",
                 width: 34,
                 height: 4,
-                borderRadius: 3,
-                backgroundColor: "#D8DBDE",
+                borderRadius: radius.sm,
+                backgroundColor: colors.lineStrong,
                 marginTop: 10,
               }}
             />
@@ -482,7 +496,7 @@ export function Sheet({
           <View
             style={[
               s.between,
-              { padding: compact ? 20 : 24, borderBottomWidth: 1, borderBottomColor: colors.line },
+              { padding: compact ? 16 : 20, borderBottomWidth: 1, borderBottomColor: colors.line },
             ]}
           >
             <View style={{ flex: 1, gap: 4 }}>
@@ -493,7 +507,7 @@ export function Sheet({
           </View>
           <ScrollView
             keyboardShouldPersistTaps="handled"
-            contentContainerStyle={{ padding: compact ? 20 : 24 }}
+            contentContainerStyle={{ padding: compact ? 16 : 20 }}
           >
             {children}
           </ScrollView>
@@ -522,15 +536,15 @@ export function CheckRow({
         style={{
           width: 20,
           height: 20,
-          borderRadius: 6,
+          borderRadius: radius.sm,
           borderWidth: 1,
-          borderColor: checked ? colors.text : colors.line,
-          backgroundColor: checked ? colors.text : "#FFF",
+          borderColor: checked ? colors.primary : colors.lineStrong,
+          backgroundColor: checked ? colors.primary : colors.surface,
           alignItems: "center",
           justifyContent: "center",
         }}
       >
-        {checked && <Check size={13} color="#FFF" />}
+        {checked && <Check size={13} color={colors.onPrimary} />}
       </View>
       <Text style={[s.text, { flex: 1 }]}>{label}</Text>
     </Pressable>
@@ -574,14 +588,14 @@ export function LinkRow({
     <Pressable
       accessibilityRole="button"
       onPress={onPress}
-      style={({ pressed }) => [
+      style={({ pressed, hovered }: WebPressState) => [
         s.row,
-        { paddingVertical: 14, gap: 14, borderRadius: 12 },
-        pressed && { backgroundColor: colors.canvas },
+        { paddingVertical: 12, gap: 14, borderRadius: radius.lg },
+        (pressed || hovered) && { backgroundColor: colors.surfaceMuted },
       ]}
     >
-      <View style={[s.iconBox, { backgroundColor: tint || colors.sky }]}>
-        <Icon size={19} color={colors.text} />
+      <View style={[s.iconBox, { backgroundColor: tint || colors.primarySoft }]}>
+        <Icon size={19} color={tint ? colors.text : colors.primary} />
       </View>
       <View style={{ flex: 1, gap: 3 }}>
         <Text style={[s.text, { fontWeight: "500" }]}>{title}</Text>
@@ -599,11 +613,7 @@ export function Mascot({
   size?: number;
   variant?: "sky" | "sand" | "lilac";
 }) {
-  const palette = {
-    sky: "#ECF5FA",
-    sand: "#FAF0DF",
-    lilac: "#F1ECF9",
-  }[variant];
+  const palette = mascotTints[variant];
   return (
     <View accessibilityLabel="Hive capybara" style={{ width: size, height: size }}>
       <View

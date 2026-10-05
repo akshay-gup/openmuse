@@ -49,13 +49,18 @@ import {
   colors,
   composingText,
   ErrorNotice,
+  fontSize,
   IconButton,
+  radius,
   s,
+  shadow,
   TypingDots,
 } from "./ui";
 import { useWorkspace } from "./workspace";
 
 const displayParameters = z.record(z.string(), z.unknown());
+/** Smallest height of the message box; it grows with the text. */
+const INPUT_MIN = 40;
 
 /** Client mirror of the server's mention gate (AGENT_MENTION, default @hive). */
 const AGENT_MENTION = "@hive";
@@ -98,10 +103,9 @@ export function ChannelChatBanner({ channelId }: { channelId: string }) {
   }, [api, channelId]);
   return (
     <View style={{ gap: 2 }}>
-      <Text style={[s.heading, { fontSize: 18 }]} numberOfLines={1}>
+      <Text style={[s.heading, { fontSize: fontSize.title }]} numberOfLines={1}>
         # {name ?? "channel"}
       </Text>
-      <Text style={s.small}>Messages and threads</Text>
     </View>
   );
 }
@@ -308,7 +312,7 @@ export function ChatScreen({
   const renderToolCall = useRenderToolCall();
   const [draft, setDraft] = useState(initialDraft);
   const [focused, setFocused] = useState(false);
-  const [inputHeight, setInputHeight] = useState(44);
+  const [inputHeight, setInputHeight] = useState(INPUT_MIN);
   const [showResults, setShowResults] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -618,7 +622,7 @@ export function ChatScreen({
     const clearComposer = () => {
       setDraft("");
       onDraftChange?.("");
-      setInputHeight(44);
+      setInputHeight(INPUT_MIN);
       setAttachments([]);
       setPicking(false);
     };
@@ -688,9 +692,9 @@ export function ChatScreen({
           ref={list}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{
-            gap: channelId || threadParent ? 2 : 13,
-            paddingTop: 15,
-            paddingBottom: 20,
+            gap: channelId || threadParent ? 2 : 8,
+            paddingTop: 8,
+            paddingBottom: 12,
             flexGrow: 1,
           }}
           onScroll={({ nativeEvent: { contentOffset, contentSize, layoutMeasurement } }) => {
@@ -729,7 +733,7 @@ export function ChatScreen({
             >
               <Text
                 style={{
-                  fontSize: 28,
+                  fontSize: fontSize.display,
                   letterSpacing: -1,
                   color: colors.text,
                   textAlign: "center",
@@ -809,11 +813,11 @@ export function ChatScreen({
                     maxWidth: channelId || threadParent ? "100%" : user ? "85%" : "95%",
                     width:
                       channelId || threadParent ? "100%" : toolCalls.length ? "95%" : undefined,
-                    gap: 8,
+                    gap: 6,
                   }}
                 >
                   {channelId && newDay && (
-                    <View style={[s.row, { gap: 12, paddingVertical: 12 }]}>
+                    <View style={[s.row, { gap: 12, paddingVertical: 6 }]}>
                       <View style={{ flex: 1, height: 1, backgroundColor: colors.line }} />
                       <Text style={[s.small, { fontWeight: "600" }]}>
                         {new Date(timestamp).toLocaleDateString(undefined, {
@@ -846,24 +850,23 @@ export function ChatScreen({
                         }
                         onNotify={notify}
                       />
-                    ) : (
+                    ) : user ? (
                       <View
                         style={{
-                          paddingHorizontal: 16,
-                          paddingVertical: 13,
-                          borderRadius: 22,
-                          borderBottomRightRadius: user ? 7 : 22,
-                          borderBottomLeftRadius: user ? 22 : 7,
-                          backgroundColor: user ? colors.blue : "#EEEEF0",
+                          paddingHorizontal: 14,
+                          paddingVertical: 9,
+                          borderRadius: radius.xl,
+                          borderBottomRightRadius: 6,
+                          backgroundColor: colors.primarySoft,
                         }}
                       >
-                        {user ? (
-                          <Text selectable style={[s.text, { fontSize: 16, lineHeight: 24 }]}>
-                            {text}
-                          </Text>
-                        ) : (
-                          <AssistantResponse content={text} />
-                        )}
+                        <Text selectable style={s.text}>
+                          {text}
+                        </Text>
+                      </View>
+                    ) : (
+                      <View style={{ maxWidth: 720, paddingVertical: 2 }}>
+                        <AssistantResponse content={text} />
                       </View>
                     ))}
                   <JevInteractionContext.Provider
@@ -968,11 +971,9 @@ export function ChatScreen({
                 s.row,
                 {
                   alignSelf: "flex-start",
-                  gap: 7,
-                  paddingHorizontal: 19,
-                  paddingVertical: 18,
-                  backgroundColor: "#EEEEF0",
-                  borderRadius: 28,
+                  gap: 6,
+                  paddingHorizontal: 4,
+                  paddingVertical: 10,
                 },
               ]}
             >
@@ -1100,16 +1101,12 @@ export function ChatScreen({
           )}
           <View
             style={{
-              backgroundColor: "#FFF",
-              borderRadius: channelId || threadParent ? 18 : 32,
+              backgroundColor: colors.surface,
+              borderRadius: channelId || threadParent ? radius.lg : radius.xl,
               borderWidth: 1,
-              borderColor: focused ? "#C7E4F9" : "#EEF0F2",
-              padding: 8,
-              shadowColor: "#18384B",
-              shadowOpacity: focused ? 0.1 : 0.06,
-              shadowRadius: 20,
-              shadowOffset: { width: 0, height: 4 },
-              elevation: 4,
+              borderColor: focused ? colors.primary : colors.lineStrong,
+              padding: 6,
+              boxShadow: focused ? shadow.focus : shadow.card,
             }}
           >
             {attachments.length > 0 && (
@@ -1127,17 +1124,17 @@ export function ChatScreen({
                         {
                           gap: 7,
                           maxWidth: "100%",
-                          backgroundColor: colors.sky,
-                          borderRadius: 16,
+                          backgroundColor: colors.primarySoft,
+                          borderRadius: radius.xl,
                           paddingHorizontal: 11,
                           paddingVertical: 8,
                         },
                       ]}
                     >
-                      <FileText size={14} color={colors.blueDark} />
+                      <FileText size={14} color={colors.primary} />
                       <Text
                         numberOfLines={1}
-                        style={{ flexShrink: 1, fontSize: 12, color: colors.text }}
+                        style={{ flexShrink: 1, fontSize: fontSize.caption, color: colors.text }}
                       >
                         {f.name}
                       </Text>
@@ -1153,12 +1150,12 @@ export function ChatScreen({
                 accessibilityState={{ expanded: picking }}
                 onPress={() => setPicking(!picking)}
                 style={({ pressed }) => ({
-                  width: 44,
-                  height: 44,
+                  width: 38,
+                  height: 38,
                   alignItems: "center",
                   justifyContent: "center",
-                  borderRadius: 24,
-                  backgroundColor: picking || pressed ? colors.sky : "transparent",
+                  borderRadius: 19,
+                  backgroundColor: picking || pressed ? colors.primarySoft : "transparent",
                 })}
               >
                 <Plus size={24} strokeWidth={1.6} color={colors.text} />
@@ -1173,7 +1170,9 @@ export function ChatScreen({
                   onDraftChange?.(text);
                 }}
                 onContentSizeChange={(event) =>
-                  setInputHeight(Math.max(44, Math.min(140, event.nativeEvent.contentSize.height)))
+                  setInputHeight(
+                    Math.max(INPUT_MIN, Math.min(140, event.nativeEvent.contentSize.height)),
+                  )
                 }
                 placeholder={
                   !isReady
@@ -1189,17 +1188,17 @@ export function ChatScreen({
                           : "Message…"
                 }
                 placeholderTextColor={colors.muted}
-                selectionColor={colors.blueDark}
+                selectionColor={colors.primary}
                 onFocus={() => setFocused(true)}
                 onBlur={() => setFocused(false)}
                 style={{
                   flex: 1,
                   color: colors.text,
                   height: inputHeight,
-                  minHeight: 44,
+                  minHeight: INPUT_MIN,
                   maxHeight: 140,
-                  fontSize: 17,
-                  lineHeight: 24,
+                  fontSize: fontSize.heading,
+                  lineHeight: 22,
                   paddingHorizontal: 2,
                   paddingTop: 10,
                   paddingBottom: 10,
@@ -1228,29 +1227,29 @@ export function ChatScreen({
                 disabled={!replying && (!draft.trim() || !loaded || !isReady)}
                 onPress={replying ? () => void stop() : send}
                 style={({ pressed }) => ({
-                  width: 44,
-                  height: 44,
-                  borderRadius: 24,
-                  backgroundColor: replying || draft.trim() ? colors.blue : "#F3F5F6",
+                  width: 38,
+                  height: 38,
+                  borderRadius: 19,
+                  backgroundColor: replying || draft.trim() ? colors.primary : colors.surfaceMuted,
                   alignItems: "center",
                   justifyContent: "center",
                   transform: [{ scale: pressed ? 0.94 : 1 }],
                 })}
               >
                 {replying ? (
-                  <Square size={18} fill={colors.text} strokeWidth={0} />
+                  <Square size={18} fill={colors.onPrimary} strokeWidth={0} />
                 ) : (
                   <ArrowUp
                     size={25}
                     strokeWidth={1.8}
-                    color={draft.trim() ? colors.text : "#9CB5C5"}
+                    color={draft.trim() ? colors.onPrimary : colors.subtle}
                   />
                 )}
               </Pressable>
             </View>
           </View>
-          {(channelId || threadParent) && (
-            <Text style={[s.small, { paddingTop: 8, paddingHorizontal: 8 }]}>
+          {(channelId || threadParent) && (focused || !!draft) && (
+            <Text style={[s.small, { paddingTop: 6, paddingHorizontal: 8 }]}>
               Mention @hive for an agent reply
               {Platform.OS === "web" ? " · Shift+Enter for a new line" : ""}
             </Text>

@@ -26,10 +26,10 @@ export function BackgroundUpdates() {
     }
   }
   return (
-    <Card style={{ backgroundColor: colors.sky, padding: 20, gap: 12 }}>
+    <Card style={{ backgroundColor: colors.primarySoft, padding: 14, gap: 8 }}>
       <View style={[s.between, { gap: 12 }]}>
         <View style={[s.row, { gap: 8 }]}>
-          <Bell size={15} color={colors.blueDark} />
+          <Bell size={15} color={colors.primary} />
           <Text style={s.label}>An update for you</Text>
         </View>
         <Pressable
@@ -37,8 +37,8 @@ export function BackgroundUpdates() {
           accessibilityLabel="Dismiss background update"
           disabled={busy}
           onPress={() => void dismiss()}
-          hitSlop={10}
-          style={{ padding: 10 }}
+          hitSlop={12}
+          style={{ padding: 4 }}
         >
           <X size={16} color={colors.muted} />
         </Pressable>

@@ -7,7 +7,7 @@ import {
   type TaskStatus,
   taskColumn,
 } from "../../../packages/domain/src/agent";
-import { Button, colors, s, type WebPressState } from "./ui";
+import { Button, colors, fontSize, radius, s, shadow, type WebPressState } from "./ui";
 
 const columns: { id: TaskColumn; title: string }[] = [
   { id: "todo", title: "To Do" },
@@ -17,22 +17,22 @@ const columns: { id: TaskColumn; title: string }[] = [
 ];
 
 export const priorityColors: Record<TaskPriority, string> = {
-  low: "#9AA3A8",
-  medium: colors.blueDark,
-  high: "#D97A2B",
+  low: colors.neutral,
+  medium: colors.primary,
+  high: colors.warning,
   urgent: colors.danger,
 };
 
 export const statusMeta: Record<TaskStatus, { label: string; dot: string }> = {
-  queued: { label: "QUEUED", dot: "#9AA3A8" },
-  running: { label: "RUNNING", dot: "#2E9E5B" },
-  waiting_approval: { label: "NEEDS REVIEW", dot: "#D97A2B" },
-  waiting_input: { label: "NEEDS YOU", dot: "#D97A2B" },
-  scheduled: { label: "SCHEDULED", dot: "#9AA3A8" },
-  paused: { label: "PAUSED", dot: "#9AA3A8" },
-  succeeded: { label: "DONE", dot: "#2E9E5B" },
+  queued: { label: "QUEUED", dot: colors.neutral },
+  running: { label: "RUNNING", dot: colors.success },
+  waiting_approval: { label: "NEEDS REVIEW", dot: colors.warning },
+  waiting_input: { label: "NEEDS YOU", dot: colors.warning },
+  scheduled: { label: "SCHEDULED", dot: colors.neutral },
+  paused: { label: "PAUSED", dot: colors.neutral },
+  succeeded: { label: "DONE", dot: colors.success },
   failed: { label: "FAILED", dot: colors.danger },
-  cancelled: { label: "CANCELLED", dot: "#9AA3A8" },
+  cancelled: { label: "CANCELLED", dot: colors.neutral },
 };
 
 /** Manual issues read as a to-do list; agent tasks use the worker's own vocabulary. */
@@ -119,10 +119,11 @@ export function TaskBoardCard({
     <View
       style={{
         flexShrink: 0,
-        backgroundColor: "#FFFFFF",
-        borderRadius: 16,
+        backgroundColor: colors.surface,
+        borderRadius: radius.lg,
         borderWidth: 1,
-        borderColor: task.status === "failed" ? "#F0D5D3" : colors.line,
+        borderColor: task.status === "failed" ? colors.dangerLine : colors.line,
+        boxShadow: shadow.card,
         overflow: "hidden",
       }}
     >
@@ -133,7 +134,11 @@ export function TaskBoardCard({
         style={({ pressed, hovered }: WebPressState) => ({
           padding: 14,
           gap: 10,
-          backgroundColor: pressed ? "#F4F5F6" : hovered ? "#FAFBFC" : "#FFFFFF",
+          backgroundColor: pressed
+            ? colors.surfaceMuted
+            : hovered
+              ? colors.surfaceMuted
+              : colors.surface,
         })}
       >
         <View style={[s.row, { gap: 8 }]}>
@@ -145,7 +150,7 @@ export function TaskBoardCard({
           {!!updated && <Text style={s.small}>{updated}</Text>}
         </View>
         <Text
-          style={[s.text, { fontSize: 14, lineHeight: 20, fontWeight: "600" }]}
+          style={[s.text, { fontSize: fontSize.ui, lineHeight: 20, fontWeight: "600" }]}
           numberOfLines={3}
         >
           {task.title}
@@ -183,8 +188,8 @@ export function TaskBoardCard({
         <View style={[s.row, { gap: 6, flexWrap: "wrap" }]}>
           <View
             style={{
-              backgroundColor: manual ? colors.lavender : colors.sky,
-              borderRadius: 10,
+              backgroundColor: manual ? colors.surfaceMuted : colors.primarySoft,
+              borderRadius: radius.md,
               paddingHorizontal: 9,
               paddingVertical: 4,
             }}
@@ -194,8 +199,8 @@ export function TaskBoardCard({
           {task.assignee === "agent" && (
             <View
               style={{
-                backgroundColor: colors.orange,
-                borderRadius: 10,
+                backgroundColor: colors.warningBg,
+                borderRadius: radius.md,
                 paddingHorizontal: 9,
                 paddingVertical: 4,
               }}
@@ -206,8 +211,8 @@ export function TaskBoardCard({
           {!!due && (
             <View
               style={{
-                backgroundColor: overdue ? "#FBEFED" : "#F4F4F6",
-                borderRadius: 10,
+                backgroundColor: overdue ? colors.dangerBg : colors.surfaceMuted,
+                borderRadius: radius.md,
                 paddingHorizontal: 9,
                 paddingVertical: 4,
               }}
@@ -285,17 +290,19 @@ export function TaskBoard({
                 flexShrink: 0,
                 flex: wide ? 1 : undefined,
                 gap: 10,
-                backgroundColor: "#F4F4F6",
-                borderRadius: 18,
+                backgroundColor: colors.surfaceMuted,
+                borderRadius: radius.xl,
                 padding: 12,
               }}
             >
               <View style={[s.row, { gap: 8, alignItems: "center", paddingHorizontal: 4 }]}>
-                <Text style={[s.text, { fontWeight: "700", fontSize: 14 }]}>{column.title}</Text>
+                <Text style={[s.text, { fontWeight: "700", fontSize: fontSize.ui }]}>
+                  {column.title}
+                </Text>
                 <View
                   style={{
-                    backgroundColor: "#FFFFFF",
-                    borderRadius: 10,
+                    backgroundColor: colors.surface,
+                    borderRadius: radius.md,
                     paddingHorizontal: 9,
                     paddingVertical: 3,
                   }}

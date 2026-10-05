@@ -2,7 +2,7 @@ import { ChevronLeft, ChevronRight, Minus, Plus } from "lucide-react-native";
 import { useRef, useState } from "react";
 import { Text, View } from "react-native";
 import Pdf from "react-native-pdf";
-import { Button, colors, ErrorNotice, s } from "./ui";
+import { Button, colors, ErrorNotice, radius, s } from "./ui";
 export interface PdfReaderProps {
   url: string;
   token: string;
@@ -66,7 +66,12 @@ export default function PdfReader({ url, token, pageCount }: PdfReaderProps) {
         onLoadComplete={(n) => setPages(n)}
         onPageChanged={(p) => setPage(p)}
         onError={(e) => setError(String(e))}
-        style={{ height: 530, width: "100%", backgroundColor: colors.line, borderRadius: 12 }}
+        style={{
+          height: 530,
+          width: "100%",
+          backgroundColor: colors.line,
+          borderRadius: radius.lg,
+        }}
       />
     </View>
   );

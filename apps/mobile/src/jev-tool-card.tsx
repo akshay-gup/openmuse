@@ -8,7 +8,7 @@ import {
   retryChoiceAvailable,
   selectionText,
 } from "./jev-actions";
-import { Button, Card, colors, ErrorNotice, s } from "./ui";
+import { Button, Card, colors, ErrorNotice, radius, s } from "./ui";
 
 type JevInteraction = {
   threadId: string | null;
@@ -44,10 +44,10 @@ function SourceLink({ title, url }: { title: string; url: string }) {
       onPress={() => void Linking.openURL(url)}
       style={({ pressed }) => [s.row, { gap: 4, opacity: pressed ? 0.65 : 1 }]}
     >
-      <Text style={[s.small, { color: colors.blueDark, textDecorationLine: "underline" }]}>
+      <Text style={[s.small, { color: colors.primary, textDecorationLine: "underline" }]}>
         {title}
       </Text>
-      <ExternalLink size={12} color={colors.blueDark} />
+      <ExternalLink size={12} color={colors.primary} />
     </Pressable>
   );
 }
@@ -80,7 +80,7 @@ function ChoiceButton({
         onPress={() => onChoose(option.id)}
         style={({ pressed }) => [
           s.button,
-          { alignSelf: "flex-start", backgroundColor: colors.blue },
+          { alignSelf: "flex-start", backgroundColor: colors.primarySoft },
           (disabled || pending) && { opacity: 0.5 },
           pressed && { transform: [{ scale: 0.98 }] },
         ]}
@@ -117,7 +117,7 @@ export function JevToolCard({ result, loading }: { result: unknown; loading: boo
   if (loading) {
     return (
       <View style={[s.row, { gap: 10, padding: 14 }]}>
-        <ActivityIndicator size="small" color={colors.blueDark} />
+        <ActivityIndicator size="small" color={colors.primary} />
         <Text style={s.muted}>Preparing choices…</Text>
       </View>
     );
@@ -219,7 +219,12 @@ export function JevToolCard({ result, loading }: { result: unknown; loading: boo
           {panel.options.map((option, index) => (
             <View
               key={option.id}
-              style={{ borderRadius: 16, padding: 14, gap: 9, backgroundColor: "#F6F7F8" }}
+              style={{
+                borderRadius: radius.xl,
+                padding: 14,
+                gap: 9,
+                backgroundColor: colors.surfaceMuted,
+              }}
             >
               <Text style={[s.text, { fontWeight: "600" }]}>{option.label}</Text>
               {!!option.details.length && (
