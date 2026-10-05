@@ -38,12 +38,12 @@ import { AgentWorkspaceProvider, useAgentWorkspace } from "./src/agent-workspace
 import {
   API_URL,
   ApiError,
-  savedSession,
-  saveSession,
   createSession,
   exchangeLoginCode,
   googleLoginUrl,
   MuseApi,
+  savedSession,
+  saveSession,
 } from "./src/api";
 import { ChannelChatBanner, ChatScreen, WorkspaceTools } from "./src/chat";
 import { ComputerEntry } from "./src/computer";
@@ -461,15 +461,31 @@ function WorkspaceShell({
                     <View
                       pointerEvents="none"
                       style={{
-                        width: 6,
-                        height: 6,
-                        borderRadius: 4,
+                        minWidth: 18,
+                        height: 18,
+                        borderRadius: 9,
+                        paddingHorizontal: 4,
                         position: "absolute",
-                        top: 7,
-                        right: 9,
+                        top: 4,
+                        right: 3,
+                        alignItems: "center",
+                        justifyContent: "center",
                         backgroundColor: colors.blueDark,
+                        borderWidth: 2,
+                        borderColor: "#FFFFFF",
                       }}
-                    />
+                    >
+                      <Text
+                        style={{
+                          color: "#FFFFFF",
+                          fontSize: 10,
+                          lineHeight: 12,
+                          fontWeight: "700",
+                        }}
+                      >
+                        {pending > 9 ? "9+" : pending}
+                      </Text>
+                    </View>
                   )}
                 </View>
               </View>
@@ -505,6 +521,9 @@ function WorkspaceShell({
                   style={{
                     display: section === "chat" ? "flex" : "none",
                     flex: 1,
+                    width: "100%",
+                    maxWidth: channelChat ? undefined : 940,
+                    alignSelf: "center",
                     paddingHorizontal: channelChat ? 0 : desktop ? 32 : 17,
                     paddingTop: channelChat ? 0 : 14,
                     paddingBottom: desktop ? 18 : 0,
@@ -581,6 +600,7 @@ function WorkspaceShell({
                 }}
               >
                 <View
+                  accessibilityRole="tablist"
                   style={{
                     flexDirection: "row",
                     width: "100%",
@@ -608,14 +628,30 @@ function WorkspaceShell({
                         onPress={() => navigate(item.id)}
                         style={{
                           flex: 1,
-                          height: 47,
+                          height: 54,
+                          gap: 3,
                           alignItems: "center",
                           justifyContent: "center",
                           backgroundColor: active ? "#F0F1F2" : "transparent",
-                          borderRadius: 28,
+                          borderRadius: 26,
                         }}
                       >
-                        <item.icon size={23} strokeWidth={1.8} color={colors.text} />
+                        <item.icon
+                          size={21}
+                          strokeWidth={active ? 2 : 1.8}
+                          color={active ? colors.text : colors.muted}
+                        />
+                        <Text
+                          numberOfLines={1}
+                          style={{
+                            fontSize: 10,
+                            lineHeight: 12,
+                            fontWeight: active ? "700" : "500",
+                            color: active ? colors.text : colors.muted,
+                          }}
+                        >
+                          {item.label}
+                        </Text>
                       </Pressable>
                     );
                   })}
@@ -627,6 +663,8 @@ function WorkspaceShell({
         {!!toast && (
           <View
             pointerEvents="box-none"
+            accessibilityLiveRegion="polite"
+            accessibilityRole="alert"
             style={{
               position: "absolute",
               bottom: desktop ? 28 : 94,
@@ -652,6 +690,7 @@ function WorkspaceShell({
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Dismiss notification"
+                hitSlop={12}
                 onPress={clearToast}
               >
                 <X size={16} color="#FFF" />

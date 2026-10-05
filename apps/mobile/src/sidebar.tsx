@@ -19,7 +19,16 @@ import type { Section } from "../../../packages/domain/src";
 import { type Channel, ORCHESTRATOR_CHANNEL_ID } from "../../../packages/domain/src/agent";
 import { useAgentWorkspace } from "./agent-workspace";
 import { useMuseThread } from "./threads";
-import { Button, colors, ErrorNotice, Field, IconButton, Mascot, s } from "./ui";
+import {
+  Button,
+  colors,
+  ErrorNotice,
+  Field,
+  IconButton,
+  Mascot,
+  s,
+  type WebPressState,
+} from "./ui";
 import { useWorkspace } from "./workspace";
 
 function SidebarRow({
@@ -27,29 +36,31 @@ function SidebarRow({
   label,
   active,
   onPress,
+  accessibilityLabel,
 }: {
   icon: typeof Bot;
   label: string;
   active?: boolean;
   onPress: () => void;
+  accessibilityLabel?: string;
 }) {
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={label}
+      accessibilityLabel={accessibilityLabel ?? label}
       onPress={onPress}
-      style={{
+      style={({ pressed, hovered }: WebPressState) => ({
         flexDirection: "row",
         gap: 12,
         alignItems: "center",
         paddingVertical: 12,
         paddingHorizontal: 12,
         borderRadius: 12,
-        backgroundColor: active ? "#E8EDF0" : "transparent",
-      }}
+        backgroundColor: active ? "#E8EDF0" : hovered || pressed ? "#F0F2F4" : "transparent",
+      })}
     >
       <Icon size={17} color={active ? colors.text : colors.muted} />
-      <Text style={[s.text, { fontWeight: active ? "600" : "400" }]} numberOfLines={1}>
+      <Text style={[s.text, { flex: 1, fontWeight: active ? "600" : "400" }]} numberOfLines={1}>
         {label}
       </Text>
     </Pressable>
@@ -217,6 +228,7 @@ export function Sidebar({
             accessibilityRole="button"
             accessibilityLabel="Refresh channels"
             disabled={loading}
+            hitSlop={10}
             onPress={() => void load()}
             style={{ padding: 10 }}
           >
@@ -227,38 +239,35 @@ export function Sidebar({
         {loading && !channels ? (
           <ActivityIndicator color={colors.blueDark} style={{ marginTop: 8 }} />
         ) : (
-          userChannels.map((channel) => {
-            const isActive = section === "chat" && !isMainActive && activeChannelId === channel.id;
-            return (
-              <Pressable
-                key={channel.id}
-                accessibilityRole="button"
-                accessibilityLabel={`Open channel: ${channel.name}`}
-                onPress={() => conversation({ id: `channel:${channel.id}`, existing: true })}
-                style={{
-                  flexDirection: "row",
-                  gap: 10,
-                  alignItems: "center",
-                  paddingVertical: 12,
-                  paddingHorizontal: 12,
-                  borderRadius: 12,
-                  backgroundColor: isActive ? "#E8EDF0" : "transparent",
-                }}
-              >
-                <Hash size={16} color={isActive ? colors.text : colors.muted} />
-                <Text
-                  style={[s.text, { flex: 1, fontWeight: isActive ? "600" : "400" }]}
-                  numberOfLines={1}
-                >
-                  {channel.name}
-                </Text>
-              </Pressable>
-            );
-          })
+          userChannels.map((channel) => (
+            <SidebarRow
+              key={channel.id}
+              icon={Hash}
+              label={channel.name}
+              accessibilityLabel={`Open channel: ${channel.name}`}
+              active={section === "chat" && !isMainActive && activeChannelId === channel.id}
+              onPress={() => conversation({ id: `channel:${channel.id}`, existing: true })}
+            />
+          ))
         )}
         {creating ? (
           <View style={{ gap: 12, paddingHorizontal: 12, marginTop: 8 }}>
-            <Field label="Channel name" value={name} onChangeText={setName} />
+            <Field
+              label="Channel name"
+              compact
+              autoFocus
+              value={name}
+              onChangeText={setName}
+              placeholder="e.g. family-trip"
+              returnKeyType="done"
+              onSubmitEditing={() => void createChannel()}
+              onKeyPress={(event) => {
+                if (event.nativeEvent.key === "Escape") {
+                  setCreating(false);
+                  setName("");
+                }
+              }}
+            />
             <View style={[s.row, { gap: 8 }]}>
               <Button
                 primary
@@ -338,10 +347,13 @@ export function Sidebar({
           <Text style={[s.text, { fontSize: 14, fontWeight: "500" }]} numberOfLines={1}>
             {workspace.profile.name || "You"}
           </Text>
-          <Text style={s.small}>Signed in</Text>
+          <Text style={s.small} numberOfLines={1}>
+            {workspace.profile.email || "Signed in"}
+          </Text>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Log out"
+            hitSlop={8}
             onPress={() => {
               void logout().catch((e) => setError(String(e)));
             }}
