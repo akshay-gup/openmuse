@@ -190,7 +190,9 @@ export function ChannelMessage({
               onPress={onReply}
               style={{ alignSelf: "flex-start", paddingVertical: 4 }}
             >
-              <Text style={{ color: colors.primary, fontSize: fontSize.small, fontWeight: "600" }}>
+              <Text
+                style={{ color: colors.primaryText, fontSize: fontSize.small, fontWeight: "600" }}
+              >
                 {replyCount
                   ? `${replyCount} ${replyCount === 1 ? "reply" : "replies"}`
                   : hasThread

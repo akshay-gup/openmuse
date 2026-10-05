@@ -12,6 +12,7 @@ import {
   radius,
   SectionHeading,
   s,
+  selectedCard,
 } from "./ui";
 import { useWorkspace } from "./workspace";
 
@@ -231,13 +232,11 @@ export function PermissionModeSelector({
               {
                 gap: 10,
                 alignItems: "center",
-                paddingVertical: 12,
-                paddingHorizontal: 14,
+                paddingVertical: 11,
+                paddingHorizontal: 13,
                 borderRadius: radius.lg,
-                borderWidth: 1,
-                borderColor: active ? colors.primary : colors.line,
-                backgroundColor: active ? colors.primarySoft : "transparent",
               },
+              selectedCard(active, "transparent", colors.line),
             ]}
           >
             <Text

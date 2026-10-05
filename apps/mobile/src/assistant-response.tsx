@@ -2,7 +2,7 @@ import { useCallback, useState } from "react";
 import { Linking, ScrollView, Text, type TextStyle, View, type ViewStyle } from "react-native";
 import Markdown, { type MarkdownStyles, type RenderRules } from "react-native-markdown-renderer";
 import { assistantMarkdown, isSafeAssistantUrl } from "./assistant-markdown";
-import { colors, ErrorNotice, fontSize, monoFont, radius } from "./ui";
+import { colors, ErrorNotice, fontSize, monoFont, monoProps, radius } from "./ui";
 
 const textStyle = { color: colors.text, fontSize: fontSize.body, lineHeight: 22 };
 const style: Partial<MarkdownStyles> = {
@@ -13,7 +13,7 @@ const style: Partial<MarkdownStyles> = {
   heading1: { fontSize: fontSize.title, lineHeight: 24, fontWeight: "700" },
   heading2: { fontSize: fontSize.heading, lineHeight: 23, fontWeight: "700" },
   heading3: { fontSize: fontSize.body, lineHeight: 22, fontWeight: "700" },
-  link: { color: colors.primary, textDecorationLine: "underline" },
+  link: { color: colors.primaryText, textDecorationLine: "underline" },
   codeInline: {
     backgroundColor: colors.surfaceHover,
     color: colors.text,
@@ -72,7 +72,7 @@ const renderCodeBlock: RenderRules["fence"] = (node, _children, _parent, styles)
       marginVertical: 4,
     }}
   >
-    <Text selectable style={styles.codeBlock as TextStyle}>
+    <Text selectable {...monoProps} style={styles.codeBlock as TextStyle}>
       {node.content.replace(/\n$/, "")}
     </Text>
   </View>
@@ -90,6 +90,11 @@ const rules: RenderRules = {
   ),
   code_block: renderCodeBlock,
   fence: renderCodeBlock,
+  code_inline: (node, _children, _parent, styles) => (
+    <Text key={node.key} selectable {...monoProps} style={styles.codeInline as TextStyle}>
+      {node.content}
+    </Text>
+  ),
   // Wide tables scroll sideways inside the message instead of wrapping numbers mid-digit.
   table: (node, children, _parent, styles) => (
     <ScrollView

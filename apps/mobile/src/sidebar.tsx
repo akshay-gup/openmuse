@@ -62,7 +62,7 @@ function SidebarRow({
         paddingHorizontal: 12,
         borderRadius: dense ? 8 : 12,
         backgroundColor: active
-          ? colors.primarySoft
+          ? colors.selected
           : hovered || pressed
             ? colors.surfaceHover
             : "transparent",

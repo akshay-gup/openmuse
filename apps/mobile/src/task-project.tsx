@@ -2,7 +2,17 @@ import { useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import type { Project } from "../../../packages/domain/src/agent";
 import { useAgentWorkspace } from "./agent-workspace";
-import { Button, colors, ErrorNotice, Field, radius, Sheet, s } from "./ui";
+import {
+  Button,
+  colors,
+  ErrorNotice,
+  Field,
+  radius,
+  Sheet,
+  s,
+  selectedCard,
+  type WebPressState,
+} from "./ui";
 import { useWorkspace } from "./workspace";
 
 /** null = All projects, "none" = No project, otherwise a project id. */
@@ -28,16 +38,16 @@ export function ProjectSwitcher({
       accessibilityRole="button"
       accessibilityLabel={label}
       onPress={onPress}
-      style={{
-        borderRadius: radius.md,
-        paddingHorizontal: 16,
-        paddingVertical: 10,
-        minHeight: 40,
-        justifyContent: "center",
-        backgroundColor: active ? colors.primarySoft : colors.surfaceMuted,
-        borderWidth: 1,
-        borderColor: active ? colors.primary : "transparent",
-      }}
+      style={[
+        {
+          borderRadius: radius.md,
+          paddingHorizontal: 16,
+          paddingVertical: 10,
+          minHeight: 40,
+          justifyContent: "center",
+        },
+        selectedCard(active, colors.surfaceMuted),
+      ]}
     >
       <Text
         style={[s.small, { fontWeight: active ? "700" : "600", color: colors.text }]}
@@ -59,16 +69,16 @@ export function ProjectSwitcher({
             onPress={() => onSelect(project.id)}
             onLongPress={() => onManage(project)}
             delayLongPress={500}
-            style={{
-              borderRadius: radius.md,
-              paddingHorizontal: 16,
-              paddingVertical: 10,
-              minHeight: 40,
-              justifyContent: "center",
-              backgroundColor: selected === project.id ? colors.primarySoft : colors.surfaceMuted,
-              borderWidth: 1,
-              borderColor: selected === project.id ? colors.primary : "transparent",
-            }}
+            style={[
+              {
+                borderRadius: radius.md,
+                paddingHorizontal: 16,
+                paddingVertical: 10,
+                minHeight: 40,
+                justifyContent: "center",
+              },
+              selectedCard(selected === project.id, colors.surfaceMuted),
+            ]}
           >
             <Text
               style={[
@@ -82,7 +92,25 @@ export function ProjectSwitcher({
           </Pressable>
         ))}
         {pill("none", "No project", selected === "none", () => onSelect("none"))}
-        {pill("new", "+ New", false, onNew)}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="+ New"
+          onPress={onNew}
+          style={({ hovered }: WebPressState) => ({
+            borderRadius: radius.md,
+            paddingHorizontal: 16,
+            paddingVertical: 10,
+            minHeight: 40,
+            justifyContent: "center",
+            margin: 1,
+            borderWidth: 1.5,
+            borderStyle: "dashed",
+            borderColor: colors.accent,
+            backgroundColor: hovered ? colors.accentSoft : colors.surface,
+          })}
+        >
+          <Text style={[s.small, { fontWeight: "600", color: colors.accentText }]}>+ New</Text>
+        </Pressable>
       </View>
     </ScrollView>
   );

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { ActivityIndicator, Platform, Pressable, ScrollView, Text, View } from "react-native";
 import type { AgentTask, RunEvent } from "../../../packages/domain/src/agent";
 import { AssistantResponse } from "./assistant-response";
-import { colors, ErrorNotice, fontSize, radius, s } from "./ui";
+import { colors, ErrorNotice, fontSize, monoProps, radius, s } from "./ui";
 import { useWorkspace } from "./workspace";
 
 function publicText(text: string) {
@@ -51,6 +51,7 @@ function ToolActivity({ event }: { event: RunEvent }) {
           {event.toolInput !== undefined && (
             <Text
               selectable
+              {...monoProps}
               style={[s.small, { fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace" }]}
             >
               {JSON.stringify(event.toolInput, null, 2)}
@@ -59,6 +60,7 @@ function ToolActivity({ event }: { event: RunEvent }) {
           {!!event.detail && (
             <Text
               selectable
+              {...monoProps}
               style={[
                 s.text,
                 {
@@ -137,7 +139,7 @@ export function TaskRunView({ task }: { task: AgentTask }) {
           onPress={() => setCollapsed(!collapsed)}
           style={{ paddingVertical: 8, paddingHorizontal: 6 }}
         >
-          <Text style={[s.small, { color: colors.primary }]}>
+          <Text style={[s.small, { color: colors.primaryText }]}>
             {collapsed ? "Show output" : "Hide output"}
           </Text>
         </Pressable>

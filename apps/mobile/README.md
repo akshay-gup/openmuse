@@ -40,6 +40,12 @@ The `build:ios` and `build:android` commands validate and export platform JavaSc
 
 Every colour, text size, corner radius and shadow lives in `src/theme.ts`. Components ask for a role (`colors.primary`, `fontSize.ui`, `radius.lg`, `shadow.card`), never a value, so applying a style guide means editing that one file. `test/theme.test.ts` fails if a raw colour appears anywhere else, or if a text and background pair in the theme drops below WCAG AA contrast (4.5:1). Dark mode would be a second object with the same keys as `colors`, chosen from a context.
 
+The values follow the web app's stylesheet:
+
+- **Colour.** `palette` holds the brand swatches (navy, blue, teal, amber) and `colors` gives each a role. Navy is the ink and the dark surface, and teal is `primary` for fills and icons. Links and other teal text use `primaryText`, a darker teal that stays AA on the tinted surfaces. Amber marks creation: `CreateTile` is the dashed "create something new" outline. A selected card or pill has a teal-to-green gradient border on web (`selectedCard`) and a plain teal border on native.
+- **Shape.** Cards use 12px corners, hairline borders and a lift on hover. Larger cards (files, the finance summary, the Today banner) use `radius.xxl`, 25px.
+- **Poppins.** The web build uses Poppins, self-hosted in `public/fonts` with its SIL Open Font License (four weights, Latin and Latin-extended). `src/fonts.ts` registers it and makes it the font of every `Text`. react-native-web does not inherit fonts, so the rule matches the `dir="auto"` elements it renders; code opts out with `{...monoProps}`. iOS and Android keep the system font: Poppins there needs one font family per weight loaded with `expo-font`, which is not wired up yet.
+
 ## Behavior
 
 - Chat, Activity, Ideas, Goals and Apps are the primary navigation. Tasks, timelines and notifications refresh from the durable server state. Apps contains Mail, Calendar, Browser, Files and Connections.

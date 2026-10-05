@@ -8,7 +8,7 @@ import {
   retryChoiceAvailable,
   selectionText,
 } from "./jev-actions";
-import { Button, Card, colors, ErrorNotice, radius, s } from "./ui";
+import { Button, Card, colors, ErrorNotice, radius, s, selectedCard } from "./ui";
 
 type JevInteraction = {
   threadId: string | null;
@@ -44,7 +44,7 @@ function SourceLink({ title, url }: { title: string; url: string }) {
       onPress={() => void Linking.openURL(url)}
       style={({ pressed }) => [s.row, { gap: 4, opacity: pressed ? 0.65 : 1 }]}
     >
-      <Text style={[s.small, { color: colors.primary, textDecorationLine: "underline" }]}>
+      <Text style={[s.small, { color: colors.primaryText, textDecorationLine: "underline" }]}>
         {title}
       </Text>
       <ExternalLink size={12} color={colors.primary} />
@@ -219,12 +219,10 @@ export function JevToolCard({ result, loading }: { result: unknown; loading: boo
           {panel.options.map((option, index) => (
             <View
               key={option.id}
-              style={{
-                borderRadius: radius.xl,
-                padding: 14,
-                gap: 9,
-                backgroundColor: colors.surfaceMuted,
-              }}
+              style={[
+                { borderRadius: radius.xl, padding: 12, gap: 9 },
+                selectedCard(selectedId === option.id, colors.surfaceMuted),
+              ]}
             >
               <Text style={[s.text, { fontWeight: "600" }]}>{option.label}</Text>
               {!!option.details.length && (

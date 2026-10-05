@@ -1,4 +1,12 @@
-import { ArrowUpRight, Check, ChevronRight, type LucideIcon, Search, X } from "lucide-react-native";
+import {
+  ArrowUpRight,
+  Check,
+  ChevronRight,
+  type LucideIcon,
+  Plus,
+  Search,
+  X,
+} from "lucide-react-native";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import {
   AccessibilityInfo,
@@ -19,7 +27,17 @@ import {
   type ViewStyle,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { colors, fontFamily, fontSize, mascotTints, radius, shadow, sp, type } from "./theme";
+import {
+  colors,
+  fontFamily,
+  fontSize,
+  gradients,
+  mascotTints,
+  radius,
+  shadow,
+  sp,
+  type,
+} from "./theme";
 
 export {
   avatarTints,
@@ -30,6 +48,7 @@ export {
   financeArt,
   fontFamily,
   fontSize,
+  gradients,
   layout,
   mascotTints,
   radius,
@@ -44,6 +63,11 @@ export const monoFont = Platform.select({
   android: fontFamily.monoAndroid,
   default: fontFamily.mono,
 });
+/**
+ * Spread onto a Text that shows code. On web it adds `data-mono`, which keeps the global Poppins
+ * rule (src/font-files.ts) off that element so it stays in the monospace font.
+ */
+export const monoProps = (Platform.OS === "web" ? { dataSet: { mono: "1" } } : {}) as object;
 /** True on a wide web window with a pointer. Touch layouts keep large targets; desktop gets denser rows. */
 export function useDense(): boolean {
   const { width } = useWindowDimensions();
@@ -224,6 +248,95 @@ export function IconButton({
 }
 export function Card({ children, style }: { children: ReactNode; style?: ViewStyle }) {
   return <View style={[s.card, style]}>{children}</View>;
+}
+/**
+ * Fill and border of a card that can be selected. Idle, it has a 1px hairline (`idleBorder`). The
+ * selected card gets the teal-to-green gradient border from the web app, 2px wide (a transparent
+ * border over two background layers); native draws a plain teal border. The idle card's 1px
+ * margin makes up the difference, so selecting never moves the content.
+ */
+export function selectedCard(
+  selected: boolean,
+  fill: string = colors.surface,
+  idleBorder: string = "transparent",
+): ViewStyle {
+  if (!selected) {
+    return { borderWidth: 1, borderColor: idleBorder, margin: 1, backgroundColor: fill };
+  }
+  if (Platform.OS !== "web") {
+    return { borderWidth: 2, borderColor: colors.selectedLine, backgroundColor: colors.selected };
+  }
+  return {
+    borderWidth: 2,
+    borderColor: "transparent",
+    backgroundColor: colors.selected,
+    // CSS that React Native's types do not list: the fill is clipped to the padding box and the
+    // gradient shows through the transparent border. It has to be the `background` shorthand:
+    // react-native-web drops a `backgroundClip` longhand unless it is "text".
+    ...({
+      background: `linear-gradient(${colors.selected}, ${colors.selected}) padding-box, ${gradients.selected} border-box`,
+    } as unknown as ViewStyle),
+  };
+}
+/**
+ * "Create something new": a dashed amber outline round an icon and a label, like the new-note card
+ * in the web app. Amber marks creation across the app. The label is dark amber so it stays readable.
+ */
+export function CreateTile({
+  icon: Icon,
+  label,
+  onPress,
+  accessibilityLabel,
+  style,
+}: {
+  icon: LucideIcon;
+  label: string;
+  onPress: () => void;
+  accessibilityLabel?: string;
+  style?: ViewStyle;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel ?? label}
+      onPress={onPress}
+      style={({ pressed, hovered }: WebPressState) => [
+        s.row,
+        {
+          gap: 12,
+          minHeight: 56,
+          paddingHorizontal: 14,
+          paddingVertical: 8,
+          borderWidth: 2,
+          borderStyle: "dashed",
+          borderColor: colors.accent,
+          borderRadius: radius.xl,
+          backgroundColor: pressed || hovered ? colors.accentSoft : colors.surface,
+        },
+        hovered && { boxShadow: shadow.card },
+        style,
+      ]}
+    >
+      <View
+        style={{
+          width: 36,
+          height: 36,
+          borderRadius: 18,
+          borderWidth: 1.5,
+          borderStyle: "dashed",
+          borderColor: colors.accent,
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <Icon size={18} color={colors.accentText} />
+      </View>
+      <Text style={[s.text, { flex: 1, fontWeight: "500", color: colors.accentText }]}>
+        {label}
+      </Text>
+      <Plus size={18} color={colors.accentText} />
+    </Pressable>
+  );
 }
 export function Chip({
   children,

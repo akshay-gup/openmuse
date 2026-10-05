@@ -62,7 +62,9 @@ import {
   SectionHeading,
   Sheet,
   s,
+  shadow,
   timeLabel,
+  type WebPressState,
 } from "./ui";
 import { useWorkspace } from "./workspace";
 
@@ -88,7 +90,7 @@ export function TodayScreen() {
         style={[
           {
             backgroundColor: colors.primarySoft,
-            borderRadius: radius.xl,
+            borderRadius: radius.xxl,
             padding: 32,
             minHeight: 228,
             overflow: "hidden",
@@ -99,7 +101,9 @@ export function TodayScreen() {
         <View style={{ flex: 1, gap: 15, zIndex: 1 }}>
           <View style={[s.row, { gap: 7 }]}>
             <Sparkles size={13} color={colors.primary} />
-            <Text style={[s.label, { color: colors.primary }]}>A little clarity, every day</Text>
+            <Text style={[s.label, { color: colors.primaryText }]}>
+              A little clarity, every day
+            </Text>
           </View>
           <Text
             style={{
@@ -756,7 +760,7 @@ export function CalendarScreen() {
                     s.title,
                     {
                       fontSize: fontSize.title,
-                      color: key === date ? colors.primary : colors.text,
+                      color: key === date ? colors.primaryText : colors.text,
                     },
                   ]}
                 >
@@ -1001,62 +1005,73 @@ export function FilesScreen() {
             onPress={() => open({ type: "file", file: f })}
             style={{ flexGrow: 1, flexBasis: 250, maxWidth: 430 }}
           >
-            <Card style={{ padding: 0, overflow: "hidden" }}>
-              <View
+            {({ hovered }: WebPressState) => (
+              <Card
                 style={{
-                  height: 175,
-                  backgroundColor: colors.surfaceMuted,
-                  justifyContent: "center",
-                  alignItems: "center",
+                  padding: 0,
+                  overflow: "hidden",
+                  borderRadius: radius.xxl,
+                  ...(hovered
+                    ? { boxShadow: shadow.raised, borderColor: colors.lineStrong }
+                    : null),
                 }}
               >
                 <View
                   style={{
-                    width: 93,
-                    height: 121,
-                    borderRadius: radius.sm,
-                    backgroundColor: colors.surface,
-                    padding: 14,
-                    transform: [{ rotate: "-4deg" }],
-                    borderWidth: 1,
-                    borderColor: colors.line,
+                    height: 175,
+                    backgroundColor: colors.surfaceMuted,
+                    justifyContent: "center",
+                    alignItems: "center",
                   }}
                 >
-                  <View style={[s.row, { gap: 5, marginBottom: 15 }]}>
-                    <FileText size={13} color={colors.primary} />
-                    <Text style={{ fontSize: 7, color: colors.primary }}>DOCUMENT</Text>
+                  <View
+                    style={{
+                      width: 93,
+                      height: 121,
+                      borderRadius: radius.sm,
+                      backgroundColor: colors.surface,
+                      padding: 14,
+                      transform: [{ rotate: "-4deg" }],
+                      borderWidth: 1,
+                      borderColor: colors.line,
+                    }}
+                  >
+                    <View style={[s.row, { gap: 5, marginBottom: 15 }]}>
+                      <FileText size={13} color={colors.primary} />
+                      <Text style={{ fontSize: 7, color: colors.primaryText }}>DOCUMENT</Text>
+                    </View>
+                    {[100, 75, 90, 95, 60].map((width, i) => (
+                      <View
+                        key={width}
+                        style={{
+                          height: 3,
+                          backgroundColor: i === 0 ? colors.primarySoftStrong : colors.surfaceHover,
+                          width: `${width}%`,
+                          marginBottom: 7,
+                          borderRadius: radius.sm,
+                        }}
+                      />
+                    ))}
                   </View>
-                  {[100, 75, 90, 95, 60].map((width, i) => (
-                    <View
-                      key={width}
-                      style={{
-                        height: 3,
-                        backgroundColor: i === 0 ? colors.primarySoftStrong : colors.surfaceHover,
-                        width: `${width}%`,
-                        marginBottom: 7,
-                        borderRadius: radius.sm,
-                      }}
-                    />
-                  ))}
+                  <View style={{ position: "absolute", bottom: 12, right: 14 }}>
+                    <Chip>PDF</Chip>
+                  </View>
                 </View>
-                <View style={{ position: "absolute", bottom: 12, right: 14 }}>
-                  <Chip>PDF</Chip>
+                <View style={{ padding: 20, gap: 6 }}>
+                  <Text numberOfLines={1} style={s.heading}>
+                    {f.name}
+                  </Text>
+                  <Text style={s.small}>
+                    {f.pageCount} {f.pageCount === 1 ? "page" : "pages"} ·{" "}
+                    {Math.max(1, Math.round(f.size / 1024))} KB
+                  </Text>
+                  <View style={[s.between, { marginTop: 8 }]}>
+                    <Chip>{f.source}</Chip>
+                    <Text style={s.small}>{dateLabel(f.createdAt)}</Text>
+                  </View>
                 </View>
-              </View>
-              <View style={{ padding: 20, gap: 6 }}>
-                <Text numberOfLines={1} style={s.heading}>
-                  {f.name}
-                </Text>
-                <Text style={s.small}>
-                  {f.pageCount} {f.pageCount === 1 ? "page" : "pages"} ·{" "}
-                  {Math.max(1, Math.round(f.size / 1024))} KB
-                </Text>
-                <View style={[s.between, { marginTop: 8 }]}>
-                  <Chip>{f.source}</Chip>
-                  <Text style={s.small}>{dateLabel(f.createdAt)}</Text>
-                </View>
-              </View>
-            </Card>
+              </Card>
+            )}
           </Pressable>
         ))}
       </View>
@@ -1333,7 +1348,7 @@ export function ConnectionsScreen({ query = "" }: { query?: string }) {
                       style={{
                         fontSize: fontSize.ui,
                         fontWeight: "600",
-                        color: row.group === "google" ? colors.primary : colors.muted,
+                        color: row.group === "google" ? colors.primaryText : colors.muted,
                       }}
                     >
                       {row.group === "google" ? "Connect" : "Setup"}

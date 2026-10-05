@@ -62,6 +62,7 @@ import {
   Card,
   CheckRow,
   Chip,
+  CreateTile,
   colors,
   Empty,
   ErrorNotice,
@@ -601,7 +602,7 @@ export function TaskDetail({ taskId }: { taskId: string }) {
                   <Text
                     style={[
                       s.text,
-                      { color: step.status === "succeeded" ? colors.primary : colors.muted },
+                      { color: step.status === "succeeded" ? colors.primaryText : colors.muted },
                     ]}
                   >
                     {step.status === "succeeded" ? "✓" : `${index + 1}.`}
@@ -807,7 +808,7 @@ function FinanceArtifact({ artifact }: { artifact: AgentArtifact }) {
         <View
           style={{
             minHeight: 200,
-            borderRadius: radius.xl,
+            borderRadius: radius.xxl,
             overflow: "hidden",
             backgroundColor: financeArt.card,
             padding: 20,
@@ -1443,17 +1444,13 @@ export function GoalsScreen() {
         { name: "Finances", icon: CircleDollarSign },
         { name: "Something else", icon: Target },
       ].map((item) => (
-        <Pressable
+        <CreateTile
           key={item.name}
-          accessibilityRole="button"
+          icon={item.icon}
+          label={item.name}
           accessibilityLabel={`Create ${item.name.toLowerCase()} goal`}
           onPress={() => setAdding(item.name)}
-          style={[s.row, { gap: 12, minHeight: 44, paddingVertical: 8 }]}
-        >
-          <item.icon size={23} color={colors.subtle} />
-          <Text style={[s.text, { flex: 1, color: colors.muted }]}>{item.name}</Text>
-          <Plus size={18} color={colors.subtle} />
-        </Pressable>
+        />
       ))}
       {adding && (
         <Sheet
