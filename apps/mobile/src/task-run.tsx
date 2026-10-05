@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Platform, Pressable, Text, View } from "react-native";
+import { ActivityIndicator, Platform, Pressable, ScrollView, Text, View } from "react-native";
 import type { AgentTask, RunEvent } from "../../../packages/domain/src/agent";
 import { AssistantResponse } from "./assistant-response";
 import { colors, ErrorNotice, s } from "./ui";
@@ -76,6 +76,7 @@ export function TaskRunView({ task }: { task: AgentTask }) {
   const [events, setEvents] = useState<RunEvent[]>([]);
   const [savedTask, setSavedTask] = useState(task);
   const [error, setError] = useState("");
+  const [collapsed, setCollapsed] = useState(false);
   useEffect(() => {
     let active = true,
       pending = false;
@@ -113,7 +114,7 @@ export function TaskRunView({ task }: { task: AgentTask }) {
   return (
     <View style={{ gap: 16 }}>
       <View style={[s.row, { gap: 10 }]}>
-        <Text style={s.heading}>Agent run</Text>
+        <Text style={[s.heading, { flex: 1 }]}>Agent run</Text>
         {live && (
           <>
             <ActivityIndicator size="small" color={colors.blueDark} />
@@ -122,8 +123,32 @@ export function TaskRunView({ task }: { task: AgentTask }) {
             </Text>
           </>
         )}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={collapsed ? "Expand agent output" : "Collapse agent output"}
+          accessibilityState={{ expanded: !collapsed }}
+          onPress={() => setCollapsed(!collapsed)}
+          style={{ paddingVertical: 8, paddingHorizontal: 6 }}
+        >
+          <Text style={[s.small, { color: colors.blueDark }]}>
+            {collapsed ? "Show output" : "Hide output"}
+          </Text>
+        </Pressable>
       </View>
       <ErrorNotice error={error} />
+      <ScrollView
+        accessibilityLabel="Agent run output"
+        nestedScrollEnabled
+        style={{
+          display: collapsed ? "none" : "flex",
+          maxHeight: 360,
+          flexGrow: 0,
+          borderWidth: 1,
+          borderColor: colors.line,
+          borderRadius: 14,
+        }}
+        contentContainerStyle={{ gap: 16, padding: 12 }}
+      >
         {entries.map((event) =>
           event.kind === "tool" ? (
             <ToolActivity key={event.id} event={event} />
@@ -159,6 +184,7 @@ export function TaskRunView({ task }: { task: AgentTask }) {
               : "No run messages were recorded for this task."}
           </Text>
         )}
+      </ScrollView>
       {!!current.result && (
         <View style={{ gap: 8, padding: 16, borderRadius: 14, backgroundColor: colors.green }}>
           <Text style={s.heading}>Final response</Text>
