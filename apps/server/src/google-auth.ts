@@ -43,6 +43,9 @@ interface Credential {
   generation?: string;
   connectionId: string | null;
   secret: string | null;
+  /** Who completed the connection, to show on the Apps screen. */
+  connectedBy?: string;
+  connectedAt?: string;
 }
 export class GoogleAuth {
   private readonly refreshing = new Map<string, Promise<string>>();
@@ -55,8 +58,17 @@ export class GoogleAuth {
       this.config.googleClientId && this.config.googleClientSecret && this.config.encryptionKey,
     );
   }
+  /**
+   * The workspace's Google connection. There is only one, so `owner` is whoever is asking and
+   * makes no difference to which connection they get.
+   */
   async tokens(owner: string): Promise<Tokens | null> {
     return this.decodeTokens(await this.db.get<Credential>(owner, "credentials", "google"));
+  }
+  /** Who connected the workspace's Google account, when it is connected. */
+  async connectedBy(owner: string): Promise<string | undefined> {
+    const credential = await this.db.get<Credential>(owner, "credentials", "google");
+    return credential?.secret ? credential.connectedBy : undefined;
   }
   private decodeTokens(stored: Credential | null): Tokens | null {
     if (!stored?.secret) return null;
@@ -76,6 +88,8 @@ export class GoogleAuth {
         generation: randomUUID(),
         connectionId: tokens.connectionId,
         secret: encryptSecret(JSON.stringify(tokens), this.config.encryptionKey),
+        connectedBy: owner,
+        connectedAt: new Date().toISOString(),
       },
     );
     if (!saved)
@@ -152,6 +166,8 @@ export class GoogleAuth {
       access_type: "offline",
       prompt: "consent",
       include_granted_scopes: "true",
+      // Granting more access is for the account that is connected, so Google starts there.
+      ...(existing ? { login_hint: existing.account } : {}),
       code_challenge_method: "S256",
       code_challenge: createHash("sha256").update(verifier).digest("base64url"),
     }).toString();
@@ -286,6 +302,13 @@ export class GoogleAuth {
       throw new AppError("Google did not grant Gmail read access. Connect again.", 403);
     const { emailAddress } = z.object({ emailAddress: z.email() }).parse(await profile.json());
     const previous = await this.tokens(state.owner);
+    // The workspace has one Google connection. More access for the connected account is fine;
+    // a different account has to wait until the connected one is disconnected.
+    if (previous && previous.account !== emailAddress)
+      throw new AppError(
+        `Google is already connected as ${previous.account}. Disconnect it before connecting ${emailAddress}.`,
+        409,
+      );
     await this.save(
       state.owner,
       {
@@ -307,7 +330,8 @@ export class GoogleAuth {
     if (expectedConnectionId && tokens.connectionId !== expectedConnectionId)
       throw new AppError("Google account or connection changed. Prepare a new action.", 409);
     if (tokens.expiresAt > Date.now() + 60000) return tokens.accessToken;
-    const refreshKey = `${owner}:${tokens.connectionId}`;
+    // One connection serves the whole workspace, so a refresh is shared by whoever asks.
+    const refreshKey = tokens.connectionId;
     const pending = this.refreshing.get(refreshKey);
     if (pending) return pending;
     const task = this.refresh(owner, tokens).finally(() => this.refreshing.delete(refreshKey));

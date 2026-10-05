@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
-import { test } from "node:test";
+import { type TestContext, test } from "node:test";
 import type { Config } from "../apps/server/src/config.ts";
 import { createStore } from "../apps/server/src/db.ts";
 import { GoogleAuth } from "../apps/server/src/google-auth.ts";
@@ -238,4 +238,102 @@ test("an in-flight refresh cannot restore credentials after disconnect", async (
   release.resolve();
   await assert.rejects(refresh, /disconnected/i);
   assert.equal(await auth.tokens("refresh-disconnect"), null);
+});
+
+function googleCallbackMock(t: TestContext, account: () => string) {
+  t.mock.method(globalThis, "fetch", async (input: string | URL | Request) =>
+    Response.json(
+      String(input).includes("/token")
+        ? { access_token: "access", refresh_token: "refresh", expires_in: 3600, scope: "gmail" }
+        : { emailAddress: account() },
+    ),
+  );
+}
+
+test("the workspace has one Google connection: more access is fine, another account is not", async (t) => {
+  const db = await createStore();
+  t.after(() => db.close());
+  const auth = new GoogleAuth(db, oauthConfig());
+  let account = "team@example.com";
+  googleCallbackMock(t, () => account);
+
+  const first = new URL((await auth.connect("alice", false)).url).searchParams.get("state");
+  assert.ok(first);
+  await auth.callback(first, "code");
+  assert.equal((await auth.tokens("anyone"))?.account, "team@example.com");
+  assert.equal(await auth.connectedBy("bob"), "alice");
+
+  // Bob tries to bring his own account: refused, and the team's connection is untouched.
+  account = "bob@example.com";
+  const second = new URL((await auth.connect("bob", false)).url).searchParams.get("state");
+  assert.ok(second);
+  await assert.rejects(
+    auth.callback(second, "code"),
+    /already connected as team@example\.com.*before connecting bob@example\.com/,
+  );
+  assert.equal((await auth.tokens("alice"))?.account, "team@example.com");
+  assert.equal(await auth.connectedBy("alice"), "alice");
+
+  // The connected account granting more access, started by anyone, is allowed.
+  account = "team@example.com";
+  const third = new URL((await auth.connect("bob", true)).url).searchParams.get("state");
+  assert.ok(third);
+  await auth.callback(third, "code");
+  assert.equal((await auth.tokens("alice"))?.account, "team@example.com");
+  assert.equal(await auth.connectedBy("alice"), "bob");
+
+  // After a disconnect, which anyone can do, another account can connect.
+  t.mock.restoreAll();
+  t.mock.method(globalThis, "fetch", async () => new Response(null, { status: 200 }));
+  await auth.disconnect("alice");
+  assert.equal(await auth.tokens("bob"), null);
+  googleCallbackMock(t, () => "bob@example.com");
+  const fourth = new URL((await auth.connect("bob", false)).url).searchParams.get("state");
+  assert.ok(fourth);
+  await auth.callback(fourth, "code");
+  assert.equal((await auth.tokens("alice"))?.account, "bob@example.com");
+});
+
+test("connecting again starts Google at the connected account", async (t) => {
+  const db = await createStore();
+  t.after(() => db.close());
+  const auth = new GoogleAuth(db, oauthConfig());
+  googleCallbackMock(t, () => "team@example.com");
+  const state = new URL((await auth.connect("alice", false)).url).searchParams.get("state");
+  assert.ok(state);
+  await auth.callback(state, "code");
+  const url = new URL((await auth.connect("bob", true)).url);
+  assert.equal(url.searchParams.get("login_hint"), "team@example.com");
+});
+
+test("a Google token refresh is shared by everyone who needs it at once", async (t) => {
+  const db = await createStore();
+  t.after(() => db.close());
+  const config = oauthConfig();
+  assert.ok(config.encryptionKey);
+  await db.put("alice", "credentials", {
+    id: "google",
+    connectionId: "shared-connection",
+    secret: encryptSecret(
+      JSON.stringify({
+        connectionId: "shared-connection",
+        accessToken: "stale",
+        refreshToken: "refresh",
+        expiresAt: 0,
+        scopes: [],
+        account: "team@example.com",
+      }),
+      config.encryptionKey,
+    ),
+  });
+  let refreshes = 0;
+  t.mock.method(globalThis, "fetch", async () => {
+    refreshes++;
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    return Response.json({ access_token: "fresh", expires_in: 3600 });
+  });
+  const auth = new GoogleAuth(db, config);
+  const tokens = await Promise.all([auth.accessToken("alice"), auth.accessToken("bob")]);
+  assert.deepEqual(tokens, ["fresh", "fresh"]);
+  assert.equal(refreshes, 1);
 });

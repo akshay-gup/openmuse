@@ -177,6 +177,8 @@ export interface Connection {
   name: string;
   status: "connected" | "disconnected" | "sample" | "unconfigured" | "unavailable";
   account?: string;
+  /** Who connected it, for the one connection the whole workspace shares. */
+  connectedBy?: string;
   capabilities: string[];
 }
 export interface Workspace {

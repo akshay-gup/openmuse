@@ -316,6 +316,10 @@ export class WorkspaceService {
       reviews.map((review) => review.createdBy),
     );
     const tokens = this.config.mode === "live" ? await this.googleAuth.tokens(owner) : null;
+    const connectedById = tokens ? await this.googleAuth.connectedBy(owner) : undefined;
+    const connectedBy = connectedById
+      ? (await requesterNames(this.db, [connectedById])).get(connectedById)
+      : undefined;
     // Google sign-in records the user's name at login; use it instead of the
     // generic fallback so messages are attributed to the person, not "You".
     const user =
@@ -327,9 +331,10 @@ export class WorkspaceService {
       profile: {
         id: owner,
         name: this.config.mode === "sample" ? "Alex" : (user?.name ?? "You"),
+        // Who is signed in, not the account the workspace's Google connection belongs to.
         email:
-          tokens?.account ??
           user?.email ??
+          tokens?.account ??
           (this.config.mode === "sample" ? "alex@example.com" : ""),
       },
       mail: mail.sort((a, b) => b.date.localeCompare(a.date)),
@@ -351,6 +356,7 @@ export class WorkspaceService {
             : "disconnected",
           account:
             tokens?.account ?? (this.config.mode === "sample" ? "alex@example.com" : undefined),
+          ...(connectedBy ? { connectedBy } : {}),
           capabilities:
             this.config.mode === "sample" ? ["Gmail", "Calendar"] : (tokens?.scopes ?? []),
         },
