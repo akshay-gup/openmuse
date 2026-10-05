@@ -1,3 +1,4 @@
+import { TaskRunLog } from "./task-run-log.ts";
 import type { HiveTool, HiveToolBridge } from "./hive-tools.ts";
 /**
  * Task-worker execution through OpenCode sessions.
@@ -238,6 +239,7 @@ export async function runOpencodeTask(
   const client = runtime.pool.forDirectory(directory);
 
   let toolLease: Awaited<ReturnType<HiveToolBridge["connect"]>> | undefined;
+  const runLog = new TaskRunLog(service.db, owner, task.id, sessionId, () => ctx.guard());
   const collector = new TaskTextCollector();
   let emittedChars = 0;
   let lastCheckpoint = Date.now();
@@ -261,6 +263,7 @@ export async function runOpencodeTask(
   });
 
   const unsubscribe = runtime.bus.onEvent(scope, (event) => {
+    runLog.handle(event);
     if (event.type === "permission.asked") {
       const props = event.properties as {
         id?: string;
@@ -365,6 +368,11 @@ export async function runOpencodeTask(
     clearTimeout(timer);
     ctx.signal.removeEventListener("abort", onAbort);
     unsubscribe();
+    try {
+      await runLog.close();
+    } catch (error) {
+      if (!ctx.signal.aborted) throw error;
+    }
   }
 
   const mediatedOutcome = toolState?.outcome();

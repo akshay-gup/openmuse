@@ -96,7 +96,22 @@ export interface RunEvent {
   id: string;
   taskId: string;
   date: string;
-  kind: "plan" | "step" | "observation" | "approval" | "result" | "error" | "status";
+  kind:
+    | "plan"
+    | "step"
+    | "observation"
+    | "approval"
+    | "result"
+    | "error"
+    | "status"
+    | "message"
+    | "tool";
+  runId?: string;
+  sequence?: number;
+  toolName?: string;
+  toolCallId?: string;
+  toolState?: string;
+  toolInput?: unknown;
   title: string;
   detail: string;
 }

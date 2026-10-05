@@ -460,7 +460,7 @@ export class AgentService {
       browsers: browsers.map((browser) => this.browser.decorate(owner, browser)),
       events: (await this.db.list<RunEvent>(owner, "run-events"))
         .filter((e) => e.taskId === id)
-        .sort((a, b) => a.date.localeCompare(b.date)),
+        .sort((a, b) => a.date.localeCompare(b.date) || (a.sequence ?? 0) - (b.sequence ?? 0)),
       artifacts: (await this.db.list<AgentArtifact>(owner, "agent-artifacts")).filter(
         (a) => a.taskId === id,
       ),
