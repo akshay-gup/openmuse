@@ -458,24 +458,17 @@ export class AgentService {
   }
   async detail(owner: string, id: string) {
     const task = await this.getTask(owner, id);
-    // Anyone can open a task, so anyone can see what it produced. Those files and browser
-    // sessions live with the person who asked for the work; a teammate gets the preview of a
-    // session but never the console that would let them drive it.
-    const requester = task.createdBy ?? owner;
-    const files = (await this.db.list<Artifact>(requester, "files")).filter((file) =>
+    const files = (await this.db.list<Artifact>(owner, "files")).filter((file) =>
       task.artifactIds.includes(file.id),
     );
-    const browsers = (await this.db.list<BrowserSession>(requester, "browsers")).filter((browser) =>
+    const browsers = (await this.db.list<BrowserSession>(owner, "browsers")).filter((browser) =>
       [task.state.browserId, task.state.sessionId].includes(browser.id),
     );
     const names = await requesterNames(this.db, [task.createdBy]);
     return {
       task: withRequester(task, names),
-      files: files.map((file) => this.files.signed(requester, file)),
-      browsers: browsers.map((browser) => {
-        const decorated = this.browser.decorate(requester, browser);
-        return requester === owner ? decorated : { ...decorated, consoleUrl: undefined };
-      }),
+      files: files.map((file) => this.files.signed(owner, file)),
+      browsers: browsers.map((browser) => this.browser.decorate(owner, browser)),
       events: (await this.db.listWhere<RunEvent>(owner, "run-events", "taskId", id)).sort(
         (a, b) => a.date.localeCompare(b.date) || (a.sequence ?? 0) - (b.sequence ?? 0),
       ),
@@ -1113,12 +1106,7 @@ export class AgentService {
     );
     const completedSources = new Set(
       (await this.db.list<AgentTask>(owner, "tasks"))
-        .filter(
-          (task) =>
-            task.status === "succeeded" &&
-            typeof task.input.messageId === "string" &&
-            (task.createdBy ?? owner) === owner,
-        )
+        .filter((task) => task.status === "succeeded" && typeof task.input.messageId === "string")
         .map((task) => `${task.kind}:${task.input.messageId}`),
     );
     const obsolete = (kind: AgentTask["kind"], messageId: unknown) =>
@@ -1177,11 +1165,7 @@ export class AgentService {
       } satisfies Idea);
     }
     for (const goal of await this.db.list<Goal>(owner, "goals"))
-      if (
-        goal.status === "active" &&
-        !goal.milestones.length &&
-        (goal.createdBy ?? owner) === owner
-      ) {
+      if (goal.status === "active" && !goal.milestones.length) {
         const id = hash(`goal:${goal.id}:${goal.description}`);
         await this.db.insertIfAbsent(owner, "ideas", {
           id,

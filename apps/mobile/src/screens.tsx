@@ -33,7 +33,6 @@ import {
   View,
 } from "react-native";
 import type {
-  ActionProposal,
   Artifact,
   BrowserSession,
   CalendarEvent,
@@ -41,7 +40,6 @@ import type {
 } from "../../../packages/domain/src";
 import { API_URL } from "./api";
 import { localDateTime, zonedInstant } from "./date-time";
-import { isMine, requesterName } from "./reviews";
 import {
   avatarTints,
   Button,
@@ -1077,11 +1075,8 @@ export function FilesScreen() {
 export function ActivityScreen() {
   const { workspace: w, open } = useWorkspace();
   const [filter, setFilter] = useState("all");
-  // Everyone's reviews are listed; the "needs review" count is the ones only you can approve.
-  const awaitingYou = (a: ActionProposal) =>
-    a.status === "awaiting_review" && isMine(a, w.profile.id);
-  const pending = w.actions.filter(awaitingYou);
-  const actions = w.actions.filter((a) => filter === "all" || awaitingYou(a));
+  const pending = w.actions.filter((a) => a.status === "awaiting_review");
+  const actions = w.actions.filter((a) => filter === "all" || a.status === "awaiting_review");
   return (
     <View style={{ gap: 20 }}>
       <View style={[s.row, { gap: 10 }]}>
@@ -1122,7 +1117,7 @@ export function ActivityScreen() {
               <View style={{ flex: 1, gap: 4 }}>
                 <Text style={s.text}>{a.title}</Text>
                 <Text style={s.small}>
-                  {isMine(a, w.profile.id) ? "" : `${requesterName(a)} · `}
+                  {a.createdByName ? `${a.createdByName} · ` : ""}
                   {relativeDate(a.createdAt)}
                 </Text>
               </View>

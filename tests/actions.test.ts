@@ -66,17 +66,21 @@ test("concurrent approval consumes the proposal only once", async () => {
   assert.equal(saved?.status, "succeeded");
   assert.equal(saved?.result, "provider-receipt");
 });
-test("wrong owner and stale hash cannot approve", async () => {
+test("anyone in the workspace can approve a review, but a stale hash cannot", async () => {
+  let calls = 0;
   const service = new ActionService(db, {
-    execute: async () => "sent",
+    execute: async () => {
+      calls++;
+      return "sent";
+    },
     connected: async () => true,
   });
-  const proposal = await service.propose("private-user", email);
-  await assert.rejects(
-    service.decide("attacker", proposal.id, proposal.hash, "approve"),
-    /not found/i,
-  );
-  await assert.rejects(service.decide("private-user", proposal.id, "stale", "approve"), /changed/i);
+  const proposal = await service.propose("preparer", email);
+  await assert.rejects(service.decide("teammate", proposal.id, "stale", "approve"), /changed/i);
+  assert.equal(calls, 0);
+  const approved = await service.decide("teammate", proposal.id, proposal.hash, "approve");
+  assert.equal(approved.status, "succeeded");
+  assert.equal(calls, 1);
 });
 test("expired and disconnected proposals never reach the provider", async () => {
   let now = Date.now();

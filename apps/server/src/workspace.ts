@@ -11,7 +11,7 @@ import type {
 } from "../../../packages/domain/src/index.ts";
 import { type DriveFile, GoogleClient } from "../../../packages/integrations/src/google.ts";
 import { createSamplePdf } from "../../../packages/integrations/src/pdf.ts";
-import { type ActionService, reviewVisibleTo } from "./actions.ts";
+import type { ActionService } from "./actions.ts";
 import { agentConfigured } from "./agent.ts";
 import type { Config } from "./config.ts";
 import type { Store } from "./db.ts";
@@ -308,9 +308,7 @@ export class WorkspaceService {
       mail = [];
       events = [];
     }
-    const reviews = (await this.db.list<ActionProposal>(owner, "actions")).filter((action) =>
-      reviewVisibleTo(owner, action),
-    );
+    const reviews = await this.db.list<ActionProposal>(owner, "actions");
     const names = await requesterNames(
       this.db,
       reviews.map((review) => review.createdBy),
@@ -329,7 +327,6 @@ export class WorkspaceService {
     return {
       mode: this.config.mode,
       profile: {
-        id: owner,
         name: this.config.mode === "sample" ? "Alex" : (user?.name ?? "You"),
         // Who is signed in, not the account the workspace's Google connection belongs to.
         email:
@@ -342,9 +339,7 @@ export class WorkspaceService {
       files: await this.files.list(owner),
       browsers: await this.db.list<BrowserSession>(owner, "browsers"),
       actions: reviews.map((review) => withRequester(review, names)),
-      activity: (await this.db.list<ActivityEntry>(owner, "activity")).filter((entry) =>
-        reviewVisibleTo(owner, entry),
-      ),
+      activity: await this.db.list<ActivityEntry>(owner, "activity"),
       connections: [
         {
           id: "google",

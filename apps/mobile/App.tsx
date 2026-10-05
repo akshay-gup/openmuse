@@ -49,7 +49,6 @@ import { ChannelChatBanner, ChatScreen, WorkspaceTools } from "./src/chat";
 import { ComputerEntry } from "./src/computer";
 import { ComputerDraftProvider } from "./src/computer-drafts";
 import { Details } from "./src/details";
-import { isMine } from "./src/reviews";
 import { BrowserScreen, CalendarScreen, FilesScreen, MailScreen } from "./src/screens";
 import { Sidebar } from "./src/sidebar";
 import { ThreadsProvider, useMuseThread } from "./src/threads";
@@ -380,15 +379,12 @@ function WorkspaceShell({
   const { width } = useWindowDimensions();
   const desktop = width >= 900;
   const channelChat = section === "chat" && selection.id.startsWith("channel:");
-  const me = workspace.profile.id;
-  // Everyone sees the workspace's work, but only what is waiting on you counts as yours.
   const pending =
     (data?.notifications.filter((n) => !n.read).length || 0) +
-    workspace.actions.filter((a) => a.status === "awaiting_review" && isMine(a, me)).length;
+    workspace.actions.filter((a) => a.status === "awaiting_review").length;
   const activeTask =
     data?.tasks.find(
-      (task) =>
-        task.status === "waiting_input" || (task.status === "waiting_approval" && isMine(task, me)),
+      (task) => task.status === "waiting_approval" || task.status === "waiting_input",
     ) || data?.tasks.find((task) => task.status === "running");
   const agentName = data?.identity.name || "Hive";
   const status = activeTask

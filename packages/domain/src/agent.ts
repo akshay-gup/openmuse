@@ -76,10 +76,7 @@ export interface AgentTask {
   delegationReason?: string;
   /** Thread the work was delegated from. A thread's task list is its work queue. */
   threadId?: string;
-  /**
-   * Who asked for the work. Tasks are shared by everyone in the workspace, but the worker runs a
-   * task on this person's Google account and files, and they are the one asked to approve it.
-   */
+  /** Who asked for the work. Tasks are shared by everyone in the workspace. */
   createdBy?: string;
   /** Display name for `createdBy`, filled in when the task is sent to a client. */
   createdByName?: string;
@@ -130,7 +127,6 @@ export interface Goal {
   status: "active" | "paused" | "completed";
   milestones: { id: string; title: string; done: boolean }[];
   createdAt: string;
-  /** Goals are shared like tasks; the ideas they inspire go to the person who set them. */
   createdBy?: string;
 }
 /** A project groups tasks on the board. Tasks without one sit in "No project". */

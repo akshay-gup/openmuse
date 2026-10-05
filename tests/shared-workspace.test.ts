@@ -246,7 +246,7 @@ test("anyone can work a shared task and add to a shared board", async () => {
   assert.equal(task.createdBy, ALICE);
 });
 
-test("the worker runs a shared task as the person who created it and everyone sees its run", async () => {
+test("the worker runs a shared task as the person who asked for it and everyone sees its run", async () => {
   const mine = await agent<AgentTask>(
     tokenA,
     "/tasks",
@@ -287,7 +287,7 @@ test("a task's outcome notifies the workspace, and one person reading it clears 
   assert.equal(forAlice?.read, true);
 });
 
-test("reviews and receipts for the team's tasks are shared; only the account that prepared one can approve it", async () => {
+test("reviews and receipts are shared, and anyone on the team can approve one", async () => {
   const work = await agent<AgentTask>(
     tokenA,
     "/tasks",
@@ -325,20 +325,16 @@ test("reviews and receipts for the team's tasks are shared; only the account tha
     "and its timeline entry",
   );
 
-  const refused = await call(tokenB, `/api/actions/${proposal.id}/decide`, {
-    hash: proposal.hash,
-    decision: "approve",
-  });
-  assert.equal(refused.status, 403);
-  assert.match(((await refused.json()) as { error: string }).error, /only .* can approve/i);
-
-  const approved = await read<ActionProposal>(tokenA, `/api/actions/${proposal.id}/decide`, {
+  // The review runs on the workspace's one Google connection, so Bob can approve Alice's.
+  const approved = await read<ActionProposal>(tokenB, `/api/actions/${proposal.id}/decide`, {
     hash: proposal.hash,
     decision: "approve",
   });
   assert.equal(approved.status, "succeeded");
-  const receipts = await read<Workspace>(tokenB, "/api/workspace");
-  assert.equal(receipts.actions.find((a) => a.id === proposal.id)?.status, "succeeded");
+  const receipts = await read<Workspace>(tokenA, "/api/workspace");
+  const receipt = receipts.actions.find((a) => a.id === proposal.id);
+  assert.equal(receipt?.status, "succeeded");
+  assert.equal(receipt?.createdByName, "Alice");
 });
 
 const calendarReview = (title: string) => ({
@@ -397,9 +393,9 @@ test("cancelling a task declines its pending review, whoever cancels it", async 
   assert.equal(after.actions.find((a) => a.id === proposal.id)?.status, "denied");
 });
 
-test("a review someone prepared for themselves, outside any task, stays theirs", async () => {
+test("a review prepared outside any task is the workspace's too", async () => {
   const now = Date.now();
-  const personal = await server.actions.propose(ALICE, {
+  const outside = await server.actions.propose(ALICE, {
     kind: "calendar.create",
     data: {
       calendarId: "primary",
@@ -413,17 +409,14 @@ test("a review someone prepared for themselves, outside any task, stays theirs",
       attendees: [],
     },
   });
-  assert.ok(
-    (await read<Workspace>(tokenA, "/api/workspace")).actions.some((a) => a.id === personal.id),
-  );
   const bobsView = await read<Workspace>(tokenB, "/api/workspace");
-  assert.ok(!bobsView.actions.some((a) => a.id === personal.id));
-  assert.ok(!bobsView.activity.some((a) => a.actionId === personal.id));
-  const poke = await call(tokenB, `/api/actions/${personal.id}/decide`, {
-    hash: personal.hash,
-    decision: "deny",
+  assert.ok(bobsView.actions.some((a) => a.id === outside.id));
+  assert.ok(bobsView.activity.some((a) => a.actionId === outside.id));
+  const approved = await read<ActionProposal>(tokenB, `/api/actions/${outside.id}/decide`, {
+    hash: outside.hash,
+    decision: "approve",
   });
-  assert.equal(poke.status, 404);
+  assert.equal(approved.status, "succeeded");
 });
 
 test("everything else is shared too: drafts, files, browser sessions, memory and the agent's personality", async () => {
