@@ -76,7 +76,7 @@ Where this fork is headed — self-contained, agent-native team chat:
 - Live VM verification: end-to-end task loop with real inference, `opencode serve` systemd unit.
 - Shared-computer arbitration between channel workers on the one box.
 - Orchestrator queue and new-tab routing for delegated tasks.
-- Multi-tenant membership: invites, channel visibility, orchestrator scope, roles (decisions pending).
+- Multi-tenant membership: invites and roles (decisions pending). Visibility is decided: see [Who sees what](#who-sees-what).
 - Browser access (deferred); native mobile against the same API.
 
 Details and open questions live in [ROADMAP.md](ROADMAP.md).
@@ -160,6 +160,18 @@ Or use `docker compose --env-file .env -f infra/compose.yaml up --build -d`. The
 ## Persistence and operation
 
 Channel workspace directories and thread bindings live on the API server's local disk under `DATA_DIR` (`channels/<channelId>/threads/<threadId>.json`), alongside the database.
+
+### Who sees what
+
+Hive is a team workspace. Everyone who signs in sees the same channels, threads (with the agent's replies), tasks, boards, goals, watches, and the reviews and receipts those tasks produce.
+
+Kept per person: the **orchestrator chat** and its threads, and everything that comes from their own Google account (mail, calendar, Drive, files, drafts, browser sessions), plus their memories, agent personality, ideas and notifications.
+
+A task is shared, but it runs as the person who asked for it: their Google account, files and browser. Anyone can pause, cancel or answer it. Only that person can approve a review it prepares, because approving acts on their account; teammates can read the review and decline it. Reviews a person prepares for themselves, outside any task, stay theirs.
+
+Shared thread history applies to the default local thread storage. Hosted Rich Threads (`CPK_INTELLIGENCE_API_KEY`) identifies each person to CopilotKit separately, so it keeps their threads apart.
+
+On start the server adopts anything that used to be kept per person (tasks, boards, reviews, thread transcripts), so existing work appears for the whole workspace. Orchestrator transcripts stay where they were. The kinds shared this way are listed in `SHARED_KINDS` in `apps/server/src/db.ts`.
 
 ### Application storage
 

@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Tasks, boards, goals, watches, reviews and thread transcripts are shared by everyone who signs in; a teammate now sees a thread's messages and the agent's replies, and the whole team's tasks. Only the orchestrator chat and what comes from a person's own Google account stay private. A task runs as the person who asked for it, and only they can approve its reviews. Existing per-person records are adopted on start.
+
 ## 0.1.0-alpha — 2026-09-15
 
 Initial public Hive alpha.
