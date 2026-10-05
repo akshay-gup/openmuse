@@ -1,5 +1,5 @@
 import { Text, View } from "react-native";
-import { colors, s } from "./ui";
+import { colors, s, webFontFamily } from "./ui";
 
 interface DateFieldsProps {
   label: string;
@@ -16,7 +16,7 @@ export default function DateFields({ label, date, time, allDay, onChange }: Date
     fontSize: 14,
     color: colors.text,
     background: "#FFF",
-    fontFamily: "inherit",
+    fontFamily: webFontFamily,
     width: "100%",
     boxSizing: "border-box" as const,
     minHeight: 46,

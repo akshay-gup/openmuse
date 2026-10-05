@@ -1,20 +1,29 @@
-import { ArrowUpRight, Check, ChevronRight, type LucideIcon, X } from "lucide-react-native";
-import type { ReactNode } from "react";
+import { ArrowUpRight, Check, ChevronRight, type LucideIcon, Search, X } from "lucide-react-native";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import {
+  AccessibilityInfo,
   ActivityIndicator,
+  Animated,
   Image,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   type TextInputProps,
+  type TextStyle,
   useWindowDimensions,
   View,
   type ViewStyle,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+/** The system font stack react-native-web gives Text and TextInput. Raw web <input> elements need it spelled out. */
+export const webFontFamily =
+  '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
+/** react-native-web also passes hover and focus state to Pressable style callbacks; React Native's types only declare `pressed`. */
+export type WebPressState = { pressed: boolean; hovered?: boolean; focused?: boolean };
 /** Spacing scale: everything in the app should be a multiple of 4. */
 export const sp = {
   xs: 4,
@@ -150,9 +159,11 @@ export function Button({
   small,
   danger,
   style,
+  accessibilityLabel,
 }: {
   children: ReactNode;
   onPress: () => void;
+  accessibilityLabel?: string;
   icon?: LucideIcon;
   primary?: boolean;
   disabled?: boolean;
@@ -165,6 +176,7 @@ export function Button({
   return (
     <Pressable
       accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
       disabled={disabled || busy}
       accessibilityState={{ disabled: !!(disabled || busy), busy: !!busy }}
       onPress={onPress}
@@ -218,16 +230,109 @@ export function IconButton({
 export function Card({ children, style }: { children: ReactNode; style?: ViewStyle }) {
   return <View style={[s.card, style]}>{children}</View>;
 }
-export function Chip({ children, tint }: { children: ReactNode; tint?: string }) {
+export function Chip({
+  children,
+  tint,
+  color,
+}: {
+  children: ReactNode;
+  tint?: string;
+  color?: string;
+}) {
   return (
     <View style={[s.chip, tint ? { backgroundColor: tint } : null]}>
-      <Text style={s.chipText}>{children}</Text>
+      <Text style={[s.chipText, color ? { color } : null]}>{children}</Text>
     </View>
   );
 }
-export function Field({ label, ...props }: TextInputProps & { label: string }) {
+/** One choice out of a few, shown together (view switchers, filters, priority). */
+export function Segmented<T extends string>({
+  label,
+  options,
+  value,
+  onChange,
+  disabled,
+}: {
+  label: string;
+  options: { id: T; label: string; dot?: string }[];
+  value: T;
+  onChange: (id: T) => void;
+  disabled?: boolean;
+}) {
   return (
-    <View style={s.field}>
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      style={{ flexGrow: 0, maxWidth: "100%", alignSelf: "flex-start" }}
+      contentContainerStyle={{ flexGrow: 0 }}
+    >
+      <View
+        accessibilityRole="tablist"
+        accessibilityLabel={label}
+        style={{
+          flexDirection: "row",
+          padding: 3,
+          borderRadius: 999,
+          backgroundColor: "#F1F2F3",
+          opacity: disabled ? 0.6 : 1,
+        }}
+      >
+        {options.map((option) => {
+          const selected = option.id === value;
+          return (
+            <Pressable
+              key={option.id}
+              accessibilityRole="tab"
+              accessibilityState={{ selected, disabled: !!disabled }}
+              disabled={disabled}
+              onPress={() => onChange(option.id)}
+              style={({ pressed, hovered }: WebPressState) => ({
+                flexShrink: 0,
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 6,
+                minHeight: 38,
+                paddingHorizontal: 14,
+                borderRadius: 999,
+                borderWidth: 1,
+                borderColor: selected ? colors.line : "transparent",
+                backgroundColor: selected
+                  ? "#FFFFFF"
+                  : hovered || pressed
+                    ? "#E7E9EB"
+                    : "transparent",
+              })}
+            >
+              {!!option.dot && (
+                <View
+                  style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: option.dot }}
+                />
+              )}
+              <Text
+                numberOfLines={1}
+                style={{
+                  fontSize: 14,
+                  fontWeight: selected ? "700" : "500",
+                  color: selected ? colors.text : colors.muted,
+                }}
+              >
+                {option.label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+    </ScrollView>
+  );
+}
+export function Field({
+  label,
+  compact,
+  ...props
+}: TextInputProps & { label: string; compact?: boolean }) {
+  return (
+    <View style={[s.field, compact && { marginBottom: 0 }]}>
       <Text style={[s.small, { fontWeight: "600", color: colors.text }]}>{label}</Text>
       <TextInput
         placeholderTextColor={colors.muted}
@@ -239,6 +344,65 @@ export function Field({ label, ...props }: TextInputProps & { label: string }) {
           props.style,
         ]}
       />
+    </View>
+  );
+}
+/** Inline search box. Its border carries the focus state, so the browser's own ring inside it is switched off. */
+export function SearchField({
+  label,
+  placeholder,
+  value,
+  onChangeText,
+  style,
+}: {
+  label: string;
+  placeholder: string;
+  value: string;
+  onChangeText: (value: string) => void;
+  style?: ViewStyle;
+}) {
+  const [focused, setFocused] = useState(false);
+  return (
+    <View
+      style={[
+        s.row,
+        {
+          gap: 9,
+          backgroundColor: "#FFF",
+          borderWidth: 1,
+          borderColor: focused ? colors.blueDark : colors.line,
+          borderRadius: 12,
+          paddingHorizontal: 14,
+        },
+        style,
+      ]}
+    >
+      <Search size={16} color={colors.muted} />
+      <TextInput
+        accessibilityLabel={label}
+        placeholder={placeholder}
+        placeholderTextColor={colors.muted}
+        value={value}
+        onChangeText={onChangeText}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        returnKeyType="search"
+        autoCorrect={false}
+        style={[
+          { flex: 1, paddingVertical: 12, fontSize: 15, color: colors.text },
+          Platform.OS === "web" ? ({ outlineStyle: "none" } as unknown as TextStyle) : null,
+        ]}
+      />
+      {!!value && (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Clear search"
+          hitSlop={12}
+          onPress={() => onChangeText("")}
+        >
+          <X size={16} color={colors.muted} />
+        </Pressable>
+      )}
     </View>
   );
 }
@@ -462,6 +626,75 @@ export function Mascot({
     </View>
   );
 }
+/** True while an input method is mid-composition. Enter confirms the candidate then and must not submit. */
+export function composingText(event: object): boolean {
+  const { isComposing, keyCode } = event as { isComposing?: boolean; keyCode?: number };
+  return !!isComposing || keyCode === 229;
+}
+
+const typingDots = ["first", "second", "third"].map((id, index) => ({
+  id,
+  delay: index * 150,
+  tail: (2 - index) * 150,
+}));
+/** Three pulsing dots while the agent works. Static when the system asks for reduced motion. */
+export function TypingDots() {
+  const values = useRef(typingDots.map(() => new Animated.Value(0.35))).current;
+  const [still, setStill] = useState(false);
+  useEffect(() => {
+    let active = true;
+    AccessibilityInfo.isReduceMotionEnabled()
+      .then((reduce) => {
+        if (active) setStill(reduce);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, []);
+  useEffect(() => {
+    if (still) return;
+    const useNativeDriver = Platform.OS !== "web";
+    const loops = values.map((value, index) =>
+      Animated.loop(
+        Animated.sequence([
+          Animated.delay(typingDots[index].delay),
+          Animated.timing(value, { toValue: 1, duration: 320, useNativeDriver }),
+          Animated.timing(value, { toValue: 0.35, duration: 320, useNativeDriver }),
+          Animated.delay(typingDots[index].tail),
+        ]),
+      ),
+    );
+    for (const loop of loops) loop.start();
+    return () => {
+      for (const loop of loops) loop.stop();
+    };
+  }, [still, values]);
+  return (
+    <>
+      {typingDots.map((dot, index) => (
+        <Animated.View
+          key={dot.id}
+          style={{
+            width: 8,
+            height: 8,
+            borderRadius: 4,
+            backgroundColor: colors.muted,
+            opacity: still ? 0.6 : values[index],
+            transform: [
+              {
+                scale: still
+                  ? 1
+                  : values[index].interpolate({ inputRange: [0.35, 1], outputRange: [0.85, 1.15] }),
+              },
+            ],
+          }}
+        />
+      ))}
+    </>
+  );
+}
+
 export function dateLabel(value: string, options?: Intl.DateTimeFormatOptions) {
   const date = new Date(value);
   return Number.isNaN(date.getTime())
