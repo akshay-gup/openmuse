@@ -1964,7 +1964,7 @@ export function AppsScreen() {
       {settings && (
         <>
           <Card style={{ gap: 12 }}>
-            <SectionHeading title="Your agent" />
+            <SectionHeading title="Your team's agent" />
             <View style={[s.row, { gap: 16, justifyContent: "center", marginBottom: 12 }]}>
               {(["sky", "sand", "lilac"] as const).map((item) => (
                 <Pressable
@@ -2012,15 +2012,15 @@ export function AppsScreen() {
           </Card>
           <Card style={{ gap: 12 }}>
             <SectionHeading title="Memory" />
-            <Text style={s.muted}>Context you can inspect, correct or forget.</Text>
+            <Text style={s.muted}>Context your whole team can inspect, correct or forget.</Text>
             {data?.memories.map((item) => (
               <MemoryRow key={item.id} memory={item} />
             ))}
             <Field
-              label="Remember something about me"
+              label="Remember something for the team"
               value={memory}
               onChangeText={setMemory}
-              placeholder="I prefer morning meetings"
+              placeholder="We ship on Fridays"
             />
             <Button
               busy={busy}

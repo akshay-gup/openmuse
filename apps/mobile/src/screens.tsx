@@ -1234,6 +1234,8 @@ export function ConnectionsScreen({ query = "" }: { query?: string }) {
   const connected = google?.status === "connected" || google?.status === "sample";
   const driveGranted =
     google?.capabilities?.some((capability) => capability.includes("/auth/drive")) ?? false;
+  const canSend =
+    google?.capabilities?.some((capability) => capability.includes("gmail.send")) ?? false;
   const rows = [
     { id: "gmail", name: "Gmail", icon: Mail, color: brand.gmail, connected, group: "google" },
     {
@@ -1346,28 +1348,43 @@ export function ConnectionsScreen({ query = "" }: { query?: string }) {
       {!rows.length && <Text style={s.muted}>No matching connectors.</Text>}
       {selected && (
         <Sheet
-          title={selected === "google" ? "Google connections" : "OpenBot"}
+          title={selected === "google" ? "Google connection" : "OpenBot"}
           subtitle={selected === "google" ? google?.account : "A computer for your agent"}
           onClose={() => setSelected(undefined)}
         >
           {selected === "google" ? (
             <View style={{ gap: 18 }}>
               <Text style={s.muted}>
-                Bring Gmail, Google Calendar, and Google Drive into your conversations. Choose read
-                access, then enable sending and editing when you need it.
+                {connected
+                  ? "One Google account is connected for your whole team. Everyone sees its mail, calendar and Drive, and anyone can approve what Hive prepares for it."
+                  : "Connect one Google account for your whole team: Gmail, Google Calendar, and Google Drive, shared by everyone. Choose read access, then enable sending and editing when you need it."}
               </Text>
+              {connected && google?.account && (
+                <SettingsLine
+                  label="Connected account"
+                  value={
+                    google.connectedBy
+                      ? `${google.account} · by ${google.connectedBy}`
+                      : google.account
+                  }
+                />
+              )}
               <View style={[s.row, { gap: 7, flexWrap: "wrap" }]}>
                 {google?.capabilities.map((cap) => (
                   <Chip key={cap}>{capabilityLabel(cap)}</Chip>
                 ))}
               </View>
               <ErrorNotice error={error} />
-              <Button busy={busy} primary icon={Link2} onPress={() => void connect("read")}>
-                Connect Google
-              </Button>
-              <Button busy={busy} onPress={() => void connect("write")}>
-                Enable sending & editing
-              </Button>
+              {!connected && (
+                <Button busy={busy} primary icon={Link2} onPress={() => void connect("read")}>
+                  Connect Google
+                </Button>
+              )}
+              {(!connected || (w.mode === "live" && !canSend)) && (
+                <Button busy={busy} onPress={() => void connect("write")}>
+                  Enable sending & editing
+                </Button>
+              )}
               {connected && (
                 <Button busy={busy} danger onPress={() => void disconnect()}>
                   Disconnect Google

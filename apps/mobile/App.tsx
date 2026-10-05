@@ -83,7 +83,7 @@ const titles: Partial<Record<Section, { title: string; subtitle: string }>> = {
   },
   apps: {
     title: "Apps",
-    subtitle: "Connections, capabilities and what your agent remembers.",
+    subtitle: "Connections, capabilities and what the team's agent remembers.",
   },
   connections: { title: "Apps", subtitle: "Connections and capabilities." },
   mail: { title: "Mail", subtitle: "The conversations behind your work." },

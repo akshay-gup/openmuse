@@ -293,7 +293,7 @@ function EmailEditor({ draft }: { draft?: Partial<EmailDraft> & { id?: string } 
   return (
     <Sheet
       title={draft?.threadId ? "Write a reply" : "A new message"}
-      subtitle={`From ${w.profile.email} · saved privately in Hive`}
+      subtitle={`From ${w.connections.find((c) => c.id === "google")?.account || w.profile.email} · drafts are shared with your team`}
       onClose={close}
     >
       <Field
