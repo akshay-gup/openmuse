@@ -200,10 +200,15 @@ test("memories can be edited and forgotten while identity changes persist", asyn
   assert.equal(updated.id, memory.id);
   assert.equal(updated.createdAt, memory.createdAt);
   assert.equal(updated.source, "You");
-  await db.put("other-user", "memories", { ...memory, id: "private-memory" });
-  const privateIdentity = await db.get("other-user", "agent-settings", "identity");
-  assert.equal((await request("/memories/private-memory", { text: "Overwrite" })).status, 404);
-  assert.equal((await request("/memories/private-memory/forget", {})).status, 404);
+  // Memory belongs to the team: one a teammate saved can be corrected and forgotten like any other.
+  await db.put("other-user", "memories", { ...memory, id: "teammate-memory" });
+  assert.equal((await request("/memories/teammate-memory", { text: "Corrected" })).status, 200);
+  assert.equal(
+    (await db.get<AgentMemory>("other-user", "memories", "teammate-memory"))?.text,
+    "Corrected",
+  );
+  assert.equal((await request("/memories/teammate-memory/forget", {})).status, 200);
+  assert.equal(await db.get("other-user", "memories", "teammate-memory"), null);
   await read("/identity", {
     name: "Nova",
     tone: "concise",
@@ -220,10 +225,13 @@ test("memories can be edited and forgotten while identity changes persist", asyn
     422,
   );
   assert.equal(snapshot.memories.find((item) => item.id === memory.id)?.text, updated.text);
-  assert.deepEqual(await db.get("other-user", "agent-settings", "identity"), privateIdentity);
+  // The agent's personality is the team's too.
+  assert.equal(
+    (await db.get<{ name: string }>("other-user", "agent-settings", "identity"))?.name,
+    "Nova",
+  );
   assert.deepEqual(await read(`/memories/${memory.id}/forget`, {}), { ok: true });
   assert.ok(!(await read<AgentWorkspace>("")).memories.some((item) => item.id === memory.id));
-  assert.ok(await db.get("other-user", "memories", "private-memory"));
 });
 
 test("idea dismissal survives refresh and concurrent acceptance creates one goal and task", async () => {
@@ -302,18 +310,16 @@ test("sample monitor saves its baseline and deduplicates notifications for repea
     (await read<Monitor>(`/monitors/${monitor.id}/control`, { action: "stop" })).status,
     "stopped",
   );
-  await server.agent.notify(
-    "other-user",
-    "Private",
-    "Private details",
-    undefined,
-    "private-notice",
+  // Notifications are the workspace's: one raised for a teammate can be read by anyone.
+  await server.agent.notify("other-user", "For the team", "Team details", undefined, "team-notice");
+  const teamNotification = (await db.list<AgentNotification>("other-user", "notifications")).find(
+    (item) => item.title === "For the team",
   );
-  const privateNotification = (await db.list<AgentNotification>("other-user", "notifications"))[0];
-  assert.equal((await request(`/notifications/${privateNotification.id}/read`, {})).status, 404);
+  assert.ok(teamNotification);
+  assert.equal((await request(`/notifications/${teamNotification.id}/read`, {})).status, 200);
   assert.equal(
-    (await db.get<AgentNotification>("other-user", "notifications", privateNotification.id))?.read,
-    false,
+    (await db.get<AgentNotification>("other-user", "notifications", teamNotification.id))?.read,
+    true,
   );
 });
 

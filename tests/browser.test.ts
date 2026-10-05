@@ -69,15 +69,11 @@ test("browser API reopens an owned profile at the edited address and renews cons
   assert.equal(console.status, 200);
   assert.match(await console.text(), /Text to type in browser/);
   assert.equal((await app.request(path)).status, 401);
-  const hiddenId = "00000000-0000-4000-8000-000000000099";
-  await db.put("someone-else", "browsers", { ...savedSession, id: hiddenId });
-  assert.equal((await app.request(`/api/browsers/${hiddenId}`, { headers })).status, 404);
-  assert.equal(
-    (await app.request(`/api/browsers/${hiddenId}/reopen`, { method: "POST", headers, body: "{}" }))
-      .status,
-    404,
-  );
-  assert.equal(calls.length, 2, "renewal and rejected requests never navigate the browser");
+  // Browser sessions belong to the workspace, so one a teammate opened is reachable too.
+  const teammatesId = "00000000-0000-4000-8000-000000000099";
+  await db.put("someone-else", "browsers", { ...savedSession, id: teammatesId });
+  assert.equal((await app.request(`/api/browsers/${teammatesId}`, { headers })).status, 200);
+  assert.equal(calls.length, 2, "renewal and reads never navigate the browser");
 });
 
 test("server reopens the same worker UUID regardless of stale local session status", async (t) => {
@@ -96,10 +92,10 @@ test("server reopens the same worker UUID regardless of stale local session stat
     });
     assert.equal((await service.get("owner", sessionId)).url, "https://example.org/");
   }
-  await assert.rejects(service.navigate("stranger", sessionId, "https://example.org/"), {
-    status: 404,
-  });
-  assert.equal(calls.length, 4);
+  // Sessions belong to the workspace, so a teammate reopens the same one.
+  const teammate = await service.navigate("teammate", sessionId, "https://example.org/");
+  assert.equal(teammate.id, sessionId);
+  assert.equal(calls.length, 5);
 });
 
 test("console input persists the worker's current page title and URL", async (t) => {
@@ -132,7 +128,7 @@ test("failed creation remains app-visible and can be retried with its original U
   assert.equal(result.status, "active");
 });
 
-test("browser observations reuse an owned profile and reject unowned reads", async (t) => {
+test("browser observations reuse the workspace's profile, whoever asks", async (t) => {
   const calls: string[] = [];
   const read = {
     url: "https://example.org/",
@@ -150,15 +146,18 @@ test("browser observations reuse an owned profile and reject unowned reads", asy
   assert.deepEqual(await service.observe("owner", read.url, sessionId), { sessionId, ...read });
   assert.deepEqual(calls, ["/sessions", `/sessions/${sessionId}/read`]);
   assert.equal((await service.get("owner", sessionId)).title, read.title);
-  await assert.rejects(service.read("stranger", sessionId), { status: 404 });
-  await assert.rejects(service.observe("stranger", read.url, sessionId), { status: 404 });
-  assert.equal(calls.length, 2);
+  assert.deepEqual(await service.read("teammate", sessionId), read);
+  assert.deepEqual(calls, [
+    "/sessions",
+    `/sessions/${sessionId}/read`,
+    `/sessions/${sessionId}/read`,
+  ]);
   const fresh = await service.observe("owner", read.url);
   assert.notEqual(fresh.sessionId, sessionId);
   assert.equal(fresh.text, read.text);
 });
 
-test("chat browser reads reuse a persisted owned profile across turns and service restarts", async (t) => {
+test("chat browser reads reuse a persisted profile across turns and service restarts", async (t) => {
   const calls: { path: string; body: Record<string, unknown> }[] = [];
   let currentUrl = savedSession.url;
   const { db, service, config } = await browserFixture(t, (path, body) => {
@@ -187,9 +186,10 @@ test("chat browser reads reuse a persisted owned profile across turns and servic
   }
   assert.equal((await db.list("owner", "browsers")).length, 1);
   assert.equal(calls.filter((call) => call.path === "/sessions").length, 5);
-  const otherOwner = await restarted.observeForThread("stranger", "chat-thread", savedSession.url);
-  assert.notEqual(otherOwner.sessionId, first.sessionId);
-  await assert.rejects(restarted.get("stranger", first.sessionId), { status: 404 });
+  // A thread is shared, so a teammate in it reads through the same browser profile.
+  const teammate = await restarted.observeForThread("teammate", "chat-thread", savedSession.url);
+  assert.equal(teammate.sessionId, first.sessionId);
+  assert.equal((await restarted.get("teammate", first.sessionId)).id, first.sessionId);
 });
 
 test("chat browser retries failed navigation using the reserved profile", async (t) => {

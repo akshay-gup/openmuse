@@ -16,11 +16,12 @@ import type {
   RunEvent,
 } from "../packages/domain/src/agent.ts";
 import type { ActionProposal, Workspace } from "../packages/domain/src/index.ts";
+import { createSamplePdf } from "../packages/integrations/src/pdf.ts";
 
 /**
- * Hive is a team workspace: channels, threads (and the agent's replies in them), tasks, boards
- * and the activity around them are shared by everyone who is signed in. Only the orchestrator
- * chat, and anything tied to one person's own Google account, stays private.
+ * Hive is a team workspace: channels, threads (and the agent's replies in them), tasks, boards,
+ * reviews, files, drafts and the agent's own memory are shared by everyone who is signed in. Only
+ * the orchestrator chat stays private.
  */
 
 const ALICE = "google:alice";
@@ -269,7 +270,7 @@ test("the worker runs a shared task as the person who created it and everyone se
   assert.ok(seen.events.some((e) => e.title === "Reading the thread"));
 });
 
-test("a task's outcome notifies the person who asked for it", async () => {
+test("a task's outcome notifies the workspace, and one person reading it clears it for everyone", async () => {
   await agent<AgentTask>(
     tokenA,
     "/tasks",
@@ -278,10 +279,12 @@ test("a task's outcome notifies the person who asked for it", async () => {
   );
   // No model is configured, so the task stops to ask for one: an outcome that wants a person.
   await server.agent.worker.tick();
-  const titles = (token: string) =>
-    agent<AgentNotification[]>(token, "/notifications").then((list) => list.map((n) => n.title));
-  assert.ok((await titles(tokenA)).includes("Your details are needed"));
-  assert.ok(!(await titles(tokenB)).includes("Your details are needed"));
+  const notes = (token: string) => agent<AgentNotification[]>(token, "/notifications");
+  const forBob = (await notes(tokenB)).find((n) => n.title === "Your details are needed");
+  assert.ok(forBob, "Bob sees the notification Alice's task raised");
+  await agent(tokenB, `/notifications/${forBob.id}/read`, {});
+  const forAlice = (await notes(tokenA)).find((n) => n.id === forBob.id);
+  assert.equal(forAlice?.read, true);
 });
 
 test("reviews and receipts for the team's tasks are shared; only the account that prepared one can approve it", async () => {
@@ -423,17 +426,49 @@ test("a review someone prepared for themselves, outside any task, stays theirs",
   assert.equal(poke.status, 404);
 });
 
-test("things tied to one person stay with that person", async () => {
+test("everything else is shared too: drafts, files, browser sessions, memory and the agent's personality", async () => {
   await read(
     tokenA,
     "/api/drafts",
     { to: ["x@example.com"], cc: [], bcc: [], subject: "Hi", body: "Draft", attachmentIds: [] },
     201,
   );
-  assert.deepEqual(await read<unknown[]>(tokenB, "/api/drafts"), []);
+  assert.equal((await read<unknown[]>(tokenB, "/api/drafts")).length, 1);
+
+  const file = await server.files.import(
+    ALICE,
+    "Permission slip.pdf",
+    await createSamplePdf(),
+    "Uploaded",
+  );
+  assert.ok((await read<Workspace>(tokenB, "/api/workspace")).files.some((f) => f.id === file.id));
+  const content = await call(tokenB, `/api/files/${file.id}/content`);
+  assert.equal(content.status, 200);
+  assert.equal(content.headers.get("content-type"), "application/pdf");
+
+  await db.put(ALICE, "browsers", {
+    id: "session-1",
+    title: "Example",
+    url: "https://example.org/",
+    status: "idle",
+    updatedAt: new Date().toISOString(),
+  });
+  assert.ok(
+    (await read<Workspace>(tokenB, "/api/workspace")).browsers.some((b) => b.id === "session-1"),
+  );
+
   await agent(tokenA, "/memories", { text: "Prefers short answers" }, 201);
-  assert.equal((await agent<AgentWorkspace>(tokenA, "")).memories.length, 1);
-  assert.equal((await agent<AgentWorkspace>(tokenB, "")).memories.length, 0);
+  assert.equal((await agent<AgentWorkspace>(tokenB, "")).memories.length, 1);
   await agent(tokenA, "/identity", { name: "Sky", tone: "concise" });
-  assert.equal((await agent<AgentWorkspace>(tokenB, "")).identity.name, "Hive");
+  assert.equal((await agent<AgentWorkspace>(tokenB, "")).identity.name, "Sky");
+});
+
+test("work the server does for the workspace itself leaves no orchestrator chat behind", async () => {
+  // The agent's personality is one shared record, so background maintenance, which acts as the
+  // record's owner, now runs for the workspace rather than for a person.
+  await (server.agent as unknown as { maintain(): Promise<void> }).maintain();
+  await server.agent.ensure("shared");
+  assert.equal(await db.get("shared", "channels", "orchestrator"), null);
+  const channels = await agent<{ id: string }[]>(tokenA, "/channels");
+  assert.equal(channels.filter((c) => c.id === "orchestrator").length, 1);
 });

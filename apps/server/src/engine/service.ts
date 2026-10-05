@@ -158,7 +158,8 @@ export class AgentService {
       name: "Hive",
       tone: "warm",
     });
-    await this.ensureOrchestratorChannel(owner);
+    // Maintenance works on shared records as the workspace itself, which has no orchestrator chat.
+    if (owner !== SHARED_OWNER) await this.ensureOrchestratorChannel(owner);
   }
   /** The orchestrator channel always exists: the fixed control-plane surface. */
   async ensureOrchestratorChannel(owner: string): Promise<Channel> {

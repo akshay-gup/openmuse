@@ -153,7 +153,7 @@ test("unsubscribing from chat stops queued browser navigation and further model 
   assert.equal(requests.length, 1);
 });
 
-test("chat searches and reads actual owner mail without creating a task or sending", async (t) => {
+test("chat searches and reads the workspace's mail without creating a task or sending", async (t) => {
   const { requests } = await modelFixture(t, (index) =>
     index === 0
       ? { name: "search_mail", arguments: { query: "aquarium" } }
@@ -163,13 +163,7 @@ test("chat searches and reads actual owner mail without creating a task or sendi
   );
   const fixture = await chatFixture(t);
   await fixture.workspace.ensureSample("local-user", fixture.actions);
-  await fixture.workspace.ensureSample("another-owner", fixture.actions);
-  const foreign = (await fixture.workspace.thread("another-owner", "trip-thread"))[0];
   const actionsBefore = await fixture.db.list("local-user", "actions");
-  await fixture.db.put("another-owner", "mail", {
-    ...foreign,
-    body: "PRIVATE FOREIGN AQUARIUM DETAILS",
-  });
   const input = runInput();
   input.messages = [
     { id: randomUUID(), role: "user", content: "Check my emails for the school trip" },
@@ -187,16 +181,15 @@ test("chat searches and reads actual owner mail without creating a task or sendi
   assert.match(read.messages[0].body, /8:15 AM/);
   assert.equal(read.truncated, false);
   assert.ok(requests[2].body.includes("8:15 AM"));
-  assert.ok(!JSON.stringify(results).includes("PRIVATE FOREIGN"));
   assert.equal((await fixture.db.list("local-user", "tasks")).length, 0);
   assert.deepEqual(await fixture.db.list("local-user", "actions"), actionsBefore);
 });
 
-test("chat mail tools report disconnected mail and refuse another owner's thread", async (t) => {
+test("chat mail tools report disconnected mail and a thread that is not there", async (t) => {
   let call = { name: "search_mail", arguments: { query: "aquarium" } as object };
   await modelFixture(t, (index) => (index % 2 === 0 ? call : undefined));
   const fixture = await chatFixture(t);
-  await fixture.workspace.ensureSample("another-owner", fixture.actions);
+  await fixture.workspace.ensureSample("local-user", fixture.actions);
   await fixture.db.put("local-user", "settings", { id: "google", enabled: false });
   async function toolError() {
     const events = (await lastValueFrom(fixture.conversation.run(runInput()).pipe(toArray()))).map(
@@ -208,6 +201,6 @@ test("chat mail tools report disconnected mail and refuse another owner's thread
   }
   assert.match(await toolError(), /disconnected/);
   await fixture.db.put("local-user", "settings", { id: "google", enabled: true });
-  call = { name: "read_mail_thread", arguments: { threadId: "trip-thread" } };
+  call = { name: "read_mail_thread", arguments: { threadId: "no-such-thread" } };
   assert.match(await toolError(), /not found/);
 });

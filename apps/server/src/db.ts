@@ -14,13 +14,15 @@ interface Database {
 /**
  * Kinds of record that belong to the whole workspace rather than to whoever made them.
  *
- * Hive is a team product: apart from the orchestrator chat and what is tied to one person's own
- * Google account (mail, calendar, Drive, files, drafts, browser sessions, memories, ideas,
- * notifications), everything is shared by every signed-in user. Store calls for these kinds
- * ignore the owner they are given, so a task, a board or a review is one record whoever opens it.
- * Tasks, reviews and goals carry `createdBy`, which is whose account and files the work runs on.
+ * Hive is a team product: apart from the orchestrator chat (and the sign-in sessions, which live
+ * under their own owner), everything is shared by every signed-in user. Store calls for these
+ * kinds ignore the owner they are given, so a task, a board, a review, a draft or the agent's
+ * memory is one record whoever opens it. The workspace has one Google connection (`credentials`),
+ * and the mail, calendar and files that come through it are the team's. Tasks, goals and reviews
+ * carry `createdBy`, only to show who asked.
  */
 export const SHARED_KINDS: ReadonlySet<string> = new Set([
+  // Work
   "tasks",
   "runs",
   "run-events",
@@ -30,6 +32,24 @@ export const SHARED_KINDS: ReadonlySet<string> = new Set([
   "agent-artifacts",
   "actions",
   "activity",
+  // The workspace's one Google connection, and what comes through it
+  "credentials",
+  "settings",
+  "mail",
+  "events",
+  "imports",
+  "files",
+  "drafts",
+  // Browser sessions
+  "browsers",
+  "chat-browsers",
+  "browser-downloads",
+  // The agent
+  "memories",
+  "agent-settings",
+  "ideas",
+  "notifications",
+  "sample-pages",
 ]);
 const homeOf = (owner: string, kind: string) => (SHARED_KINDS.has(kind) ? SHARED_OWNER : owner);
 
@@ -142,7 +162,7 @@ export class Store {
   async updateCredential(owner: string, connectionId: string, secret: string): Promise<boolean> {
     const result = await this.db.query(
       "UPDATE records SET data=jsonb_set(data,'{secret}',$3::jsonb),updated_at=now() WHERE owner=$1 AND kind='credentials' AND id='google' AND data->>'connectionId'=$2 RETURNING data",
-      [owner, connectionId, JSON.stringify(secret)],
+      [homeOf(owner, "credentials"), connectionId, JSON.stringify(secret)],
     );
     return result.rows.length === 1;
   }

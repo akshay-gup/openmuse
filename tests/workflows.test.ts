@@ -102,7 +102,10 @@ test("ideas ignore sent replies while retaining unfinished incoming requests", a
   const ideaOwner = "sent-reply-ideas";
   await server.workspace.ensureSample(ideaOwner, server.actions);
   const workspace = await server.workspace.snapshot(ideaOwner);
-  const incoming = workspace.mail.find((mail) => mail.attachments.length);
+  // The mailbox is the workspace's, and earlier tests have sent replies with attachments into it.
+  const incoming = workspace.mail.find(
+    (mail) => mail.attachments.length && !/^Sent\b/i.test(mail.label),
+  );
   assert.ok(incoming);
   await server.workspace.execute(ideaOwner, {
     kind: "email.send",
