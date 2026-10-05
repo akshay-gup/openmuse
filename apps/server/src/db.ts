@@ -75,6 +75,14 @@ export class Store {
     );
     return result.rows.map((row) => row.data as { owner: string; value: T });
   }
+  /** Owner and id of every record of a kind, without loading what they hold. */
+  async ids(kind: string): Promise<{ owner: string; id: string }[]> {
+    const result = await this.db.query(
+      "SELECT jsonb_build_object('owner',owner,'id',id) AS data FROM records WHERE kind=$1",
+      [kind],
+    );
+    return result.rows.map((row) => row.data as { owner: string; id: string });
+  }
   async claim<T>(owner: string, id: string, status: string, now: string): Promise<T | null> {
     const result = await this.db.query(
       `UPDATE records AS action SET data=jsonb_set(data,'{status}',$4::jsonb),updated_at=now()

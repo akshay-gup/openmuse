@@ -9,7 +9,6 @@ import { type Context, Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { cors } from "hono/cors";
 import { z } from "zod";
-import { ORCHESTRATOR_CHANNEL_ID } from "../../../packages/domain/src/agent.ts";
 import { emailDraftSchema, proposalSchema } from "../../../packages/domain/src/index.ts";
 import { ActionService } from "./actions.ts";
 import { agentConfigured, makeRuntime } from "./agent.ts";
@@ -19,7 +18,13 @@ import type { Config } from "./config.ts";
 import type { Store } from "./db.ts";
 import { agentRoutes } from "./engine/routes.ts";
 import { AgentService } from "./engine/service.ts";
-import { LocalDiskThreadStore, type ThreadBindingStore } from "./engine/threads.ts";
+import {
+  adoptSharedTranscripts,
+  channelAuthors,
+  conversationHome,
+  saveSharedConversation,
+} from "./engine/shared-conversations.ts";
+import { LocalDiskThreadStore, SHARED_OWNER, type ThreadBindingStore } from "./engine/threads.ts";
 import { AppError } from "./errors.ts";
 import { Files } from "./files.ts";
 import { GoogleAuth } from "./google-auth.ts";
@@ -61,6 +66,10 @@ export async function createApp(
     browser,
     options.threads ?? new LocalDiskThreadStore(config.dataDir),
   );
+  // Thread transcripts used to be kept with whoever ran the thread. Threads are shared now, so
+  // adopt what is already there before anything is served.
+  const adopted = await adoptSharedTranscripts(db, agent.threads);
+  if (adopted) console.log(`[Hive] Shared ${adopted} thread transcripts with the workspace`);
   // CopilotKit Intelligence is optional: without a key the runtime runs in
   // local-only mode and thread state lives in the local stores.
   const intelligence = config.intelligenceApiKey
@@ -310,7 +319,9 @@ export async function createApp(
   });
   app.get("/api/conversation", async (c) => {
     const id = conversationKey(c.req.query("threadId"));
-    const owner = conversationOwner(id, c.get("owner"));
+    const { owner } = await conversationHome(id, c.get("owner"), (o, t) =>
+      agent.channelOfThread(o, t),
+    );
     return c.json((await db.get(owner, "conversations", id)) ?? { messages: [] });
   });
   app.put("/api/conversation", async (c) => {
@@ -322,12 +333,15 @@ export async function createApp(
       .map((message) => MessageSchema.parse(message));
     const id = conversationKey(c.req.query("threadId"));
     const sessionOwner = c.get("owner");
-    const owner = conversationOwner(id, sessionOwner);
-    let messages = incoming;
-    if (owner === "shared") {
-      messages = await stampChannelAuthors(db, id, sessionOwner, incoming);
-    }
-    await db.put(owner, "conversations", { id, messages });
+    const home = await conversationHome(id, sessionOwner, (o, t) => agent.channelOfThread(o, t));
+    if (home.owner === SHARED_OWNER) {
+      // A thread forked from a channel starts as copies of channel messages that keep their author.
+      const inherited =
+        home.channelId && !id.startsWith("channel:")
+          ? await channelAuthors(db, home.channelId)
+          : undefined;
+      await saveSharedConversation(db, id, sessionOwner, incoming, inherited);
+    } else await db.put(home.owner, "conversations", { id, messages: incoming });
     return c.json({ ok: true });
   });
   app.post("/api/files", async (c) => {
@@ -473,62 +487,6 @@ export async function createApp(
 function conversationKey(threadId: string | undefined): string {
   const id = (threadId ?? "").trim().slice(0, 128);
   return id ? id : "default";
-}
-
-/**
- * Owner a conversation transcript is stored under. Channel chats
- * (`channel:<id>`) share one transcript across users so a channel reads as a
- * single conversation; the orchestrator keeps a private transcript per user.
- */
-function conversationOwner(threadId: string, sessionOwner: string): string {
-  return threadId.startsWith("channel:") && threadId !== `channel:${ORCHESTRATOR_CHANNEL_ID}`
-    ? "shared"
-    : sessionOwner;
-}
-
-type ChannelMessage = ReturnType<typeof MessageSchema.parse>;
-
-/**
- * Attribute shared-channel messages to their writers. A sidecar record tracks
- * message-id -> owner (first writer wins), then every user message's display
- * name is set from the author's Google profile. Writers sharing a name are
- * disambiguated with their email — "Alex (a1@example.com)" — so identical
- * names never collide in the transcript.
- */
-async function stampChannelAuthors(
-  db: Store,
-  id: string,
-  sessionOwner: string,
-  incoming: ChannelMessage[],
-): Promise<ChannelMessage[]> {
-  const sidecar =
-    (await db.get<{ authors?: Record<string, string> }>("shared", "conversation-authors", id)) ??
-    {};
-  const authors: Record<string, string> = sidecar.authors ?? {};
-  for (const m of incoming) {
-    if (m.role === "user" && !authors[m.id]) authors[m.id] = sessionOwner;
-  }
-  const owners = [...new Set(Object.values(authors))];
-  const names = new Map<string, string>();
-  for (const o of owners) {
-    const user = await db.get<{ name?: string }>("system", "users", o);
-    names.set(o, user?.name ?? o);
-  }
-  // Merge with the stored transcript by message id so concurrent writers
-  // append without clobbering each other.
-  const stored =
-    (await db.get<{ messages?: unknown[] }>("shared", "conversations", id))?.messages ?? [];
-  const byId = new Map<string, ChannelMessage>();
-  for (const m of stored) {
-    const parsed = MessageSchema.safeParse(m);
-    if (parsed.success) byId.set(parsed.data.id, parsed.data);
-  }
-  for (const m of incoming) byId.set(m.id, m);
-  await db.put("shared", "conversation-authors", { id, authors });
-  return [...byId.values()].map((m) => {
-    const owner = m.role === "user" ? authors[m.id] : undefined;
-    return owner ? { ...m, name: names.get(owner) ?? owner } : m;
-  });
 }
 
 function webRootDir(config: Config): string | undefined {
