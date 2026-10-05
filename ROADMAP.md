@@ -40,7 +40,8 @@ API + web UI, OpenCode as the agent backend, threads as durable agent sessions.
       status (queued/working/done) visible in the originating channel.
 - [ ] Multi-tenant membership semantics — awaiting decisions:
       - [ ] Invites: owner-only or any member?
-      - [x] Visibility: everything is shared (channels, threads, tasks, boards, reviews).
+      - [x] Visibility: everything is shared (channels, threads, tasks, boards, reviews, files,
+            the Google connection, the agent's memory).
       - [x] Orchestrator scope: each person's own chat history is private; the work it
             creates is shared like any task.
       - [ ] Owner/admin roles and member permissions.

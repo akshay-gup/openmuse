@@ -6,7 +6,7 @@ Use the repository's **Security → Report a vulnerability** form for private re
 
 ## Deployment boundary
 
-Hive currently supports one owner per deployment. Live mode uses a shared access key; it is not multi-tenant account authentication. Sample mode binds to loopback and contains fictional data. Use HTTPS and restricted network access for a remote live deployment.
+Hive currently supports one team per deployment. Everyone who can sign in with Google shares the workspace, including its single Google connection: they can read the connected mailbox, calendar and Drive, approve what Hive prepares for them, and disconnect it. Restrict who can sign in (for example the test users on your Google OAuth consent screen) to people you trust with that access. It is not multi-tenant account authentication. Sample mode binds to loopback and contains fictional data. Use HTTPS and restricted network access for a remote live deployment.
 
 The API holds provider credentials. Google tokens are encrypted at rest; short-lived signed URLs grant file and browser-console access. Protect `.env`, `.hive`, database backups, and browser profiles as private data. A signed URL is a credential until it expires.
 

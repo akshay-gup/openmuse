@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Tasks, boards, goals, watches, reviews and thread transcripts are shared by everyone who signs in; a teammate now sees a thread's messages and the agent's replies, and the whole team's tasks. Only the orchestrator chat and what comes from a person's own Google account stay private. A task runs as the person who asked for it, and only they can approve its reviews. Existing per-person records are adopted on start.
+- Everything except the orchestrator chat is shared by everyone who signs in: a teammate now sees a thread's messages and the agent's replies, the whole team's tasks, boards and reviews, and the files, drafts, browser sessions, memory, personality, ideas and notifications. The workspace has one Google connection: another account can only be connected after the connected one is disconnected, and anyone can approve a review that runs on it. Breaking: records earlier builds kept per person (tasks, threads, files, Google connections) are not migrated; start from an empty data directory.
 
 ## 0.1.0-alpha — 2026-09-15
 
