@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { Linking, Text, type TextStyle } from "react-native";
+import { Linking, ScrollView, Text, type TextStyle, View, type ViewStyle } from "react-native";
 import Markdown, { type MarkdownStyles, type RenderRules } from "react-native-markdown-renderer";
 import { assistantMarkdown, isSafeAssistantUrl } from "./assistant-markdown";
 import { colors, ErrorNotice } from "./ui";
@@ -16,6 +16,33 @@ const style: Partial<MarkdownStyles> = {
   link: { color: colors.blueDark, textDecorationLine: "underline" },
   codeInline: { backgroundColor: "#E2E4E7", color: colors.text },
   codeBlock: { backgroundColor: "#E2E4E7", color: colors.text },
+  table: {
+    borderWidth: 1,
+    borderColor: "#D2D6DA",
+    borderRadius: 8,
+    overflow: "hidden",
+    backgroundColor: "#FFFFFF",
+  },
+  tableHeader: { backgroundColor: "#F3F4F6" },
+  tableHeaderCell: {
+    flex: 1,
+    minWidth: 68,
+    paddingVertical: 7,
+    paddingHorizontal: 10,
+    borderWidth: 0,
+    borderRightWidth: 1,
+    borderColor: "#E3E6E9",
+  },
+  tableRow: { borderBottomWidth: 1, borderColor: "#E3E6E9", flexDirection: "row" },
+  tableRowCell: {
+    flex: 1,
+    minWidth: 68,
+    paddingVertical: 7,
+    paddingHorizontal: 10,
+    borderWidth: 0,
+    borderRightWidth: 1,
+    borderColor: "#E3E6E9",
+  },
 };
 const renderCodeBlock: RenderRules["fence"] = (node, _children, _parent, styles) => (
   <Text key={node.key} selectable style={styles.codeBlock as TextStyle}>
@@ -35,6 +62,27 @@ const rules: RenderRules = {
   ),
   code_block: renderCodeBlock,
   fence: renderCodeBlock,
+  // Wide tables scroll sideways inside the message instead of wrapping numbers mid-digit.
+  table: (node, children, _parent, styles) => (
+    <ScrollView
+      key={node.key}
+      horizontal
+      style={{ marginVertical: 6 }}
+      contentContainerStyle={{ flexGrow: 1 }}
+    >
+      <View style={[styles.table as ViewStyle, { flexGrow: 1 }]}>{children}</View>
+    </ScrollView>
+  ),
+  th: (node, children, _parent, styles) => (
+    <View key={node.key} style={styles.tableHeaderCell as ViewStyle}>
+      <Text style={{ fontWeight: "700", fontSize: 14, lineHeight: 20 }}>{children}</Text>
+    </View>
+  ),
+  td: (node, children, _parent, styles) => (
+    <View key={node.key} style={styles.tableRowCell as ViewStyle}>
+      <Text style={{ fontSize: 14, lineHeight: 20 }}>{children}</Text>
+    </View>
+  ),
 };
 
 export function AssistantResponse({ content }: { content: string }) {

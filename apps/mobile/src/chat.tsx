@@ -7,7 +7,7 @@ import {
   useRenderTool,
   useRenderToolCall,
 } from "@copilotkit/react-native/headless";
-import { ArrowDown, ArrowUp, FileText, RotateCcw, Square, X } from "lucide-react-native";
+import { ArrowDown, ArrowUp, FileText, Plus, RotateCcw, Square, X } from "lucide-react-native";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import {
   KeyboardAvoidingView,
@@ -42,7 +42,17 @@ import { PendingApprovals } from "./opencode-permissions";
 import { FileThreadCard, TaskThreadCard } from "./thread-artifacts";
 import { countThreadReplies } from "./thread-replies";
 import { resolveThreadId, type Selection, useMuseThread } from "./threads";
-import { Button, Card, CheckRow, colors, ErrorNotice, IconButton, s } from "./ui";
+import {
+  Button,
+  Card,
+  CheckRow,
+  colors,
+  composingText,
+  ErrorNotice,
+  IconButton,
+  s,
+  TypingDots,
+} from "./ui";
 import { useWorkspace } from "./workspace";
 
 const displayParameters = z.record(z.string(), z.unknown());
@@ -663,6 +673,7 @@ export function ChatScreen({
     (m, index) => (m.role === "user" || m.role === "assistant") && index > parentIndex,
   );
   const replying = busy || agent.isRunning;
+  const agentName = agentWorkspace?.identity.name || "Hive";
   return (
     <View style={{ flex: 1, flexDirection: "row", minHeight: 0 }}>
       <View
@@ -705,7 +716,6 @@ export function ChatScreen({
           {!channelId && !threadParent && (richThreads || selection.id !== "local") && (
             <ChannelThreadBanner threadId={threadId} mainId={mainId} />
           )}
-          {(richThreads || selection.id !== "local") && <PendingApprovals threadId={threadId} />}
           {!visible.length && !threadParent ? (
             <View
               style={{
@@ -818,7 +828,7 @@ export function ChatScreen({
                     (channelId || threadParent ? (
                       <ChannelMessage
                         text={text}
-                        author={user ? message.name || w.profile.name || "You" : "Hive"}
+                        author={user ? message.name || w.profile.name || "You" : agentName}
                         assistant={!user}
                         grouped={grouped}
                         timestamp={timestamp}
@@ -966,18 +976,7 @@ export function ChatScreen({
                 },
               ]}
             >
-              {[0.4, 0.75, 0.5].map((opacity) => (
-                <View
-                  key={opacity}
-                  style={{
-                    width: 8,
-                    height: 8,
-                    borderRadius: 4,
-                    backgroundColor: colors.muted,
-                    opacity,
-                  }}
-                />
-              ))}
+              <TypingDots />
             </View>
           )}
           <ErrorNotice error={error} />
@@ -1013,6 +1012,7 @@ export function ChatScreen({
           </Button>
         )}
         <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined}>
+          {(richThreads || selection.id !== "local") && <PendingApprovals threadId={threadId} />}
           <ErrorNotice error={saveError} />
           {!!saveError && (
             <Button
@@ -1161,11 +1161,7 @@ export function ChatScreen({
                   backgroundColor: picking || pressed ? colors.sky : "transparent",
                 })}
               >
-                <Text
-                  style={{ color: colors.text, fontSize: 29, fontWeight: "300", lineHeight: 32 }}
-                >
-                  +
-                </Text>
+                <Plus size={24} strokeWidth={1.6} color={colors.text} />
               </Pressable>
               <TextInput
                 accessibilityLabel={
@@ -1192,7 +1188,7 @@ export function ChatScreen({
                           ? "Message channel…"
                           : "Message…"
                 }
-                placeholderTextColor="#949B9F"
+                placeholderTextColor={colors.muted}
                 selectionColor={colors.blueDark}
                 onFocus={() => setFocused(true)}
                 onBlur={() => setFocused(false)}
@@ -1216,7 +1212,8 @@ export function ChatScreen({
                     ? (event) => {
                         if (
                           event.nativeEvent.key === "Enter" &&
-                          !("shiftKey" in event.nativeEvent && event.nativeEvent.shiftKey)
+                          !("shiftKey" in event.nativeEvent && event.nativeEvent.shiftKey) &&
+                          !composingText(event.nativeEvent)
                         ) {
                           event.preventDefault();
                           send();
@@ -1323,7 +1320,7 @@ export function ChatScreen({
             author={
               replyPanel.parent.role === "user"
                 ? replyPanel.parent.name || w.profile.name || "You"
-                : "Hive"
+                : agentName
             }
             assistant={replyPanel.parent.role === "assistant"}
             timestamp={messageTimestamp(replyPanel.parent)}

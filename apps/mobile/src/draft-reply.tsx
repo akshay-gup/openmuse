@@ -1,7 +1,7 @@
 import { ArrowUp } from "lucide-react-native";
 import { useRef, useState } from "react";
 import { KeyboardAvoidingView, Platform, Pressable, Text, TextInput, View } from "react-native";
-import { colors, ErrorNotice, s } from "./ui";
+import { colors, composingText, ErrorNotice, s } from "./ui";
 
 /** Opening a reply is local draft state. Only submitting it creates a thread. */
 export function DraftReply({
@@ -61,7 +61,8 @@ export function DraftReply({
                 ? (event) => {
                     if (
                       event.nativeEvent.key === "Enter" &&
-                      !("shiftKey" in event.nativeEvent && event.nativeEvent.shiftKey)
+                      !("shiftKey" in event.nativeEvent && event.nativeEvent.shiftKey) &&
+                      !composingText(event.nativeEvent)
                     ) {
                       event.preventDefault();
                       void submit();

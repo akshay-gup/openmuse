@@ -14,6 +14,11 @@ interface PendingRequest {
   channelId: string;
 }
 
+function waited(askedAt: number): string {
+  const seconds = Math.max(0, Math.round((Date.now() - askedAt) / 1000));
+  return seconds < 90 ? `${seconds}s` : `${Math.round(seconds / 60)}m`;
+}
+
 function requestSummary(request: PendingRequest): string {
   const patterns = request.patterns.filter(Boolean).join(", ");
   return patterns ? `${request.permission} · ${patterns}` : request.permission;
@@ -66,11 +71,12 @@ export function PendingApprovals({ threadId }: { threadId: string }) {
 
   if (!pending?.length) return null;
   return (
-    <View style={{ gap: 8 }}>
+    <View style={{ gap: 8, marginBottom: 10 }}>
       <ErrorNotice error={error} />
       {pending.map((request) => (
         <View
           key={request.requestId}
+          accessibilityRole="alert"
           style={{
             gap: 10,
             paddingHorizontal: 14,
@@ -83,13 +89,12 @@ export function PendingApprovals({ threadId }: { threadId: string }) {
         >
           <View style={[s.row, { gap: 8, alignItems: "center" }]}>
             <ShieldCheck size={16} color={colors.text} />
-            <Text style={[s.text, { flex: 1, fontSize: 14, fontWeight: "600" }]} numberOfLines={2}>
+            <Text selectable style={[s.text, { flex: 1, fontSize: 14, fontWeight: "600" }]}>
               {requestSummary(request)}
             </Text>
           </View>
           <Text style={s.small}>
-            The agent is waiting for approval (
-            {Math.max(0, Math.round((Date.now() - request.askedAt) / 1000))}s)
+            The agent is paused until you decide · waiting {waited(request.askedAt)}
           </Text>
           <View style={[s.row, { gap: 8, flexWrap: "wrap" }]}>
             <Button
@@ -107,7 +112,7 @@ export function PendingApprovals({ threadId }: { threadId: string }) {
               disabled={busy === request.requestId}
               onPress={() => void reply(request.requestId, "always")}
             >
-              Always
+              Always allow
             </Button>
             <Button
               small
