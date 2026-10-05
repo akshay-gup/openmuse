@@ -8,6 +8,7 @@ import {
   taskPriorities,
 } from "../../../packages/domain/src/agent";
 import { useAgentWorkspace } from "./agent-workspace";
+import { TaskRunView } from "./task-run";
 import { priorityColors } from "./task-board";
 import { Button, ErrorNotice, Field, Sheet, s } from "./ui";
 import { useWorkspace } from "./workspace";
@@ -122,6 +123,7 @@ export function TaskDetail({
     <Sheet title={manual ? "Issue" : "Task"} subtitle={statusLabel(task.status)} onClose={onClose}>
       <View style={{ gap: 16 }}>
         <ErrorNotice error={error} />
+        {(!manual || task.attempts > 0) && <TaskRunView task={task} />}
         <Field label="Title" value={title} onChangeText={setTitle} />
         <View style={{ gap: 6 }}>
           <Text style={s.label}>Priority</Text>
@@ -226,7 +228,9 @@ export function TaskDetail({
             <Text style={s.small}>Assign to the agent to have it run this issue.</Text>
           )}
           {task.assignee === "agent" && (
-            <Text style={s.small}>The agent runs this ticket, grounded in the channel discussion.</Text>
+            <Text style={s.small}>
+              The agent runs this ticket, grounded in the channel discussion.
+            </Text>
           )}
         </View>
         <View style={{ gap: 6 }}>

@@ -1,0 +1,171 @@
+import { useEffect, useState } from "react";
+import { ActivityIndicator, Platform, Pressable, Text, View } from "react-native";
+import type { AgentTask, RunEvent } from "../../../packages/domain/src/agent";
+import { AssistantResponse } from "./assistant-response";
+import { colors, ErrorNotice, s } from "./ui";
+import { useWorkspace } from "./workspace";
+
+function publicText(text: string) {
+  return text.replace(/^TASK_(?:COMPLETE|BLOCKED):\s*/gm, "");
+}
+function ToolActivity({ event }: { event: RunEvent }) {
+  const [expanded, setExpanded] = useState(false);
+  const running = ["pending", "running"].includes(event.toolState ?? "");
+  return (
+    <View
+      style={{ borderWidth: 1, borderColor: colors.line, borderRadius: 12, overflow: "hidden" }}
+    >
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Tool activity: ${event.toolName ?? event.title}`}
+        onPress={() => setExpanded(!expanded)}
+        style={[s.row, { gap: 10, padding: 12 }]}
+      >
+        {running ? (
+          <ActivityIndicator size="small" color={colors.blueDark} />
+        ) : (
+          <Text style={s.small}>{event.toolState === "error" ? "!" : "✓"}</Text>
+        )}
+        <Text style={[s.text, { flex: 1, fontSize: 14 }]}>{event.toolName ?? event.title}</Text>
+        <Text style={s.small}>
+          {event.toolState ?? "completed"} · {expanded ? "Hide" : "Details"}
+        </Text>
+      </Pressable>
+      {expanded && (
+        <View
+          style={{
+            gap: 8,
+            padding: 12,
+            borderTopWidth: 1,
+            borderTopColor: colors.line,
+            backgroundColor: "#F4F4F6",
+          }}
+        >
+          {event.toolInput !== undefined && (
+            <Text
+              selectable
+              style={[s.small, { fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace" }]}
+            >
+              {JSON.stringify(event.toolInput, null, 2)}
+            </Text>
+          )}
+          {!!event.detail && (
+            <Text
+              selectable
+              style={[
+                s.text,
+                {
+                  fontSize: 13,
+                  lineHeight: 19,
+                  fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
+                },
+              ]}
+            >
+              {event.detail}
+            </Text>
+          )}
+        </View>
+      )}
+    </View>
+  );
+}
+
+/** A durable transcript of the delegated run, independent of the ticket editor. */
+export function TaskRunView({ task }: { task: AgentTask }) {
+  const { api } = useWorkspace();
+  const [events, setEvents] = useState<RunEvent[]>([]);
+  const [savedTask, setSavedTask] = useState(task);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    let active = true,
+      pending = false;
+    const load = async () => {
+      if (pending) return;
+      pending = true;
+      try {
+        const detail = await api.request<{ task: AgentTask; events: RunEvent[] }>(
+          `/api/agent/tasks/${task.id}`,
+        );
+        if (active) {
+          setEvents(detail.events);
+          setSavedTask(detail.task);
+          setError("");
+        }
+      } catch (e) {
+        if (active) setError(e instanceof Error ? e.message : String(e));
+      } finally {
+        pending = false;
+      }
+    };
+    void load();
+    const timer = setInterval(() => void load(), 1500);
+    return () => {
+      active = false;
+      clearInterval(timer);
+    };
+  }, [api, task.id]);
+  const current = savedTask.updatedAt >= task.updatedAt ? savedTask : task;
+  const live = ["queued", "running", "scheduled"].includes(current.status);
+  const transcript = events.filter((e) => e.kind === "message" || e.kind === "tool");
+  const entries = transcript.length
+    ? events.filter((e) => !(e.kind === "step" && e.title === "Agent update"))
+    : events;
+  return (
+    <View style={{ gap: 16 }}>
+      <View style={[s.row, { gap: 10 }]}>
+        <Text style={s.heading}>Agent run</Text>
+        {live && (
+          <>
+            <ActivityIndicator size="small" color={colors.blueDark} />
+            <Text style={s.small}>
+              {current.status === "running" ? "Live" : "Waiting to start"}
+            </Text>
+          </>
+        )}
+      </View>
+      <ErrorNotice error={error} />
+        {entries.map((event) =>
+          event.kind === "tool" ? (
+            <ToolActivity key={event.id} event={event} />
+          ) : event.kind === "message" ? (
+            <View key={event.id} style={{ gap: 6 }}>
+              <Text style={[s.small, { fontWeight: "600" }]}>
+                Hive ·{" "}
+                {new Date(event.date).toLocaleTimeString(undefined, {
+                  hour: "numeric",
+                  minute: "2-digit",
+                })}
+              </Text>
+              <AssistantResponse content={publicText(event.detail)} />
+            </View>
+          ) : (
+            <View
+              key={event.id}
+              style={{ gap: 4, borderLeftWidth: 2, borderLeftColor: colors.line, paddingLeft: 12 }}
+            >
+              <Text style={[s.small, { fontWeight: "600" }]}>{event.title}</Text>
+              {!!event.detail && (
+                <Text selectable style={s.muted}>
+                  {event.detail}
+                </Text>
+              )}
+            </View>
+          ),
+        )}
+        {!entries.length && (
+          <Text style={s.muted}>
+            {live
+              ? "Agent messages and tool activity will appear here as the run progresses."
+              : "No run messages were recorded for this task."}
+          </Text>
+        )}
+      {!!current.result && (
+        <View style={{ gap: 8, padding: 16, borderRadius: 14, backgroundColor: colors.green }}>
+          <Text style={s.heading}>Final response</Text>
+          <AssistantResponse content={publicText(current.result)} />
+        </View>
+      )}
+      {!!current.error && <ErrorNotice error={current.error} />}
+    </View>
+  );
+}

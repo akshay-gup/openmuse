@@ -46,6 +46,7 @@ import {
   type ProjectSelection,
   ProjectSwitcher,
 } from "./task-project";
+import { TaskRunView } from "./task-run";
 import { TaskTimeline } from "./task-timeline";
 import {
   Button,
@@ -111,10 +112,12 @@ export function TaskCard({
   task,
   compact = false,
   onOpen,
+  onSelect,
 }: {
   task: AgentTask;
   compact?: boolean;
   onOpen?: () => void;
+  onSelect?: () => void;
 }) {
   const { open } = useWorkspace();
   const manual = task.kind === "manual";
@@ -126,8 +129,11 @@ export function TaskCard({
       accessibilityRole="button"
       accessibilityLabel={`Open task: ${task.title}`}
       onPress={() => {
-        if (onOpen) onOpen();
-        else open({ type: "task", taskId: task.id });
+        if (onSelect) onSelect();
+        else {
+          onOpen?.();
+          open({ type: "task", taskId: task.id });
+        }
       }}
     >
       <Card
@@ -265,7 +271,7 @@ export function AgentActivityScreen() {
             ))}
           </View>
           {tasks.map((task) => (
-            <TaskCard key={task.id} task={task} onOpen={() => setSelectedId(task.id)} />
+            <TaskCard key={task.id} task={task} onSelect={() => setSelectedId(task.id)} />
           ))}
           {!tasks.length && (
             <Empty
@@ -609,6 +615,7 @@ export function TaskDetail({ taskId }: { taskId: string }) {
               </Button>
             </Card>
           )}
+          <TaskRunView task={task} />
           {!!task.plan.length && (
             <Card style={{ gap: 16 }}>
               <Text style={s.heading}>Plan</Text>
@@ -631,13 +638,6 @@ export function TaskDetail({ taskId }: { taskId: string }) {
                   </View>
                 </View>
               ))}
-            </Card>
-          )}
-          {!!task.result && (
-            <Card style={{ backgroundColor: colors.green }}>
-              <Text selectable style={s.text}>
-                {resultSummary(task.result)}
-              </Text>
             </Card>
           )}
           <ErrorNotice error={task.error ?? undefined} />
@@ -697,28 +697,6 @@ export function TaskDetail({ taskId }: { taskId: string }) {
               <Text style={s.heading}>Sources</Text>
               <EvidenceList items={task.evidence} />
             </View>
-          )}
-          <Text style={s.heading}>Timeline</Text>
-          {detail?.events.map((event) => (
-            <View
-              key={event.id}
-              style={{ gap: 4, paddingLeft: 14, borderLeftWidth: 2, borderLeftColor: colors.line }}
-            >
-              <Text style={s.small}>
-                {stamp(event.date)} · {statusLabel(event.kind)}
-              </Text>
-              <Text style={s.text}>{event.title}</Text>
-              <Text selectable style={s.muted}>
-                {event.detail}
-              </Text>
-            </View>
-          ))}
-          {!detail?.events.length && (
-            <Empty
-              icon={Clock3}
-              title="Nothing recorded yet"
-              detail="The worker will record each step here."
-            />
           )}
         </View>
       )}
