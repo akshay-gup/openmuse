@@ -19,7 +19,6 @@ import type { Store } from "./db.ts";
 import { agentRoutes } from "./engine/routes.ts";
 import { AgentService } from "./engine/service.ts";
 import {
-  adoptSharedWorkspace,
   channelAuthors,
   conversationHome,
   saveSharedConversation,
@@ -67,18 +66,6 @@ export async function createApp(
     browser,
     options.threads ?? new LocalDiskThreadStore(config.dataDir),
   );
-  // Tasks, boards, reviews and thread transcripts used to be kept per person. Everything but the
-  // orchestrator chat is shared now, so adopt what is already there before anything is served.
-  const adopted = await adoptSharedWorkspace(db, agent.threads);
-  const adoptedCount =
-    Object.values(adopted.records).reduce((sum, n) => sum + n, 0) + adopted.transcripts;
-  if (adoptedCount)
-    console.log(
-      `[Hive] Shared with the workspace: ${[
-        ...Object.entries(adopted.records).map(([kind, n]) => `${n} ${kind}`),
-        ...(adopted.transcripts ? [`${adopted.transcripts} thread transcripts`] : []),
-      ].join(", ")}`,
-    );
   // CopilotKit Intelligence is optional: without a key the runtime runs in
   // local-only mode and thread state lives in the local stores.
   const intelligence = config.intelligenceApiKey

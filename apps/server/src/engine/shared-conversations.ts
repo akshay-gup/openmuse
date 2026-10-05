@@ -5,7 +5,6 @@ import {
 } from "../../../../packages/domain/src/agent.ts";
 import type { Store } from "../db.ts";
 import { SHARED_OWNER } from "../shared.ts";
-import type { ThreadBindingStore } from "./threads.ts";
 
 export type ChannelMessage = ReturnType<typeof MessageSchema.parse>;
 
@@ -101,55 +100,4 @@ export async function channelAuthors(
       `channel:${channelId}`,
     )
   )?.authors;
-}
-
-/**
- * Move the transcripts of threads in shared channels, which used to be saved with whoever ran
- * them and so were invisible to everyone else, into the shared transcript. Orchestrator
- * transcripts stay where they are. Safe to run on every start; returns how many were moved.
- */
-export async function adoptSharedTranscripts(
-  db: Store,
-  threads: ThreadBindingStore,
-): Promise<number> {
-  const sharedThreads = new Map(
-    (await threads.scan(SHARED_OWNER))
-      .filter((binding) => binding.channelId !== ORCHESTRATOR_CHANNEL_ID)
-      .map((binding) => [binding.threadId, binding]),
-  );
-  let transcripts = 0;
-  for (const { owner, id } of await db.ids("conversations")) {
-    const binding = sharedThreads.get(id);
-    if (!binding || owner === SHARED_OWNER || owner === "system") continue;
-    const stored = await db.get<{ messages?: unknown[] }>(owner, "conversations", id);
-    const messages = (stored?.messages ?? []).flatMap((message) => {
-      const parsed = MessageSchema.safeParse(message);
-      return parsed.success ? [parsed.data] : [];
-    });
-    // Only this person could see the thread until now, so every user turn in it is theirs, apart
-    // from messages copied in from the channel, which keep that channel's author.
-    await saveSharedConversation(
-      db,
-      id,
-      owner,
-      messages,
-      await channelAuthors(db, binding.channelId),
-    );
-    await db.remove(owner, "conversations", id);
-    transcripts++;
-  }
-  return transcripts;
-}
-
-/**
- * Bring what the workspace kept per person into the shared workspace, once, at start: tasks,
- * boards and reviews (see `Store.adoptShared`), and thread transcripts. Safe to run on every
- * start.
- */
-export async function adoptSharedWorkspace(
-  db: Store,
-  threads: ThreadBindingStore,
-): Promise<{ records: Record<string, number>; transcripts: number }> {
-  const records = await db.adoptShared();
-  return { records, transcripts: await adoptSharedTranscripts(db, threads) };
 }

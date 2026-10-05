@@ -111,14 +111,6 @@ export class Store {
     );
     return result.rows.map((row) => row.data as { owner: string; value: T });
   }
-  /** Owner and id of every record of a kind, without loading what they hold. */
-  async ids(kind: string): Promise<{ owner: string; id: string }[]> {
-    const result = await this.db.query(
-      "SELECT jsonb_build_object('owner',owner,'id',id) AS data FROM records WHERE kind=$1",
-      [kind],
-    );
-    return result.rows.map((row) => row.data as { owner: string; id: string });
-  }
   async claim<T>(owner: string, id: string, status: string, now: string): Promise<T | null> {
     const result = await this.db.query(
       `UPDATE records AS action SET data=jsonb_set(data,'{status}',$4::jsonb),updated_at=now()
@@ -136,41 +128,6 @@ export class Store {
     await this.db.query(
       `UPDATE records SET data=data || '{"status":"outcome_unknown","error":"Server restarted during execution. Check the provider before creating another action."}'::jsonb WHERE kind='actions' AND data->>'status'='executing'`,
     );
-  }
-  /**
-   * One-time move of records that used to be kept per person into the shared workspace, so a team
-   * that already has tasks and reviews sees them all after the upgrade. Tasks, goals, reviews and
-   * timeline entries are stamped with `createdBy` (the person whose records they were), which is
-   * whose account and files the work keeps running on; a timeline entry also learns its review's
-   * task, which decides who may see it. Safe on every start: anything already shared stays put,
-   * and when two people hold the same id the most recently updated record is the one adopted.
-   * Returns the number of rows moved per kind.
-   */
-  async adoptShared(): Promise<Record<string, number>> {
-    const moved: Record<string, number> = {};
-    const candidate = `r.kind=$1 AND r.owner NOT IN ('shared','system')
-      AND NOT EXISTS (SELECT 1 FROM records s WHERE s.owner='shared' AND s.kind=r.kind AND s.id=r.id)
-      AND r.owner=(SELECT r2.owner FROM records r2 WHERE r2.kind=r.kind AND r2.id=r.id
-        AND r2.owner NOT IN ('shared','system') ORDER BY r2.updated_at DESC,r2.owner LIMIT 1)`;
-    const stamp = "jsonb_build_object('createdBy',COALESCE(r.data->>'createdBy',r.owner))";
-    const adopt = async (kind: string, data = "r.data") => {
-      const result = await this.db.query(
-        `UPDATE records AS r SET owner='shared',data=${data} WHERE ${candidate} RETURNING r.id`,
-        [kind],
-      );
-      if (result.rows.length) moved[kind] = result.rows.length;
-    };
-    // Timeline entries read their review's task, so they move before the reviews do.
-    await adopt(
-      "activity",
-      `r.data || ${stamp} || COALESCE((SELECT jsonb_build_object('taskId',a.data->>'taskId')
-        FROM records a WHERE a.owner=r.owner AND a.kind='actions' AND a.id=r.data->>'actionId'
-        AND a.data->>'taskId' IS NOT NULL LIMIT 1),'{}'::jsonb)`,
-    );
-    for (const kind of ["actions", "tasks", "goals"]) await adopt(kind, `r.data || ${stamp}`);
-    for (const kind of ["runs", "run-events", "projects", "monitors", "agent-artifacts"])
-      await adopt(kind);
-    return moved;
   }
   async take<T>(owner: string, kind: string, id: string): Promise<T | null> {
     const result = await this.db.query(

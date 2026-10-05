@@ -51,14 +51,13 @@ export class ActionService {
   ): Promise<ActionProposal> {
     // Reviews are stored for the whole workspace, but an idempotency key only ever identifies the
     // review of the person who used it, so two people reusing a key still get a review each.
-    const digest = (value: string) => createHash("sha256").update(value).digest("hex");
-    const id = idempotencyKey === undefined ? randomUUID() : digest(`${owner}\n${idempotencyKey}`);
+    const id =
+      idempotencyKey === undefined
+        ? randomUUID()
+        : createHash("sha256").update(`${owner}\n${idempotencyKey}`).digest("hex");
     if (idempotencyKey !== undefined) {
       const existing = await this.db.get<ActionProposal>(owner, "actions", id);
       if (existing) return existing;
-      // Reviews saved before they were shared were keyed by the idempotency key alone.
-      const earlier = await this.db.get<ActionProposal>(owner, "actions", digest(idempotencyKey));
-      if (earlier?.createdBy === owner) return earlier;
     }
     const parsed = proposalSchema.parse(raw);
     const connection = await this.options.connection?.(owner);
