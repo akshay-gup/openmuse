@@ -43,7 +43,7 @@ Every colour, text size, corner radius and shadow lives in `src/theme.ts`. Compo
 The values follow the web app's stylesheet:
 
 - **Colour.** `palette` holds the brand swatches (navy, blue, teal, amber) and `colors` gives each a role. Navy is the ink and the dark surface, and teal is `primary` for fills and icons. Links and other teal text use `primaryText`, a darker teal that stays AA on the tinted surfaces. Amber marks creation: `CreateTile` is the dashed "create something new" outline. A selected card or pill has a teal-to-green gradient border on web (`selectedCard`) and a plain teal border on native.
-- **Shape.** Cards use 12px corners, hairline borders and a lift on hover. Larger cards (files, the finance summary, the Today banner) use `radius.xxl`, 25px.
+- **Shape.** Cards use 12px corners and hairline borders; task cards and file cards also lift on hover. Larger cards (files, the finance summary, the Today banner) use `radius.xxl`, 25px.
 - **Poppins.** The web build uses Poppins, self-hosted in `public/fonts` with its SIL Open Font License (four weights, Latin and Latin-extended). `src/fonts.ts` registers it and makes it the font of every `Text`. react-native-web does not inherit fonts, so the rule matches the `dir="auto"` elements it renders; code opts out with `{...monoProps}`. iOS and Android keep the system font: Poppins there needs one font family per weight loaded with `expo-font`, which is not wired up yet.
 
 ## Behavior

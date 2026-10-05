@@ -156,7 +156,7 @@ export const brand = {
 } as const;
 
 /** Accent bars on calendar events, cycled by calendar. */
-export const eventColors = ["#8FD3EA", "#8FE3BF", "#FDDC7A"] as const;
+export const eventColors = [palette.lightCyan, "#8FE3BF", "#FDDC7A"] as const;
 
 /** The dark finance summary card is its own piece of art, not part of the app chrome. */
 export const financeArt = {
@@ -172,7 +172,7 @@ export const financeArt = {
 /** CSS gradients, for the web (native falls back to the flat colour next to each one). */
 export const gradients = {
   /** Border of the selected card: teal into green. */
-  selected: "linear-gradient(90deg, #3E8DA1 37.5%, #1CCC80 100%)",
+  selected: `linear-gradient(90deg, #3E8DA1 37.5%, ${palette.tealGreen} 100%)`,
 } as const;
 
 /** Text sizes. Use these rather than numbers. */
