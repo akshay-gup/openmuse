@@ -39,6 +39,7 @@ import { ComputerSheet } from "./computer";
 import DateTimeEditor from "./DateTimeEditor";
 import { localDateTime, zonedInstant } from "./date-time";
 import PdfReader from "./PdfReader";
+import { isMine, requesterName } from "./reviews";
 import {
   Button,
   Card,
@@ -566,6 +567,8 @@ function ReviewDetail({ initial }: { initial: ActionProposal }) {
     local.status !== initial.status ? local : w.actions.find((a) => a.id === initial.id) || local;
   const d = action.data;
   const pending = action.status === "awaiting_review";
+  // A teammate can read a review and decline it, but approving acts on someone else's account.
+  const mine = isMine(action, w.profile.id);
   async function decide(decision: "approve" | "deny") {
     setBusy(true);
     setError("");
@@ -615,9 +618,11 @@ function ReviewDetail({ initial }: { initial: ActionProposal }) {
     <Sheet
       title={pending ? "One last look" : action.title}
       subtitle={
-        w.mode === "sample"
-          ? "This action stays in your local workspace."
-          : "Review this exact action before it changes your connected account."
+        !mine
+          ? `Prepared for ${requesterName(action)}'s Google account.`
+          : w.mode === "sample"
+            ? "This action stays in your local workspace."
+            : "Review this exact action before it changes your connected account."
       }
       onClose={close}
     >
@@ -722,17 +727,22 @@ function ReviewDetail({ initial }: { initial: ActionProposal }) {
               minute: "2-digit",
               timeZoneName: "short",
             })}
-            . Your approval applies only to the details shown above.
+            .{" "}
+            {mine
+              ? "Your approval applies only to the details shown above."
+              : `Only ${requesterName(action)} can approve this, because it runs on their Google account.`}
           </Text>
           <View style={[s.row, { gap: 10, flexWrap: "wrap" }]}>
-            <Button primary icon={Check} busy={busy} onPress={() => void decide("approve")}>
-              {w.mode === "sample"
-                ? "Approve locally"
-                : email
-                  ? "Approve & send"
-                  : "Approve change"}
-            </Button>
-            {action.kind !== "calendar.delete" && (
+            {mine && (
+              <Button primary icon={Check} busy={busy} onPress={() => void decide("approve")}>
+                {w.mode === "sample"
+                  ? "Approve locally"
+                  : email
+                    ? "Approve & send"
+                    : "Approve change"}
+              </Button>
+            )}
+            {mine && action.kind !== "calendar.delete" && (
               <Button icon={Edit3} disabled={busy} onPress={() => void edit()}>
                 Edit details
               </Button>

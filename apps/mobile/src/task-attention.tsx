@@ -3,6 +3,7 @@ import { Text } from "react-native";
 import type { Workspace } from "../../../packages/domain/src";
 import type { AgentTask } from "../../../packages/domain/src/agent";
 import { useAgentWorkspace } from "./agent-workspace";
+import { isMine, requesterName } from "./reviews";
 import { Button, Card, CheckRow, colors, ErrorNotice, Field, s } from "./ui";
 import { useWorkspace } from "./workspace";
 
@@ -22,7 +23,7 @@ export function TaskAttention({
   /** Called before another sheet opens (for example the action review), so sheets never stack. */
   onBeforeOpen?: () => void;
 }) {
-  const { api, open, refresh: refreshWorkspace } = useWorkspace();
+  const { api, open, refresh: refreshWorkspace, workspace } = useWorkspace();
   const { mutate } = useAgentWorkspace();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -90,17 +91,26 @@ export function TaskAttention({
     }
   }
 
-  if (task.status === "waiting_approval")
+  if (task.status === "waiting_approval") {
+    // Anyone can open the review; approving is for the person whose Google account it runs on.
+    const mine = isMine(task, workspace.profile.id);
     return (
       <Card style={{ backgroundColor: colors.primarySoft, gap: 12 }}>
-        <Text style={s.heading}>Ready for your review</Text>
-        <Text style={s.muted}>Review the exact action and account before it proceeds.</Text>
+        <Text style={s.heading}>
+          {mine ? "Ready for your review" : `Waiting on ${requesterName(task)}`}
+        </Text>
+        <Text style={s.muted}>
+          {mine
+            ? "Review the exact action and account before it proceeds."
+            : "Only they can approve this, because it runs on their Google account."}
+        </Text>
         <ErrorNotice error={error} />
-        <Button primary busy={busy} onPress={() => void review()}>
-          Review action
+        <Button primary={mine} busy={busy} onPress={() => void review()}>
+          {mine ? "Review action" : "View review"}
         </Button>
       </Card>
     );
+  }
   return (
     <Card style={{ backgroundColor: colors.primarySoft, gap: 12 }}>
       <Text style={s.heading}>{task.question || "A detail from you will help"}</Text>

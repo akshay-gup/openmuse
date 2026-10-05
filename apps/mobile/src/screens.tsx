@@ -33,6 +33,7 @@ import {
   View,
 } from "react-native";
 import type {
+  ActionProposal,
   Artifact,
   BrowserSession,
   CalendarEvent,
@@ -40,6 +41,7 @@ import type {
 } from "../../../packages/domain/src";
 import { API_URL } from "./api";
 import { localDateTime, zonedInstant } from "./date-time";
+import { isMine, requesterName } from "./reviews";
 import {
   avatarTints,
   Button,
@@ -1075,8 +1077,11 @@ export function FilesScreen() {
 export function ActivityScreen() {
   const { workspace: w, open } = useWorkspace();
   const [filter, setFilter] = useState("all");
-  const pending = w.actions.filter((a) => a.status === "awaiting_review");
-  const actions = w.actions.filter((a) => filter === "all" || a.status === "awaiting_review");
+  // Everyone's reviews are listed; the "needs review" count is the ones only you can approve.
+  const awaitingYou = (a: ActionProposal) =>
+    a.status === "awaiting_review" && isMine(a, w.profile.id);
+  const pending = w.actions.filter(awaitingYou);
+  const actions = w.actions.filter((a) => filter === "all" || awaitingYou(a));
   return (
     <View style={{ gap: 20 }}>
       <View style={[s.row, { gap: 10 }]}>
@@ -1089,7 +1094,7 @@ export function ActivityScreen() {
       </View>
       {actions.length > 0 && (
         <Card>
-          <SectionHeading title="Your actions" />
+          <SectionHeading title="Reviews" />
           {actions.map((a) => (
             <Pressable
               key={a.id}
@@ -1116,7 +1121,10 @@ export function ActivityScreen() {
               </View>
               <View style={{ flex: 1, gap: 4 }}>
                 <Text style={s.text}>{a.title}</Text>
-                <Text style={s.small}>{relativeDate(a.createdAt)}</Text>
+                <Text style={s.small}>
+                  {isMine(a, w.profile.id) ? "" : `${requesterName(a)} · `}
+                  {relativeDate(a.createdAt)}
+                </Text>
               </View>
               <Chip
                 tint={

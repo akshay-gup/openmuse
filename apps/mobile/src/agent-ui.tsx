@@ -44,6 +44,7 @@ import type {
 } from "../../../packages/domain/src/agent";
 import { useAgentWorkspace } from "./agent-workspace";
 import { PermissionsSettings } from "./opencode-permissions";
+import { isMine, requesterName } from "./reviews";
 import { ActivityScreen, ConnectionsScreen } from "./screens";
 import { TaskAttention } from "./task-attention";
 import { ago, formatDue, isOverdue, statusMeta, TaskBoard, taskStatusLabel } from "./task-board";
@@ -141,7 +142,8 @@ export function TaskCard({
   onOpen?: () => void;
   onSelect?: () => void;
 }) {
-  const { open } = useWorkspace();
+  const { open, workspace } = useWorkspace();
+  const mine = isMine(task, workspace.profile.id);
   const done = task.plan.filter((step) => step.status === "succeeded").length;
   const next = task.plan.find((step) => ["running", "waiting"].includes(step.status));
   const waiting = ["waiting_input", "waiting_approval"].includes(task.status);
@@ -184,6 +186,7 @@ export function TaskCard({
           {taskStatusLabel(task)}
         </Text>
         <Text style={s.small}>· {task.kind === "manual" ? "Manual" : "Agent"}</Text>
+        {!mine && !!task.createdByName && <Text style={s.small}>· {task.createdByName}</Text>}
         <View style={{ flex: 1 }} />
         {!!updated && <Text style={s.small}>{updated}</Text>}
         <ChevronRight size={16} color={colors.muted} />
@@ -219,7 +222,11 @@ export function TaskCard({
         <View style={[s.row, { gap: 6, flexWrap: "wrap" }]}>
           {waiting && (
             <Chip tint={colors.warningBg} color={colors.text}>
-              {task.status === "waiting_approval" ? "Review requested" : "Your input is needed"}
+              {task.status === "waiting_approval"
+                ? mine
+                  ? "Review requested"
+                  : `Waiting on ${requesterName(task)}`
+                : "Your input is needed"}
             </Chip>
           )}
           {!!due && (
@@ -252,7 +259,7 @@ export function ChatWork() {
 }
 export function AgentActivityScreen() {
   const { data, refresh } = useAgentWorkspace();
-  const { api } = useWorkspace();
+  const { api, workspace } = useWorkspace();
   const [filter, setFilter] = useState<"all" | "needs-you" | "active" | "finished">("all");
   const [view, setView] = useState<"list" | "board" | "timeline">("list");
   const [projectFilter, setProjectFilter] = useState<ProjectSelection>(null);
@@ -267,8 +274,10 @@ export function AgentActivityScreen() {
       projectFilter === null ||
       (projectFilter === "none" ? !task.projectId : task.projectId === projectFilter),
   );
+  // The whole workspace's work is listed here; "needs you" is what only you can unblock.
   const needsYou = (task: AgentTask) =>
-    task.status === "waiting_approval" || task.status === "waiting_input";
+    task.status === "waiting_input" ||
+    (task.status === "waiting_approval" && isMine(task, workspace.profile.id));
   const needsYouCount = projectTasks.filter(needsYou).length;
   const tasks = projectTasks.filter((task) =>
     filter === "all"
