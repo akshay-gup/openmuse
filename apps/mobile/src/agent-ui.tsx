@@ -2,9 +2,10 @@ import {
   ArrowRight,
   Bell,
   CalendarDays,
+  ChevronDown,
   ChevronRight,
+  CircleCheck,
   CircleDollarSign,
-  Clock3,
   FileText,
   Globe2,
   Heart,
@@ -15,13 +16,20 @@ import {
   Play,
   Plus,
   RefreshCw,
-  Square,
   Target,
   Users,
   X,
 } from "lucide-react-native";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Image, Linking, Pressable, Text, View } from "react-native";
+import {
+  ActivityIndicator,
+  Image,
+  Linking,
+  Pressable,
+  Text,
+  useWindowDimensions,
+  View,
+} from "react-native";
 import Svg, { Defs, LinearGradient, Rect, Stop } from "react-native-svg";
 import type { Artifact, BrowserSession } from "../../../packages/domain/src";
 import type {
@@ -37,7 +45,8 @@ import type {
 import { useAgentWorkspace } from "./agent-workspace";
 import { PermissionsSettings } from "./opencode-permissions";
 import { ActivityScreen, ConnectionsScreen } from "./screens";
-import { TaskBoard } from "./task-board";
+import { TaskAttention } from "./task-attention";
+import { ago, formatDue, isOverdue, statusMeta, TaskBoard, taskStatusLabel } from "./task-board";
 import { TaskCreate } from "./task-create";
 import { TaskDetail as IssueDetail } from "./task-detail";
 import {
@@ -60,12 +69,21 @@ import {
   LinkRow,
   Mascot,
   resultSummary,
+  SearchField,
   SectionHeading,
+  Segmented,
   Sheet,
   s,
+  type WebPressState,
 } from "./ui";
 import { useWorkspace } from "./workspace";
 
+/** 60 -> "hour", 120 -> "2 hours", 1440 -> "day", otherwise minutes. */
+function every(minutes: number): string {
+  if (minutes % 1440 === 0) return minutes === 1440 ? "day" : `${minutes / 1440} days`;
+  if (minutes % 60 === 0) return minutes === 60 ? "hour" : `${minutes / 60} hours`;
+  return `${minutes} minutes`;
+}
 export function statusLabel(value: string) {
   return value.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
 }
@@ -120,10 +138,14 @@ export function TaskCard({
   onSelect?: () => void;
 }) {
   const { open } = useWorkspace();
-  const manual = task.kind === "manual";
   const done = task.plan.filter((step) => step.status === "succeeded").length;
   const next = task.plan.find((step) => ["running", "waiting"].includes(step.status));
   const waiting = ["waiting_input", "waiting_approval"].includes(task.status);
+  const meta = statusMeta[task.status];
+  const updated = ago(task.updatedAt);
+  const due = formatDue(task.dueAt);
+  const overdue = isOverdue(task);
+  const summary = task.question || task.error || resultSummary(task.result || next?.title || "");
   return (
     <Pressable
       accessibilityRole="button"
@@ -135,58 +157,69 @@ export function TaskCard({
           open({ type: "task", taskId: task.id });
         }
       }}
+      style={({ pressed, hovered }: WebPressState) => ({
+        gap: 10,
+        padding: compact ? 14 : 18,
+        borderRadius: 18,
+        borderWidth: 1,
+        borderColor: task.status === "failed" ? "#F0D5D3" : waiting ? "#EBDDB5" : colors.line,
+        backgroundColor: pressed ? "#F4F5F6" : hovered ? "#FAFBFC" : "#FFFFFF",
+      })}
     >
-      <Card
-        style={{
-          padding: compact ? 16 : 20,
-          gap: 12,
-          borderRadius: 20,
-          backgroundColor: "#F0F1F2",
-        }}
-      >
-        <View style={[s.row, { gap: 12 }]}>
+      <View style={[s.row, { gap: 8 }]}>
+        <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: meta.dot }} />
+        <Text style={[s.small, { fontWeight: "800", letterSpacing: 0.5 }]}>
+          {taskStatusLabel(task)}
+        </Text>
+        <Text style={s.small}>· {task.kind === "manual" ? "Manual" : "Agent"}</Text>
+        <View style={{ flex: 1 }} />
+        {!!updated && <Text style={s.small}>{updated}</Text>}
+        <ChevronRight size={16} color={colors.muted} />
+      </View>
+      <Text style={s.heading} numberOfLines={compact ? 2 : 3}>
+        {task.title}
+      </Text>
+      {!!summary && (
+        <Text numberOfLines={compact ? 2 : 3} style={s.muted}>
+          {summary}
+        </Text>
+      )}
+      {!!task.plan.length && (
+        <View style={{ gap: 4 }}>
           <View
-            style={[
-              s.iconBox,
-              { width: 36, height: 36, backgroundColor: waiting ? colors.orange : colors.sky },
-            ]}
+            style={{ height: 6, borderRadius: 3, backgroundColor: colors.line, overflow: "hidden" }}
           >
-            <ListChecks size={18} color={colors.blueDark} />
-          </View>
-          <View style={{ flex: 1, gap: 4 }}>
-            <Text style={s.heading}>{task.title}</Text>
-            <Text style={s.small}>
-              {manual
-                ? `Manual · ${task.status === "queued" ? "To do" : task.status === "running" ? "In progress" : task.status === "succeeded" ? "Done" : statusLabel(task.status)}`
-                : `Agent · ${statusLabel(task.status)}`}
-              {task.plan.length ? ` · ${done}/${task.plan.length} steps` : ""}
-            </Text>
-          </View>
-          <ChevronRight size={17} color={colors.muted} />
-        </View>
-        {!!task.plan.length && (
-          <View style={{ height: 6, backgroundColor: colors.line, borderRadius: 6 }}>
             <View
               style={{
                 height: 6,
+                borderRadius: 3,
+                backgroundColor: meta.dot,
                 width: `${Math.round((done / task.plan.length) * 100)}%`,
-                backgroundColor: "#6AAEE0",
-                borderRadius: 6,
               }}
             />
           </View>
-        )}
-        {(task.question || task.result || task.error || next?.title) && (
-          <Text numberOfLines={compact ? 2 : 4} style={s.muted}>
-            {task.question || task.error || resultSummary(task.result || next?.title || "")}
+          <Text style={s.small}>
+            {done}/{task.plan.length} steps
           </Text>
-        )}
-        {waiting && (
-          <Text style={[s.small, { color: colors.blueDark, fontWeight: "600" }]}>
-            {task.status === "waiting_approval" ? "Review requested" : "Your input is needed"}
-          </Text>
-        )}
-      </Card>
+        </View>
+      )}
+      {(waiting || !!due) && (
+        <View style={[s.row, { gap: 6, flexWrap: "wrap" }]}>
+          {waiting && (
+            <Chip tint={colors.orange} color={colors.text}>
+              {task.status === "waiting_approval" ? "Review requested" : "Your input is needed"}
+            </Chip>
+          )}
+          {!!due && (
+            <Chip
+              tint={overdue ? "#FBEFED" : "#F4F4F6"}
+              color={overdue ? colors.danger : undefined}
+            >
+              {overdue ? `Overdue · ${due}` : `Due ${due}`}
+            </Chip>
+          )}
+        </View>
+      )}
     </Pressable>
   );
 }
@@ -208,7 +241,7 @@ export function ChatWork() {
 export function AgentActivityScreen() {
   const { data, refresh } = useAgentWorkspace();
   const { api } = useWorkspace();
-  const [filter, setFilter] = useState("All");
+  const [filter, setFilter] = useState<"all" | "needs-you" | "active" | "finished">("all");
   const [view, setView] = useState<"list" | "board" | "timeline">("list");
   const [projectFilter, setProjectFilter] = useState<ProjectSelection>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -222,15 +255,60 @@ export function AgentActivityScreen() {
       projectFilter === null ||
       (projectFilter === "none" ? !task.projectId : task.projectId === projectFilter),
   );
-  const tasks = projectTasks.filter(
-    (task) =>
-      filter === "All" ||
-      (filter === "In progress" ? task.status === "running" : !activeTask(task)),
+  const needsYou = (task: AgentTask) =>
+    task.status === "waiting_approval" || task.status === "waiting_input";
+  const needsYouCount = projectTasks.filter(needsYou).length;
+  const tasks = projectTasks.filter((task) =>
+    filter === "all"
+      ? true
+      : filter === "needs-you"
+        ? needsYou(task)
+        : filter === "active"
+          ? activeTask(task)
+          : !activeTask(task),
   );
   const selected = selectedId ? allTasks.find((task) => task.id === selectedId) : undefined;
   const managingProject = managingProjectId
     ? projects.find((project) => project.id === managingProjectId)
     : undefined;
+  const { width } = useWindowDimensions();
+  const narrow = width < 700;
+  const viewSwitcher = (
+    <Segmented
+      label="View"
+      value={view}
+      onChange={setView}
+      options={[
+        { id: "list", label: "List" },
+        { id: "board", label: "Board" },
+        { id: "timeline", label: "Timeline" },
+      ]}
+    />
+  );
+  const filterSwitcher = (
+    <Segmented
+      label="Show"
+      value={filter}
+      onChange={setFilter}
+      options={[
+        { id: "all", label: "All" },
+        { id: "needs-you", label: needsYouCount ? `Needs you · ${needsYouCount}` : "Needs you" },
+        { id: "active", label: "Active" },
+        { id: "finished", label: "Finished" },
+      ]}
+    />
+  );
+  const newIssue = (
+    <Button
+      small
+      primary
+      icon={Plus}
+      accessibilityLabel="New issue"
+      onPress={() => setCreating(true)}
+    >
+      {narrow ? "New" : "New issue"}
+    </Button>
+  );
   const activeProject =
     typeof projectFilter === "string" && projectFilter !== "none"
       ? projects.find((project) => project.id === projectFilter)
@@ -249,37 +327,46 @@ export function AgentActivityScreen() {
         onManage={(project) => setManagingProjectId(project.id)}
       />
       {activeProject?.description ? <Text style={s.muted}>{activeProject.description}</Text> : null}
-      <View style={[s.row, { gap: 10, flexWrap: "wrap" }]}>
-        {(["list", "board", "timeline"] as const).map((item) => (
-          <Button key={item} small primary={view === item} onPress={() => setView(item)}>
-            {item[0].toUpperCase() + item.slice(1)}
-          </Button>
-        ))}
-        {view !== "list" && (
-          <Button small icon={Plus} onPress={() => setCreating(true)}>
-            New issue
-          </Button>
-        )}
-      </View>
+      {narrow ? (
+        <View style={{ gap: 12 }}>
+          <View style={[s.between, { gap: 12 }]}>
+            {viewSwitcher}
+            {newIssue}
+          </View>
+          {view === "list" && filterSwitcher}
+        </View>
+      ) : (
+        <View style={[s.between, { gap: 12 }]}>
+          <View style={[s.row, { gap: 12, flexShrink: 1 }]}>
+            {viewSwitcher}
+            {view === "list" && filterSwitcher}
+          </View>
+          {newIssue}
+        </View>
+      )}
       {view === "list" && (
         <>
-          <View style={[s.row, { gap: 10 }]}>
-            {["All", "In progress", "Finished"].map((item) => (
-              <Button key={item} small primary={filter === item} onPress={() => setFilter(item)}>
-                {item}
-              </Button>
-            ))}
-          </View>
           {tasks.map((task) => (
             <TaskCard key={task.id} task={task} onSelect={() => setSelectedId(task.id)} />
           ))}
-          {!tasks.length && (
-            <Empty
-              icon={ListChecks}
-              title="A place for the work"
-              detail="Delegate a task in Chat. Its plan, progress and results stay here."
-            />
-          )}
+          {!tasks.length &&
+            (projectTasks.length ? (
+              <Empty
+                icon={ListChecks}
+                title={filter === "needs-you" ? "Nothing needs you right now" : "No matching tasks"}
+                detail={
+                  filter === "needs-you"
+                    ? "Reviews and questions from Hive will show up here."
+                    : "Try a different filter to see more."
+                }
+              />
+            ) : (
+              <Empty
+                icon={ListChecks}
+                title="A place for the work"
+                detail="Delegate a task in Chat. Its plan, progress and results stay here."
+              />
+            ))}
         </>
       )}
       {view === "board" && (
@@ -370,7 +457,7 @@ export function EvidenceList({ items }: { items: Evidence[] }) {
   );
 }
 export function TaskDetail({ taskId }: { taskId: string }) {
-  const { api, workspace, close, open, refresh: refreshWorkspace } = useWorkspace();
+  const { api, close, open } = useWorkspace();
   const { data, mutate } = useAgentWorkspace();
   const [detail, setDetail] = useState<{
     task: AgentTask;
@@ -381,10 +468,6 @@ export function TaskDetail({ taskId }: { taskId: string }) {
   }>();
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const [answer, setAnswer] = useState("");
-  const [fieldJson, setFieldJson] = useState("");
-  const [showFieldJson, setShowFieldJson] = useState(false);
-  const [fields, setFields] = useState<Record<string, string | boolean>>({});
   const task = data?.tasks.find((item) => item.id === taskId) || detail?.task;
   useEffect(() => {
     let active = true;
@@ -414,49 +497,6 @@ export function TaskDetail({ taskId }: { taskId: string }) {
     setError("");
     try {
       await mutate(`/tasks/${taskId}/${path}`, body);
-      if (path === "input") {
-        setAnswer("");
-        setFields({});
-      }
-    } catch (e) {
-      setError(errorText(e));
-    } finally {
-      setBusy(false);
-    }
-  }
-  async function submitInput() {
-    try {
-      let parsed: Record<string, string | boolean> = fields;
-      if (fieldJson.trim()) {
-        const raw: unknown = JSON.parse(fieldJson);
-        if (
-          !raw ||
-          typeof raw !== "object" ||
-          Array.isArray(raw) ||
-          Object.values(raw).some(
-            (value) => typeof value !== "string" && typeof value !== "boolean",
-          )
-        )
-          throw new Error("Form fields must be a JSON object with text or true/false values.");
-        parsed = raw as Record<string, string | boolean>;
-      }
-      await act("input", {
-        answer: answer.trim() || "Provided the requested fields.",
-        fields: parsed,
-      });
-    } catch (e) {
-      setError(errorText(e));
-    }
-  }
-  async function review() {
-    setBusy(true);
-    setError("");
-    try {
-      await refreshWorkspace();
-      const snapshot = await api.request<typeof workspace>("/api/workspace");
-      const action = snapshot.actions.find((item) => item.id === task?.actionId);
-      if (!action) throw new Error("This review is not available yet. Refresh and try again.");
-      open({ type: "review", action });
     } catch (e) {
       setError(errorText(e));
     } finally {
@@ -472,16 +512,6 @@ export function TaskDetail({ taskId }: { taskId: string }) {
         onClose={close}
       />
     );
-  const missing = Array.isArray(task?.state.missingFields) ? task.state.missingFields : [];
-  const fieldNames = missing
-    .map((field) =>
-      typeof field === "string"
-        ? field
-        : typeof field === "object" && field && "name" in field
-          ? String(field.name)
-          : "",
-    )
-    .filter(Boolean);
   return (
     <Sheet
       title={task?.title || "Task"}
@@ -501,6 +531,7 @@ export function TaskDetail({ taskId }: { taskId: string }) {
           <Text selectable style={s.text}>
             {task.prompt}
           </Text>
+          <TaskAttention task={task} />
           <View style={[s.row, { gap: 8, flexWrap: "wrap" }]}>
             {["queued", "running", "scheduled", "waiting_input", "waiting_approval"].includes(
               task.status,
@@ -546,75 +577,6 @@ export function TaskDetail({ taskId }: { taskId: string }) {
               </Button>
             )}
           </View>
-          {task.status === "waiting_approval" && (
-            <Card style={{ backgroundColor: colors.lavender, gap: 12 }}>
-              <Text style={s.heading}>Ready for your review</Text>
-              <Text style={s.muted}>Review the exact action and account before it proceeds.</Text>
-              <Button primary busy={busy} onPress={() => void review()}>
-                Review action
-              </Button>
-            </Card>
-          )}
-          {task.status === "waiting_input" && (
-            <Card style={{ backgroundColor: colors.sky, gap: 12 }}>
-              <Text style={s.heading}>{task.question || "A detail from you will help"}</Text>
-              {fieldNames.map((name) =>
-                missing.some(
-                  (f) => typeof f === "object" && f && f.name === name && f.type === "checkbox",
-                ) ? (
-                  <CheckRow
-                    key={name}
-                    label={name.replace(/_/g, " ")}
-                    checked={Boolean(fields[name])}
-                    onPress={() => setFields((current) => ({ ...current, [name]: !current[name] }))}
-                  />
-                ) : (
-                  <Field
-                    key={name}
-                    label={name.replace(/_/g, " ")}
-                    value={String(fields[name] ?? "")}
-                    onChangeText={(value) =>
-                      setFields((current) => ({ ...current, [name]: value }))
-                    }
-                  />
-                ),
-              )}
-              {!fieldNames.length && (
-                <Field
-                  label="Your answer"
-                  value={answer}
-                  onChangeText={setAnswer}
-                  multiline
-                  placeholder="Add the missing details…"
-                />
-              )}
-              {task.kind === "document" && !fieldNames.length && (
-                <>
-                  <Button small onPress={() => setShowFieldJson(!showFieldJson)}>
-                    Form field values
-                  </Button>
-                  {showFieldJson && (
-                    <Field
-                      label="Fields (JSON: field name to value)"
-                      value={fieldJson}
-                      onChangeText={setFieldJson}
-                      multiline
-                      autoCapitalize="none"
-                      placeholder={'{"full_name":"Your name","consent":true}'}
-                    />
-                  )}
-                </>
-              )}
-              <Button
-                primary
-                busy={busy}
-                disabled={!answer.trim() && !Object.keys(fields).length && !fieldJson.trim()}
-                onPress={() => void submitInput()}
-              >
-                Continue task
-              </Button>
-            </Card>
-          )}
           <TaskRunView task={task} />
           {!!task.plan.length && (
             <Card style={{ gap: 16 }}>
@@ -1003,12 +965,16 @@ export function DelegateSheet({ threadId }: { threadId?: string }) {
       subtitle="Hive saves a plan and keeps working on the server."
       onClose={close}
     >
-      <View style={[s.row, { flexWrap: "wrap", gap: 8, marginBottom: 20 }]}>
-        {(["plan", "document", "finance", "agent"] as const).map((item) => (
-          <Button small primary={kind === item} key={item} onPress={() => setKind(item)}>
-            {item === "agent" ? "General task" : statusLabel(item)}
-          </Button>
-        ))}
+      <View style={{ marginBottom: 20 }}>
+        <Segmented<AgentTask["kind"]>
+          label="Kind of task"
+          value={kind}
+          onChange={setKind}
+          options={(["plan", "document", "finance", "agent"] as const).map((item) => ({
+            id: item,
+            label: item === "agent" ? "General task" : statusLabel(item),
+          }))}
+        />
       </View>
       <Field
         label="What would you like done?"
@@ -1108,11 +1074,12 @@ export function IdeasScreen() {
     }
   }
   const ideas = data?.ideas.filter((idea) => idea.status === "new") || [];
+  const started = data?.ideas.filter((idea) => idea.status === "accepted") || [];
   return (
     <View style={{ gap: 24 }}>
       <AgentStatus />
       <View style={s.between}>
-        <Text style={s.small}>Inspired by your connected apps</Text>
+        <Text style={s.small}>Inspired by your connected apps. Tap one to see why.</Text>
         <Button small icon={RefreshCw} busy={busy} onPress={() => void refreshIdeas()}>
           Find ideas
         </Button>
@@ -1128,15 +1095,18 @@ export function IdeasScreen() {
           detail="Find ideas from the sources you have granted access to. Each suggestion includes its evidence."
         />
       )}
-      {(data?.ideas || [])
-        .filter((idea) => idea.status === "accepted")
-        .map((idea) => (
-          <Card key={idea.id} style={{ gap: 10 }}>
-            <Text style={s.heading}>{idea.title}</Text>
-            <Chip tint={colors.green}>Started</Chip>
-            {!!idea.taskId && <TaskLink taskId={idea.taskId} />}
-          </Card>
-        ))}
+      {!!started.length && (
+        <View style={{ gap: 12 }}>
+          <Text style={s.label}>Started</Text>
+          {started.map((idea) => (
+            <Card key={idea.id} style={{ gap: 10 }}>
+              <Text style={s.heading}>{idea.title}</Text>
+              <Chip tint={colors.green}>Started</Chip>
+              {!!idea.taskId && <TaskLink taskId={idea.taskId} />}
+            </Card>
+          ))}
+        </View>
+      )}
     </View>
   );
 }
@@ -1146,6 +1116,7 @@ function TaskLink({ taskId, onOpen }: { taskId: string; onOpen?: () => void }) {
     <Button
       small
       icon={ArrowRight}
+      style={{ alignSelf: "flex-start" }}
       onPress={() => {
         onOpen?.();
         open({ type: "task", taskId });
@@ -1182,7 +1153,12 @@ function IdeaCard({ idea }: { idea: Idea }) {
         accessibilityLabel={`View idea: ${idea.title}`}
         accessibilityState={{ expanded }}
         onPress={() => setExpanded(!expanded)}
-        style={{ flexDirection: "row", gap: 14 }}
+        style={({ hovered }: WebPressState) => ({
+          flexDirection: "row",
+          gap: 14,
+          borderRadius: 12,
+          backgroundColor: hovered ? "#F7F8F9" : "transparent",
+        })}
       >
         <Text style={{ fontSize: 27, width: 34, paddingTop: 3 }}>
           {/document|permission|form/i.test(idea.title)
@@ -1198,7 +1174,17 @@ function IdeaCard({ idea }: { idea: Idea }) {
         <View style={{ flex: 1, gap: 5 }}>
           <Text style={[s.heading, { fontSize: 16, lineHeight: 23 }]}>{idea.title}</Text>
           <Text style={s.muted}>{idea.reason}</Text>
+          {!expanded && idea.evidence.length > 0 && (
+            <Text style={s.small}>
+              {idea.evidence.length} {idea.evidence.length === 1 ? "source" : "sources"}
+            </Text>
+          )}
         </View>
+        <ChevronDown
+          size={18}
+          color={colors.muted}
+          style={{ marginTop: 5, transform: [{ rotate: expanded ? "180deg" : "0deg" }] }}
+        />
       </Pressable>
       {expanded && (
         <View style={{ gap: 16, marginTop: 16, paddingLeft: 48 }}>
@@ -1253,32 +1239,65 @@ export function GoalsScreen() {
                 backgroundColor: "#24A46B",
               }}
             />
-            <Text style={[s.heading, { color: "#189A58" }]}>Tracking</Text>
+            <Text style={s.heading}>Tracking</Text>
           </View>
           <Button small icon={Plus} onPress={() => setAdding("Tracking")}>
             Track
           </Button>
         </View>
-        {(showAll ? monitors : monitors.slice(0, 3)).map((item) => (
-          <Pressable
-            key={item.id}
-            accessibilityRole="button"
-            accessibilityLabel={`Open tracking: ${item.title}`}
-            onPress={() => setSelectedMonitor(item.id)}
-            style={[s.row, { gap: 12, paddingVertical: 14 }]}
-          >
-            <Square size={21} color="#A7AAAC" />
-            <View style={{ flex: 1, gap: 4 }}>
-              <Text style={s.text}>{item.title}</Text>
-              <Text numberOfLines={1} style={s.muted}>
-                {item.status === "active"
-                  ? `Checking every ${item.intervalMinutes} minutes`
-                  : statusLabel(item.status)}
-              </Text>
-            </View>
-            <ChevronRight size={18} color="#A3A6A8" />
-          </Pressable>
-        ))}
+        {(showAll ? monitors : monitors.slice(0, 3)).map((item) => {
+          const failing = !!item.error && item.status === "active";
+          return (
+            <Pressable
+              key={item.id}
+              accessibilityRole="button"
+              accessibilityLabel={`Open tracking: ${item.title}`}
+              onPress={() => setSelectedMonitor(item.id)}
+              style={({ hovered }: WebPressState) => [
+                s.row,
+                {
+                  gap: 12,
+                  paddingVertical: 12,
+                  paddingHorizontal: 8,
+                  borderRadius: 12,
+                  backgroundColor: hovered ? "#F7F8F9" : "transparent",
+                },
+              ]}
+            >
+              <View
+                style={[
+                  s.iconBox,
+                  {
+                    backgroundColor: failing
+                      ? "#FBEFED"
+                      : item.status === "active"
+                        ? colors.green
+                        : "#F1F2F3",
+                  },
+                ]}
+              >
+                <Globe2 size={19} color={failing ? colors.danger : colors.text} />
+              </View>
+              <View style={{ flex: 1, gap: 3 }}>
+                <Text style={s.text} numberOfLines={1}>
+                  {item.title}
+                </Text>
+                <Text numberOfLines={1} style={s.muted}>
+                  {item.status === "active"
+                    ? `Checking every ${every(item.intervalMinutes)}`
+                    : statusLabel(item.status)}
+                  {item.lastValue ? ` · Last: ${item.lastValue}` : ""}
+                </Text>
+                {failing && (
+                  <Text numberOfLines={1} style={[s.small, { color: colors.danger }]}>
+                    Needs attention: {item.error}
+                  </Text>
+                )}
+              </View>
+              <ChevronRight size={18} color={colors.muted} />
+            </Pressable>
+          );
+        })}
         {!monitors.length && (
           <Text style={[s.muted, { paddingVertical: 12 }]}>
             Ticket prices, a reservation, a page you’re watching.
@@ -1303,30 +1322,73 @@ export function GoalsScreen() {
               backgroundColor: "#3D9BDE",
             }}
           />
-          <Text style={[s.heading, { color: colors.blueDark }]}>Goals</Text>
+          <Text style={s.heading}>Goals</Text>
         </View>
-        {data?.goals.map((item) => (
-          <Pressable
-            key={item.id}
-            accessibilityRole="button"
-            accessibilityLabel={`Open goal: ${item.title}`}
-            onPress={() => setSelectedGoal(item.id)}
-            style={[s.row, { gap: 12, paddingVertical: 14 }]}
-          >
-            <Square
-              size={21}
-              color="#A7AAAC"
-              fill={item.status === "completed" ? colors.green : "transparent"}
-            />
-            <View style={{ flex: 1, gap: 4 }}>
-              <Text style={s.text}>{item.title}</Text>
-              <Text numberOfLines={2} style={s.muted}>
-                {item.description || statusLabel(item.status)}
-              </Text>
-            </View>
-            <ChevronRight size={18} color="#A3A6A8" />
-          </Pressable>
-        ))}
+        {data?.goals.map((item) => {
+          const total = item.milestones.length;
+          const reached = item.milestones.filter((milestone) => milestone.done).length;
+          const completed = item.status === "completed";
+          return (
+            <Pressable
+              key={item.id}
+              accessibilityRole="button"
+              accessibilityLabel={`Open goal: ${item.title}`}
+              onPress={() => setSelectedGoal(item.id)}
+              style={({ hovered }: WebPressState) => [
+                s.row,
+                {
+                  gap: 12,
+                  paddingVertical: 12,
+                  paddingHorizontal: 8,
+                  borderRadius: 12,
+                  backgroundColor: hovered ? "#F7F8F9" : "transparent",
+                },
+              ]}
+            >
+              <View style={[s.iconBox, { backgroundColor: completed ? colors.green : colors.sky }]}>
+                {completed ? (
+                  <CircleCheck size={19} color="#2E7D52" />
+                ) : (
+                  <Target size={19} color={colors.blueDark} />
+                )}
+              </View>
+              <View style={{ flex: 1, gap: 4 }}>
+                <Text style={s.text} numberOfLines={2}>
+                  {item.title}
+                </Text>
+                {total > 0 ? (
+                  <View style={{ gap: 4 }}>
+                    <View
+                      style={{
+                        height: 5,
+                        borderRadius: 3,
+                        backgroundColor: colors.line,
+                        overflow: "hidden",
+                      }}
+                    >
+                      <View
+                        style={{
+                          height: 5,
+                          borderRadius: 3,
+                          width: `${Math.round((reached / total) * 100)}%`,
+                          backgroundColor: completed ? "#2E9E5B" : colors.blueDark,
+                        }}
+                      />
+                    </View>
+                    <Text style={s.small}>
+                      {reached} of {total} milestones{completed ? " · Completed" : ""}
+                    </Text>
+                  </View>
+                ) : (
+                  <Text numberOfLines={2} style={s.muted}>
+                    {item.description || statusLabel(item.status)}
+                  </Text>
+                )}
+              </View>
+              <ChevronRight size={18} color={colors.muted} />
+            </Pressable>
+          );
+        })}
         {!data?.goals.length && (
           <Text style={[s.muted, { paddingVertical: 12 }]}>
             Big plans start with one small step.
@@ -1823,31 +1885,33 @@ export function AppsScreen() {
   return (
     <View style={{ gap: 24 }}>
       <AgentStatus />
-      <Field
+      <SearchField
         label="Search apps"
+        placeholder="Search apps and connectors"
         value={query}
         onChangeText={setQuery}
-        placeholder="Search connectors"
       />
       <ConnectionsScreen query={query} />
-      <SectionHeading title="On your computer" />
-      <Card style={{ paddingHorizontal: 16, paddingVertical: 8, backgroundColor: "#F4F5F6" }}>
-        {shortcuts
-          .filter((item) =>
-            `${item.title} ${item.detail}`.toLowerCase().includes(query.toLowerCase()),
-          )
-          .map((item) => (
-            <LinkRow
-              key={item.section}
-              icon={item.icon}
-              title={item.title}
-              detail={item.detail}
-              onPress={() =>
-                item.section === "browser" ? open({ type: "computer" }) : navigate(item.section)
-              }
-            />
-          ))}
-      </Card>
+      <View style={{ gap: 10 }}>
+        <Text style={[s.label, { marginLeft: 16 }]}>On your computer</Text>
+        <Card style={{ paddingHorizontal: 16, paddingVertical: 8, backgroundColor: "#F4F5F6" }}>
+          {shortcuts
+            .filter((item) =>
+              `${item.title} ${item.detail}`.toLowerCase().includes(query.toLowerCase()),
+            )
+            .map((item) => (
+              <LinkRow
+                key={item.section}
+                icon={item.icon}
+                title={item.title}
+                detail={item.detail}
+                onPress={() =>
+                  item.section === "browser" ? open({ type: "computer" }) : navigate(item.section)
+                }
+              />
+            ))}
+        </Card>
+      </View>
       <Button onPress={() => setSettings(!settings)}>
         {settings ? "Close agent settings" : "Personality & memory"}
       </Button>

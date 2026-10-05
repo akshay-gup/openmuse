@@ -16,7 +16,6 @@ import {
   Link2,
   Mail,
   Plus,
-  Search,
   ShieldCheck,
   Sparkles,
   Upload,
@@ -54,6 +53,7 @@ import {
   Mascot,
   relativeDate,
   resultSummary,
+  SearchField,
   SectionHeading,
   Sheet,
   s,
@@ -468,31 +468,13 @@ export function MailScreen() {
   return (
     <View style={{ gap: 20 }}>
       <View style={[s.between, { gap: 12, flexWrap: "wrap" }]}>
-        <View
-          style={[
-            s.row,
-            {
-              gap: 9,
-              flex: 1,
-              minWidth: 200,
-              backgroundColor: "#FFF",
-              borderWidth: 1,
-              borderColor: colors.line,
-              borderRadius: 12,
-              paddingHorizontal: 14,
-            },
-          ]}
-        >
-          <Search size={16} color={colors.muted} />
-          <TextInput
-            accessibilityLabel="Search mail"
-            placeholder="Search your inbox"
-            placeholderTextColor={colors.muted}
-            value={query}
-            onChangeText={setQuery}
-            style={{ flex: 1, paddingVertical: 12, fontSize: 15, color: colors.text }}
-          />
-        </View>
+        <SearchField
+          label="Search mail"
+          placeholder="Search your inbox"
+          value={query}
+          onChangeText={setQuery}
+          style={{ flex: 1, minWidth: 200 }}
+        />
         <Button onPress={() => open({ type: "email" })} primary icon={Plus}>
           Compose
         </Button>

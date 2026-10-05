@@ -7,7 +7,7 @@ import {
   type TaskStatus,
   taskColumn,
 } from "../../../packages/domain/src/agent";
-import { Button, colors, s } from "./ui";
+import { Button, colors, s, type WebPressState } from "./ui";
 
 const columns: { id: TaskColumn; title: string }[] = [
   { id: "todo", title: "To Do" },
@@ -23,7 +23,7 @@ export const priorityColors: Record<TaskPriority, string> = {
   urgent: colors.danger,
 };
 
-const statusMeta: Record<TaskStatus, { label: string; dot: string }> = {
+export const statusMeta: Record<TaskStatus, { label: string; dot: string }> = {
   queued: { label: "QUEUED", dot: "#9AA3A8" },
   running: { label: "RUNNING", dot: "#2E9E5B" },
   waiting_approval: { label: "NEEDS REVIEW", dot: "#D97A2B" },
@@ -35,14 +35,30 @@ const statusMeta: Record<TaskStatus, { label: string; dot: string }> = {
   cancelled: { label: "CANCELLED", dot: "#9AA3A8" },
 };
 
-function formatDue(dueAt: string | null | undefined): string | null {
+/** Manual issues read as a to-do list; agent tasks use the worker's own vocabulary. */
+export function taskStatusLabel(task: Pick<AgentTask, "kind" | "status">): string {
+  if (task.kind === "manual") {
+    if (task.status === "queued") return "TO DO";
+    if (task.status === "running") return "IN PROGRESS";
+  }
+  return statusMeta[task.status].label;
+}
+
+export function formatDue(dueAt: string | null | undefined): string | null {
   if (!dueAt) return null;
   const date = new Date(`${dueAt}T00:00:00`);
   if (Number.isNaN(date.getTime())) return dueAt;
   return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
-function ago(iso: string): string {
+/** Past its due date and still open. Due dates are whole days, so a task due today is not overdue. */
+export function isOverdue(task: Pick<AgentTask, "dueAt" | "status">): boolean {
+  if (!task.dueAt || task.status === "succeeded" || task.status === "cancelled") return false;
+  const end = new Date(`${task.dueAt}T23:59:59`);
+  return !Number.isNaN(end.getTime()) && end.getTime() < Date.now();
+}
+
+export function ago(iso: string): string {
   const ms = Date.now() - new Date(iso).getTime();
   if (!Number.isFinite(ms) || ms < 0) return "";
   const minutes = Math.floor(ms / 60000);
@@ -53,7 +69,7 @@ function ago(iso: string): string {
   return `${Math.floor(hours / 24)}d`;
 }
 
-function excerpt(text: string | undefined | null, max = 140): string | null {
+export function excerpt(text: string | undefined | null, max = 140): string | null {
   const clean = (text ?? "").trim().replace(/\s+/g, " ");
   if (!clean) return null;
   return clean.length > max ? `${clean.slice(0, max - 1)}…` : clean;
@@ -76,6 +92,7 @@ export function TaskBoardCard({
   const runningStep = task.plan.find((step) => step.status === "running");
   const doneSteps = task.plan.filter((step) => step.status === "succeeded").length;
   const updated = ago(task.updatedAt);
+  const overdue = isOverdue(task);
 
   // What the card leads with under the title: the live step, a question or
   // error needing attention, or the task's own description.
@@ -99,98 +116,116 @@ export function TaskBoardCard({
   );
 
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={`Open ${manual ? "issue" : "task"}: ${task.title}`}
-      onPress={onPress}
-      style={({ pressed }) => [
-        {
-          flexShrink: 0,
-          backgroundColor: "#FFFFFF",
-          borderRadius: 16,
-          borderWidth: 1,
-          borderColor: task.status === "failed" ? "#F0D5D3" : colors.line,
+    <View
+      style={{
+        flexShrink: 0,
+        backgroundColor: "#FFFFFF",
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: task.status === "failed" ? "#F0D5D3" : colors.line,
+        overflow: "hidden",
+      }}
+    >
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Open ${manual ? "issue" : "task"}: ${task.title}`}
+        onPress={onPress}
+        style={({ pressed, hovered }: WebPressState) => ({
           padding: 14,
           gap: 10,
-          opacity: pressed ? 0.92 : 1,
-        },
-      ]}
-    >
-      <View style={[s.row, { gap: 8 }]}>
-        <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: meta.dot }} />
-        <Text style={[s.small, { fontWeight: "800", letterSpacing: 0.5 }]}>{meta.label}</Text>
-        <View style={{ flex: 1 }} />
-        {!!updated && <Text style={s.small}>{updated}</Text>}
-      </View>
-      <Text style={[s.text, { fontSize: 14, lineHeight: 20, fontWeight: "600" }]} numberOfLines={3}>
-        {task.title}
-      </Text>
-      {!!activity && (
-        <Text style={s.muted} numberOfLines={3}>
-          {activity}
+          backgroundColor: pressed ? "#F4F5F6" : hovered ? "#FAFBFC" : "#FFFFFF",
+        })}
+      >
+        <View style={[s.row, { gap: 8 }]}>
+          <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: meta.dot }} />
+          <Text style={[s.small, { fontWeight: "800", letterSpacing: 0.5 }]}>
+            {taskStatusLabel(task)}
+          </Text>
+          <View style={{ flex: 1 }} />
+          {!!updated && <Text style={s.small}>{updated}</Text>}
+        </View>
+        <Text
+          style={[s.text, { fontSize: 14, lineHeight: 20, fontWeight: "600" }]}
+          numberOfLines={3}
+        >
+          {task.title}
         </Text>
-      )}
-      {!manual && task.plan.length > 0 && (
-        <View style={{ gap: 4 }}>
-          <View
-            style={{ height: 6, borderRadius: 3, backgroundColor: colors.line, overflow: "hidden" }}
-          >
+        {!!activity && (
+          <Text style={s.muted} numberOfLines={3}>
+            {activity}
+          </Text>
+        )}
+        {!manual && task.plan.length > 0 && (
+          <View style={{ gap: 4 }}>
             <View
               style={{
                 height: 6,
                 borderRadius: 3,
-                backgroundColor: meta.dot,
-                width: `${Math.round((doneSteps / task.plan.length) * 100)}%`,
+                backgroundColor: colors.line,
+                overflow: "hidden",
               }}
-            />
+            >
+              <View
+                style={{
+                  height: 6,
+                  borderRadius: 3,
+                  backgroundColor: meta.dot,
+                  width: `${Math.round((doneSteps / task.plan.length) * 100)}%`,
+                }}
+              />
+            </View>
+            <Text style={s.small}>
+              {doneSteps}/{task.plan.length} steps
+              {task.attempts > 1 ? ` · attempt ${task.attempts}` : ""}
+            </Text>
           </View>
-          <Text style={s.small}>
-            {doneSteps}/{task.plan.length} steps
-            {task.attempts > 1 ? ` · attempt ${task.attempts}` : ""}
-          </Text>
-        </View>
-      )}
-      <View style={[s.row, { gap: 6, flexWrap: "wrap" }]}>
-        <View
-          style={{
-            backgroundColor: manual ? colors.lavender : colors.sky,
-            borderRadius: 10,
-            paddingHorizontal: 9,
-            paddingVertical: 4,
-          }}
-        >
-          <Text style={[s.small, { fontWeight: "700" }]}>{manual ? "Manual" : "Agent"}</Text>
-        </View>
-        {task.assignee === "agent" && (
+        )}
+        <View style={[s.row, { gap: 6, flexWrap: "wrap" }]}>
           <View
             style={{
-              backgroundColor: colors.orange,
+              backgroundColor: manual ? colors.lavender : colors.sky,
               borderRadius: 10,
               paddingHorizontal: 9,
               paddingVertical: 4,
             }}
           >
-            <Text style={[s.small, { fontWeight: "700" }]}>Assigned</Text>
+            <Text style={[s.small, { fontWeight: "700" }]}>{manual ? "Manual" : "Agent"}</Text>
           </View>
-        )}
-        {!!due && (
-          <View
-            style={{
-              backgroundColor: "#F4F4F6",
-              borderRadius: 10,
-              paddingHorizontal: 9,
-              paddingVertical: 4,
-            }}
-          >
-            <Text style={s.small}>Due {due}</Text>
-          </View>
-        )}
-        {!!task.blockedBy.length && <Text style={s.small}>Blocked by {task.blockedBy.length}</Text>}
-      </View>
+          {task.assignee === "agent" && (
+            <View
+              style={{
+                backgroundColor: colors.orange,
+                borderRadius: 10,
+                paddingHorizontal: 9,
+                paddingVertical: 4,
+              }}
+            >
+              <Text style={[s.small, { fontWeight: "700" }]}>Assigned</Text>
+            </View>
+          )}
+          {!!due && (
+            <View
+              style={{
+                backgroundColor: overdue ? "#FBEFED" : "#F4F4F6",
+                borderRadius: 10,
+                paddingHorizontal: 9,
+                paddingVertical: 4,
+              }}
+            >
+              <Text style={[s.small, overdue && { color: colors.danger, fontWeight: "700" }]}>
+                {overdue ? `Overdue · ${due}` : `Due ${due}`}
+              </Text>
+            </View>
+          )}
+          {!!task.blockedBy.length && (
+            <Text style={s.small}>Blocked by {task.blockedBy.length}</Text>
+          )}
+        </View>
+      </Pressable>
       {!manual &&
         onControl &&
         (pausable || task.status === "paused" || task.status === "failed") && (
-          <View style={[s.row, { gap: 8 }]}>
+          <View style={[s.row, { gap: 8, paddingHorizontal: 14, paddingBottom: 14 }]}>
             {pausable && (
               <Button small disabled={busy} onPress={() => void control("pause")}>
                 Pause
@@ -208,7 +243,7 @@ export function TaskBoardCard({
             )}
           </View>
         )}
-    </Pressable>
+    </View>
   );
 }
 

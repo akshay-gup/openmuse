@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ScrollView, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import {
   type AgentTask,
   type Project,
@@ -8,9 +8,11 @@ import {
   taskPriorities,
 } from "../../../packages/domain/src/agent";
 import { useAgentWorkspace } from "./agent-workspace";
-import { TaskRunView } from "./task-run";
+import DateOnlyField from "./DateOnlyField";
+import { TaskAttention } from "./task-attention";
 import { priorityColors } from "./task-board";
-import { Button, ErrorNotice, Field, Sheet, s } from "./ui";
+import { TaskRunView } from "./task-run";
+import { Button, ErrorNotice, Field, Segmented, Sheet, s } from "./ui";
 import { useWorkspace } from "./workspace";
 
 const manualTransitions: TaskStatus[] = ["queued", "running", "succeeded", "failed"];
@@ -40,7 +42,7 @@ function statusLabel(status: TaskStatus): string {
 
 const datePattern = /^\d{4}-\d{2}-\d{2}$/;
 
-/** Full edit sheet for a task: fields, priority, dates, labels, status, delete. */
+/** Full sheet for a task: what it needs from you, its run, quick changes, then editable details. */
 export function TaskDetail({
   task,
   tasks,
@@ -120,110 +122,59 @@ export function TaskDetail({
   }
 
   return (
-    <Sheet title={manual ? "Issue" : "Task"} subtitle={statusLabel(task.status)} onClose={onClose}>
-      <View style={{ gap: 16 }}>
+    <Sheet
+      title={task.title}
+      subtitle={`${manual ? "Issue" : "Agent task"} · ${statusLabel(task.status)}`}
+      onClose={onClose}
+    >
+      <View style={{ gap: 20 }}>
         <ErrorNotice error={error} />
+        {!manual && <TaskAttention task={task} onBeforeOpen={onClose} />}
         {(!manual || task.attempts > 0) && <TaskRunView task={task} />}
-        <Field label="Title" value={title} onChangeText={setTitle} />
+
+        <View style={{ gap: 6 }}>
+          <Text style={s.label}>Status</Text>
+          <Segmented
+            label="Move to"
+            value={task.status}
+            disabled={busy}
+            onChange={(status) => void patch({ status })}
+            options={transitions.map((status) => ({ id: status, label: statusLabel(status) }))}
+          />
+          {!manual && (
+            <Text style={s.small}>
+              Worker tasks can only be queued, paused, or cancelled by hand.
+            </Text>
+          )}
+        </View>
+
         <View style={{ gap: 6 }}>
           <Text style={s.label}>Priority</Text>
-          <View style={[s.row, { gap: 8, flexWrap: "wrap" }]}>
-            {taskPriorities.map((priority: TaskPriority) => {
-              const active = task.priority === priority;
-              return (
-                <Button
-                  key={priority}
-                  small
-                  primary={active}
-                  disabled={busy}
-                  onPress={() => void patch({ priority })}
-                >
-                  <View style={[s.row, { gap: 6 }]}>
-                    <View
-                      style={{
-                        width: 8,
-                        height: 8,
-                        borderRadius: 4,
-                        backgroundColor: priorityColors[priority],
-                      }}
-                    />
-                    <Text style={[s.text, { fontSize: 14 }]}>
-                      {priority[0].toUpperCase() + priority.slice(1)}
-                    </Text>
-                  </View>
-                </Button>
-              );
-            })}
-          </View>
+          <Segmented<TaskPriority>
+            label="Priority"
+            value={task.priority}
+            disabled={busy}
+            onChange={(priority) => void patch({ priority })}
+            options={taskPriorities.map((priority) => ({
+              id: priority,
+              label: priority[0].toUpperCase() + priority.slice(1),
+              dot: priorityColors[priority],
+            }))}
+          />
         </View>
-        <View style={[s.row, { gap: 10 }]}>
-          <View style={{ flex: 1 }}>
-            <Field
-              label="Start (yyyy-mm-dd)"
-              value={startAt}
-              onChangeText={setStartAt}
-              placeholder="—"
-            />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Field label="Due (yyyy-mm-dd)" value={dueAt} onChangeText={setDueAt} placeholder="—" />
-          </View>
-        </View>
-        <Field
-          label="Labels (comma-separated)"
-          value={labels}
-          onChangeText={setLabels}
-          placeholder="—"
-        />
-        <View style={{ gap: 6 }}>
-          <Text style={s.label}>Project</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            <View style={[s.row, { gap: 8 }]}>
-              <Button
-                small
-                primary={!task.projectId}
-                disabled={busy}
-                onPress={() => void patch({ projectId: null })}
-              >
-                No project
-              </Button>
-              {projects.map((project) => (
-                <Button
-                  key={project.id}
-                  small
-                  primary={task.projectId === project.id}
-                  disabled={busy}
-                  onPress={() => void patch({ projectId: project.id })}
-                >
-                  {project.name}
-                </Button>
-              ))}
-            </View>
-          </ScrollView>
-        </View>
-        <Button primary disabled={busy} onPress={saveFields}>
-          Save changes
-        </Button>
+
         <View style={{ gap: 6 }}>
           <Text style={s.label}>Assignee</Text>
-          <View style={[s.row, { gap: 8, flexWrap: "wrap" }]}>
-            <Button
-              small
-              primary={!task.assignee}
-              disabled={busy}
-              onPress={() => void patch({ assignee: null })}
-            >
-              Unassigned
-            </Button>
-            <Button
-              small
-              primary={task.assignee === "agent"}
-              disabled={busy}
-              onPress={() => void patch({ assignee: "agent" })}
-            >
-              Agent
-            </Button>
-          </View>
+          <Segmented<"none" | "agent">
+            label="Assignee"
+            value={task.assignee === "agent" ? "agent" : "none"}
+            disabled={busy}
+            onChange={(assignee) => void patch({ assignee: assignee === "agent" ? "agent" : null })}
+            options={[
+              { id: "none", label: "Unassigned" },
+              { id: "agent", label: "Agent" },
+            ]}
+          />
           {manual && !task.assignee && (
             <Text style={s.small}>Assign to the agent to have it run this issue.</Text>
           )}
@@ -233,27 +184,50 @@ export function TaskDetail({
             </Text>
           )}
         </View>
+
         <View style={{ gap: 6 }}>
-          <Text style={s.label}>Move to</Text>
-          <View style={[s.row, { gap: 8, flexWrap: "wrap" }]}>
-            {transitions.map((status) => (
-              <Button
-                key={status}
-                small
-                primary={task.status === status}
-                disabled={busy}
-                onPress={() => void patch({ status })}
-              >
-                {statusLabel(status)}
-              </Button>
-            ))}
-          </View>
-          {!manual && (
-            <Text style={s.small}>
-              Worker tasks can only be queued, paused, or cancelled by hand.
-            </Text>
-          )}
+          <Text style={s.label}>Project</Text>
+          <Segmented<string>
+            label="Project"
+            value={task.projectId ?? "none"}
+            disabled={busy}
+            onChange={(projectId) =>
+              void patch({ projectId: projectId === "none" ? null : projectId })
+            }
+            options={[
+              { id: "none", label: "No project" },
+              ...projects.map((project) => ({ id: project.id, label: project.name })),
+            ]}
+          />
         </View>
+
+        <View style={{ height: 1, backgroundColor: "#EEEEF0" }} />
+
+        <View style={{ gap: 4 }}>
+          <Text style={s.label}>Details</Text>
+          <Text style={s.small}>Changes here are saved with the button below.</Text>
+        </View>
+        <View>
+          <Field label="Title" value={title} onChangeText={setTitle} />
+          <View style={[s.row, { gap: 10, alignItems: "flex-start" }]}>
+            <View style={{ flex: 1 }}>
+              <DateOnlyField label="Start date" value={startAt} onChange={setStartAt} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <DateOnlyField label="Due date" value={dueAt} onChange={setDueAt} />
+            </View>
+          </View>
+          <Field
+            label="Labels (comma-separated)"
+            value={labels}
+            onChangeText={setLabels}
+            placeholder="errands, trip"
+          />
+          <Button primary disabled={busy} onPress={saveFields}>
+            Save details
+          </Button>
+        </View>
+
         {!!blockers.length && (
           <View style={{ gap: 8 }}>
             <Text style={s.label}>Blocked by</Text>
@@ -275,7 +249,7 @@ export function TaskDetail({
             }
           }}
         >
-          {armed ? "Tap again to confirm delete" : "Delete"}
+          {armed ? "Press again to confirm delete" : "Delete"}
         </Button>
       </View>
     </Sheet>

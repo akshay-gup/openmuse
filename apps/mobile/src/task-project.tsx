@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import type { Project } from "../../../packages/domain/src/agent";
 import { useAgentWorkspace } from "./agent-workspace";
-import { Button, ErrorNotice, Field, Sheet, s } from "./ui";
+import { Button, colors, ErrorNotice, Field, Sheet, s } from "./ui";
 import { useWorkspace } from "./workspace";
 
 /** null = All projects, "none" = No project, otherwise a project id. */
@@ -34,11 +34,11 @@ export function ProjectSwitcher({
         paddingVertical: 10,
         minHeight: 40,
         justifyContent: "center",
-        backgroundColor: active ? "#1F1F24" : "#EDEDEF",
+        backgroundColor: active ? colors.blue : "#EDEDEF",
       }}
     >
       <Text
-        style={[s.small, { fontWeight: "700", color: active ? "#FFFFFF" : "#1F1F24" }]}
+        style={[s.small, { fontWeight: active ? "700" : "600", color: colors.text }]}
         numberOfLines={1}
       >
         {label}
@@ -63,13 +63,13 @@ export function ProjectSwitcher({
               paddingVertical: 10,
               minHeight: 40,
               justifyContent: "center",
-              backgroundColor: selected === project.id ? "#1F1F24" : "#EDEDEF",
+              backgroundColor: selected === project.id ? colors.blue : "#EDEDEF",
             }}
           >
             <Text
               style={[
                 s.small,
-                { fontWeight: "700", color: selected === project.id ? "#FFFFFF" : "#1F1F24" },
+                { fontWeight: selected === project.id ? "700" : "600", color: colors.text },
               ]}
               numberOfLines={1}
             >
