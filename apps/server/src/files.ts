@@ -48,7 +48,11 @@ export class Files {
     return this.signed(owner, artifact);
   }
   signed(owner: string, file: Artifact): Artifact {
-    return { ...file, url: this.auth.sign(owner, `/api/files/${file.id}/content`) };
+    return { ...file, url: this.signPath(owner, `/api/files/${file.id}/content`) };
+  }
+  /** A time-limited link to a download route, usable without the access key. */
+  signPath(owner: string, path: string): string {
+    return this.auth.sign(owner, path);
   }
   async list(owner: string) {
     return (await this.db.list<Artifact>(owner, "files")).map((file) => this.signed(owner, file));

@@ -49,7 +49,23 @@ export interface TaskStep {
 export const taskBriefLimits = {
   noteChars: 4000,
   notes: 50,
+  attachments: 10,
+  attachmentBytes: 10 * 1024 * 1024,
+  attachmentTotalBytes: 25 * 1024 * 1024,
 } as const;
+/** File types a task can carry: documents and images the agent can read. Keyed by extension. */
+export const attachmentTypes: Readonly<Record<string, string>> = {
+  ".pdf": "application/pdf",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".webp": "image/webp",
+  ".gif": "image/gif",
+  ".txt": "text/plain",
+  ".md": "text/markdown",
+  ".csv": "text/csv",
+  ".json": "application/json",
+};
 /** A line of guidance on a task. Notes are append-only: the agent reads them in order, every run. */
 export interface TaskNote {
   id: string;
@@ -64,6 +80,23 @@ export interface TaskNote {
   mine?: boolean;
   /** False until the agent has seen it: in a run's prompt, or sent live to the running session. */
   delivered: boolean;
+}
+/** A file attached to a task. The bytes live on the server; each run stages them for the agent. */
+export interface TaskAttachment {
+  id: string;
+  name: string;
+  mimeType: string;
+  size: number;
+  addedAt: string;
+  addedBy?: string;
+  /** Display name for `addedBy`, filled in when the task is sent to a client. */
+  addedByName?: string;
+  /** True when the person it is sent to attached it. Filled in when the task is sent to a client. */
+  mine?: boolean;
+  /** A PDF is also saved in Files, so the agent's PDF tools (inspect_pdf, fill_pdf) can open it. */
+  fileId?: string;
+  /** Signed download address, filled in when the task is sent to a client. */
+  url?: string;
 }
 export interface AgentTask {
   id: string;
@@ -105,6 +138,8 @@ export interface AgentTask {
   createdByName?: string;
   /** Guidance for whoever does the work, oldest first. The agent reads all of it on every run. */
   notes?: TaskNote[];
+  /** Files the work needs. They are staged into the agent's workspace for each run. */
+  attachments?: TaskAttachment[];
   plan: TaskStep[];
   evidence: Evidence[];
   input: Record<string, unknown>;

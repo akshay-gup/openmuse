@@ -55,6 +55,46 @@ export function agentRoutes(service: AgentService): Hono<{ Variables: { owner: s
   app.delete("/tasks/:id/notes/:noteId", async (c) =>
     c.json(await service.removeNote(c.get("owner"), c.req.param("id"), c.req.param("noteId"))),
   );
+  app.post("/tasks/:id/attachments", async (c) => {
+    const file = (await c.req.parseBody()).file;
+    if (!(file instanceof File)) throw new AppError("Choose a file to attach");
+    return c.json(
+      await service.addAttachment(c.get("owner"), c.req.param("id"), {
+        name: file.name,
+        bytes: new Uint8Array(await file.arrayBuffer()),
+      }),
+      201,
+    );
+  });
+  app.delete("/tasks/:id/attachments/:attachmentId", async (c) =>
+    c.json(
+      await service.removeAttachment(
+        c.get("owner"),
+        c.req.param("id"),
+        c.req.param("attachmentId"),
+      ),
+    ),
+  );
+  /** Signed, like Files, so a browser can open it without the access key. */
+  app.get("/tasks/:id/attachments/:attachmentId/content", async (c) => {
+    const { file, bytes } = await service.attachmentContent(
+      c.get("owner"),
+      c.req.param("id"),
+      c.req.param("attachmentId"),
+    );
+    const inline = file.mimeType === "application/pdf" || file.mimeType.startsWith("image/");
+    c.header("Content-Type", file.mimeType);
+    c.header(
+      "Content-Disposition",
+      `${inline ? "inline" : "attachment"}; filename*=UTF-8''${encodeURIComponent(file.name)}`,
+    );
+    // Uploaded by a person: never let a browser guess a type or run anything from it. (A sandboxed
+    // page cannot open a PDF in the browser's own reader, so PDFs get the type header alone.)
+    c.header("X-Content-Type-Options", "nosniff");
+    if (file.mimeType !== "application/pdf")
+      c.header("Content-Security-Policy", "sandbox; default-src 'none'");
+    return c.body(bytes);
+  });
   app.post("/tasks/:id/control", async (c) => {
     const { action } = z
       .object({ action: z.enum(["pause", "resume", "cancel", "retry"]) })

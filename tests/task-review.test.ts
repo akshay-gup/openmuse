@@ -1,15 +1,22 @@
 import assert from "node:assert/strict";
+import { existsSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, test } from "node:test";
+import { PDFDocument } from "pdf-lib";
 import { createApp } from "../apps/server/src/app.ts";
 import type { Config } from "../apps/server/src/config.ts";
 import { createStore, type Store } from "../apps/server/src/db.ts";
+import { conversationTools } from "../apps/server/src/engine/tools.ts";
 import type { AgentTask, AgentWorkspace } from "../packages/domain/src/agent.ts";
 import { taskBriefLimits } from "../packages/domain/src/agent.ts";
+import type { Artifact } from "../packages/domain/src/index.ts";
 
-/** Notes on a task: what the team tells the agent besides the task itself. */
+/**
+ * Notes and files on a task: what the team tells the agent besides the task itself. Every run reads
+ * all of them.
+ */
 
 let db: Store, server: Awaited<ReturnType<typeof createApp>>, directory: string, token: string;
 const person = "local-user";
@@ -30,6 +37,16 @@ async function read<T>(path: string, body?: unknown, status = 200, method?: stri
   assert.equal(response.status, status, await response.clone().text());
   return response.json();
 }
+const upload = (taskId: string, name: string, bytes: Uint8Array, type = "text/plain") => {
+  const form = new FormData();
+  form.append("file", new File([bytes as BlobPart], name, { type }));
+  return server.app.request(`/api/agent/tasks/${taskId}/attachments`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: form,
+  });
+};
+const text = (value: string) => new TextEncoder().encode(value);
 const force = (id: string, patch: Record<string, unknown>) =>
   db.compareAndSwap("shared", "tasks", id, {}, patch);
 const create = (body: Record<string, unknown> = {}) =>
@@ -40,6 +57,12 @@ async function inReview(body: Record<string, unknown> = {}) {
   await force(task.id, { status: "in_review", result: "Here is what I did.", attempts: 1 });
   return task;
 }
+async function pdf(): Promise<Uint8Array> {
+  const document = await PDFDocument.create();
+  document.addPage();
+  return document.save();
+}
+
 before(async () => {
   directory = await mkdtemp(join(tmpdir(), "hive-task-review-"));
   db = await createStore({ dataDir: join(directory, "db") });
@@ -69,6 +92,38 @@ after(async () => {
   await server?.agent?.stop();
   await db?.close();
   if (directory) await rm(directory, { recursive: true, force: true });
+});
+
+test("what the agent reads about a task includes its notes and file names, but no download links", async () => {
+  const task = await create();
+  await server.agent.addNote(person, task.id, { text: "Mind the budget" });
+  await server.agent.addAttachment(person, task.id, { name: "budget.csv", bytes: text("a,b\n") });
+  const tools = conversationTools(
+    server.agent,
+    person,
+    {
+      threadId: "t",
+      runId: "r",
+      messages: [],
+      tools: [],
+      context: [],
+      state: {},
+      forwardedProps: {},
+    },
+    { signal: new AbortController().signal, requestKey: "test" },
+  );
+  const status = tools.find((tool) => tool.name === "agent_status");
+  assert.ok(status);
+  const seen = (
+    await (status.execute as (args: unknown) => Promise<AgentWorkspace>)({})
+  ).tasks.find((t) => t.id === task.id);
+  assert.equal(seen?.notes?.[0].text, "Mind the budget");
+  assert.equal(seen?.attachments?.[0].name, "budget.csv");
+  assert.equal(seen?.attachments?.[0].url, undefined);
+  assert.ok(!JSON.stringify(seen).includes("signature="));
+  // People still get their links.
+  const snapshot = (await server.agent.snapshot(person)).tasks.find((t) => t.id === task.id);
+  assert.ok(snapshot?.attachments?.[0].url?.includes("signature="));
 });
 
 // ---- Notes -----------------------------------------------------------------------------------
@@ -263,4 +318,176 @@ test("notes added at the same moment are all kept", async () => {
     Array.from({ length: 15 }, (_, i) => server.agent.addNote(person, task.id, { text: `n${i}` })),
   );
   assert.equal((await server.agent.getTask(person, task.id)).notes?.length, 15);
+});
+
+// ---- Files -------------------------------------------------------------------------------------
+
+test("a text file attached to a task is stored privately and downloaded through a signed link", async () => {
+  const task = await create();
+  const response = await upload(task.id, "budget.csv", text("item,cost\nvenue,1000\n"), "text/csv");
+  assert.equal(response.status, 201);
+  const saved: AgentTask = await response.json();
+  const [file] = saved.attachments ?? [];
+  assert.equal(file.name, "budget.csv");
+  assert.equal(file.mimeType, "text/csv");
+  assert.equal(file.size, 21);
+  assert.equal(file.mine, true);
+  assert.equal(file.addedByName, "Pat");
+  assert.ok(file.url?.includes("signature="));
+  assert.equal(file.fileId, undefined, "only PDFs are also kept in Files");
+
+  // The bytes are on disk away from any workspace.
+  assert.ok(existsSync(join(directory, "task-files", task.id, file.id)));
+
+  // The link works without the access key...
+  const link = new URL(file.url ?? "");
+  const download = await server.app.request(`${link.pathname}${link.search}`);
+  assert.equal(download.status, 200);
+  assert.equal(await download.text(), "item,cost\nvenue,1000\n");
+  assert.equal(download.headers.get("content-type"), "text/csv");
+  assert.match(download.headers.get("content-disposition") ?? "", /^attachment; filename\*=/);
+  assert.equal(download.headers.get("x-content-type-options"), "nosniff");
+  assert.match(download.headers.get("content-security-policy") ?? "", /sandbox/);
+
+  // ...but only for that file: the signature does not carry over to another path or none at all.
+  const other = await server.app.request(
+    `/api/agent/tasks/${task.id}/attachments/other/content${link.search}`,
+  );
+  assert.equal(other.status, 403);
+  const unsigned = await server.app.request(link.pathname);
+  assert.equal(unsigned.status, 401);
+
+  // The snapshot sends clients a fresh link, and the sheet shows who added it.
+  const snapshot = (await read<AgentWorkspace>("")).tasks.find((t) => t.id === task.id);
+  assert.ok(snapshot?.attachments?.[0].url);
+});
+
+test("only supported, genuine files are accepted", async () => {
+  const task = await create();
+  const refused = async (name: string, bytes: Uint8Array, status: number, pattern: RegExp) => {
+    const response = await upload(task.id, name, bytes);
+    assert.equal(response.status, status, name);
+    assert.match(((await response.json()) as { error: string }).error, pattern, name);
+  };
+  await refused("run.exe", text("MZ"), 422, /Attach a PDF/);
+  await refused("noext", text("hello"), 422, /Attach a PDF/);
+  await refused("empty.txt", new Uint8Array(), 422, /empty/);
+  await refused("fake.png", text("this is not a png"), 422, /not a real PNG/);
+  await refused("fake.pdf", text("%PDF"), 422, /not a real PDF/);
+  await refused("binary.txt", new Uint8Array([104, 105, 0, 1, 2]), 422, /not a real TXT/);
+  await refused("latin1.md", new Uint8Array([0xff, 0xfe, 0xfd]), 422, /not a real MD/);
+  await refused(
+    "big.txt",
+    new Uint8Array(taskBriefLimits.attachmentBytes + 1).fill(97),
+    413,
+    /10 MB or smaller/,
+  );
+  const missing = await server.app.request(`/api/agent/tasks/${task.id}/attachments`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: new FormData(),
+  });
+  assert.equal(missing.status, 400);
+  assert.equal((await server.agent.getTask(person, task.id)).attachments, undefined);
+
+  // Real ones are fine, and the type comes from the file, not from what the browser claims.
+  const png = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0]);
+  const accepted = await upload(task.id, "../../etc/Photo.PNG", png, "text/html");
+  assert.equal(accepted.status, 201);
+  const [file] = ((await accepted.json()) as AgentTask).attachments ?? [];
+  assert.equal(
+    file.name,
+    "Photo.png",
+    "the folder part of a name is dropped, the extension tidied",
+  );
+  assert.equal(file.mimeType, "image/png");
+});
+
+test("a task holds a limited number of files, and a limited total size", async () => {
+  const task = await create();
+  for (let i = 0; i < taskBriefLimits.attachments; i++)
+    assert.equal((await upload(task.id, `f${i}.txt`, text(`file ${i}`))).status, 201);
+  const full = await upload(task.id, "extra.txt", text("one too many"));
+  assert.equal(full.status, 409);
+  assert.match(((await full.json()) as { error: string }).error, /10 files/);
+
+  const heavy = await create();
+  const nine = new Uint8Array(9 * 1024 * 1024).fill(97);
+  assert.equal((await upload(heavy.id, "a.txt", nine)).status, 201);
+  assert.equal((await upload(heavy.id, "b.txt", nine)).status, 201);
+  const over = await upload(heavy.id, "c.txt", nine);
+  assert.equal(over.status, 413);
+  assert.match(((await over.json()) as { error: string }).error, /25 MB/);
+});
+
+test("files arriving together cannot slip past the total size limit", async () => {
+  const task = await create();
+  const nine = new Uint8Array(9 * 1024 * 1024).fill(97);
+  const results = await Promise.all(
+    ["a", "b", "c", "d"].map((name) => upload(task.id, `${name}.txt`, nine)),
+  );
+  assert.deepEqual(results.map((r) => r.status).sort(), [201, 201, 413, 413]);
+  const saved = await server.agent.getTask(person, task.id);
+  assert.equal(saved.attachments?.length, 2);
+});
+
+test("a PDF attached to a task is also kept in Files for the agent's PDF tools", async () => {
+  const task = await create();
+  const response = await upload(task.id, "permission-slip.pdf", await pdf(), "application/pdf");
+  assert.equal(response.status, 201);
+  const [file] = ((await response.json()) as AgentTask).attachments ?? [];
+  assert.equal(file.mimeType, "application/pdf");
+  assert.ok(file.fileId);
+  const kept = await db.get<Artifact>(person, "files", file.fileId);
+  assert.equal(kept?.name, "permission-slip.pdf");
+  assert.equal(kept?.source, "Attached to a task");
+  // A PDF opens in the browser's own reader, so it is served inline and unsandboxed.
+  const link = new URL(file.url ?? "");
+  const viewed = await server.app.request(`${link.pathname}${link.search}`);
+  assert.equal(viewed.headers.get("content-type"), "application/pdf");
+  assert.match(viewed.headers.get("content-disposition") ?? "", /^inline;/);
+  assert.equal(viewed.headers.get("x-content-type-options"), "nosniff");
+  assert.equal(viewed.headers.get("content-security-policy"), null);
+  // A PDF that does not open is refused before it is stored.
+  const broken = await upload(
+    task.id,
+    "broken.pdf",
+    text("%PDF-1.7 but nothing else"),
+    "application/pdf",
+  );
+  assert.ok(broken.status >= 400 && broken.status < 500, String(broken.status));
+  assert.equal((await server.agent.getTask(person, task.id)).attachments?.length, 1);
+});
+
+test("only the person who attached a file removes it, and its bytes go with it", async () => {
+  const task = await create();
+  const added = await server.agent.addAttachment("alice", task.id, {
+    name: "plan.md",
+    bytes: text("# Plan"),
+  });
+  const file = added.attachments?.[0];
+  assert.ok(file);
+  const stored = join(directory, "task-files", task.id, file.id);
+  assert.ok(existsSync(stored));
+  await assert.rejects(
+    server.agent.removeAttachment("bob", task.id, file.id),
+    /files you attached/,
+  );
+  await assert.rejects(server.agent.removeAttachment("alice", task.id, "nope"), /File not found/);
+  const after = await server.agent.removeAttachment("alice", task.id, file.id);
+  assert.deepEqual(after.attachments, []);
+  assert.ok(!existsSync(stored));
+  const gone = await server.app.request(new URL(file.url ?? "http://x/").pathname, {
+    headers: headers(),
+  });
+  assert.equal(gone.status, 404);
+});
+
+test("deleting a task deletes its files", async () => {
+  const task = await create();
+  await upload(task.id, "keep.txt", text("hi"));
+  const folder = join(directory, "task-files", task.id);
+  assert.ok(existsSync(folder));
+  await read(`/tasks/${task.id}`, undefined, 200, "DELETE");
+  assert.ok(!existsSync(folder));
 });

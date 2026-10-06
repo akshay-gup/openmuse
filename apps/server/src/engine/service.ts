@@ -23,6 +23,7 @@ import {
   ORCHESTRATOR_CHANNEL_ID,
   type Project,
   type RunEvent,
+  type TaskAttachment,
   type TaskNote,
   type TaskStatus,
   taskBriefLimits,
@@ -49,6 +50,7 @@ import type { WorkspaceService } from "../workspace.ts";
 import { ChannelManager } from "./channels.ts";
 import { analyzeSpending } from "./finance.ts";
 import { executeModelTask } from "./model.ts";
+import { inspectAttachment, TaskFiles } from "./task-files.ts";
 import {
   channelWorkspaceDir,
   diskOwnerForChannel,
@@ -73,6 +75,8 @@ export class AgentService {
    * execution through OpenCode sessions; also enables session title sync.
    */
   opencodeRuntime?: OpencodeTaskRuntime;
+  /** The bytes of the files attached to tasks, and how they reach an agent. */
+  readonly taskFiles: TaskFiles;
   constructor(
     readonly db: Store,
     readonly config: Config,
@@ -82,6 +86,7 @@ export class AgentService {
     readonly browser: BrowserService,
     readonly threads: ThreadBindingStore = new LocalDiskThreadStore(config.dataDir),
   ) {
+    this.taskFiles = new TaskFiles(config.dataDir);
     this.worker = new TaskWorker(db, (owner, task, context) => this.execute(owner, task, context), {
       settled: (owner, task) => this.publishOutcome(owner, task),
       // In orchestrator mode the main process only runs orchestrator-channel tasks;
@@ -456,8 +461,8 @@ export class AgentService {
     return task;
   }
   /**
-   * Tasks as a client sees them: who asked, and who wrote each note. The names are for display and
-   * are never stored.
+   * Tasks as a client sees them: who asked, who wrote each note and added each file, and a signed
+   * download link for each file. The names and links are for display and are never stored.
    */
   private async present(owner: string, tasks: AgentTask[]): Promise<AgentTask[]> {
     const names = await requesterNames(
@@ -465,19 +470,33 @@ export class AgentService {
       tasks.flatMap((task) => [
         task.createdBy,
         ...(task.notes ?? []).map((note) => note.createdBy),
+        ...(task.attachments ?? []).map((file) => file.addedBy),
       ]),
     );
     const nameOf = (id?: string) => (id ? names.get(id) : undefined);
     return tasks.map((task) => {
       const named = withRequester(task, names);
-      if (!named.notes?.length) return named;
+      if (!named.notes?.length && !named.attachments?.length) return named;
       return {
         ...named,
-        notes: named.notes.map((note) => ({
-          ...note,
-          createdByName: nameOf(note.createdBy),
-          mine: note.createdBy === owner,
-        })),
+        ...(named.notes && {
+          notes: named.notes.map((note) => ({
+            ...note,
+            createdByName: nameOf(note.createdBy),
+            mine: note.createdBy === owner,
+          })),
+        }),
+        ...(named.attachments && {
+          attachments: named.attachments.map((file) => ({
+            ...file,
+            addedByName: nameOf(file.addedBy),
+            mine: file.addedBy === owner,
+            url: this.files.signPath(
+              owner,
+              `/api/agent/tasks/${task.id}/attachments/${file.id}/content`,
+            ),
+          })),
+        }),
       };
     });
   }
@@ -862,6 +881,10 @@ export class AgentService {
       throw new AppError("Stop the task before deleting it", 409);
     this.worker.abort(id);
     await this.db.remove(owner, "tasks", id);
+    // Its files go too: the stored bytes and any copies left in the agent's workspace.
+    await this.taskFiles
+      .removeAll(id, this.workspaceOf(task, owner))
+      .catch((error) => backgroundFailure("remove task files", error));
     for (const other of await this.db.list<AgentTask>(owner, "tasks"))
       if (other.blockedBy.includes(id))
         await this.db.put(owner, "tasks", {
@@ -919,6 +942,15 @@ export class AgentService {
       title,
       detail,
     } satisfies RunEvent);
+  }
+  /** The folder a task's runs work in, where its files are staged for the agent. */
+  workspaceOf(task: AgentTask, owner: string): string {
+    const channelId = task.originChannelId ?? ORCHESTRATOR_CHANNEL_ID;
+    return channelWorkspaceDir(
+      this.config.dataDir,
+      diskOwnerForChannel(channelId, task.createdBy ?? owner),
+      channelId,
+    );
   }
   /** Where a task can be sent back from: the agent has stopped, and is waiting on or finished with the team. */
   private static readonly sendBackFrom: ReadonlySet<TaskStatus> = new Set([
@@ -1016,6 +1048,105 @@ export class AgentService {
     });
     if (!saved) throw new AppError("Task not found", 404);
     return (await this.present(owner, [saved]))[0];
+  }
+  private readonly attaching = new Map<string, Promise<unknown>>();
+  /** One at a time per task, so the size limits hold when several files arrive together. */
+  private async oneAtATime<T>(key: string, work: () => Promise<T>): Promise<T> {
+    const previous = this.attaching.get(key) ?? Promise.resolve();
+    const run = previous.then(work, work);
+    const tail = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    this.attaching.set(key, tail);
+    try {
+      return await run;
+    } finally {
+      if (this.attaching.get(key) === tail) this.attaching.delete(key);
+    }
+  }
+  /** Attach a file to a task: a PDF, an image, or a text, Markdown, CSV or JSON file. */
+  async addAttachment(
+    owner: string,
+    id: string,
+    upload: { name: string; bytes: Uint8Array },
+  ): Promise<AgentTask> {
+    const checked = inspectAttachment(upload.name, upload.bytes);
+    const saved = await this.oneAtATime(id, async () => {
+      const task = await this.getTask(owner, id);
+      const held = task.attachments ?? [];
+      if (held.length >= taskBriefLimits.attachments)
+        throw new AppError(
+          `A task can carry ${taskBriefLimits.attachments} files. Remove one first.`,
+          409,
+        );
+      if (
+        held.reduce((total, file) => total + file.size, 0) + upload.bytes.length >
+        taskBriefLimits.attachmentTotalBytes
+      )
+        throw new AppError(
+          `The files on a task can total ${taskBriefLimits.attachmentTotalBytes / (1024 * 1024)} MB. Remove one first.`,
+          413,
+        );
+      const attachment: TaskAttachment = {
+        id: randomUUID(),
+        name: checked.name,
+        mimeType: checked.mimeType,
+        size: upload.bytes.length,
+        addedAt: date(),
+        addedBy: owner,
+      };
+      // A PDF is also kept in Files, which checks that it opens and lets the agent's PDF tools read it.
+      if (checked.mimeType === "application/pdf")
+        attachment.fileId = (
+          await this.files.import(owner, checked.name, upload.bytes, "Attached to a task")
+        ).id;
+      await this.taskFiles.save(id, attachment.id, upload.bytes);
+      const next = await this.db.appendItem<AgentTask>(
+        owner,
+        "tasks",
+        id,
+        "attachments",
+        attachment,
+        { max: taskBriefLimits.attachments, merge: { updatedAt: date() } },
+      );
+      if (!next) {
+        await this.taskFiles.remove(id, attachment.id);
+        throw new AppError("Task not found", 404);
+      }
+      return { next, attachment };
+    });
+    await this.logInstruction(
+      owner,
+      id,
+      `${await this.personName(owner)} attached a file`,
+      saved.attachment.name,
+    );
+    return (await this.present(owner, [saved.next]))[0];
+  }
+  /** Take a file off a task. Only the person who attached it can. */
+  async removeAttachment(owner: string, id: string, attachmentId: string): Promise<AgentTask> {
+    const task = await this.getTask(owner, id);
+    const file = task.attachments?.find((entry) => entry.id === attachmentId);
+    if (!file) throw new AppError("File not found", 404);
+    if (file.addedBy !== owner) throw new AppError("You can only remove files you attached", 403);
+    const saved = await this.db.removeItem<AgentTask>(
+      owner,
+      "tasks",
+      id,
+      "attachments",
+      attachmentId,
+      { updatedAt: date() },
+    );
+    if (!saved) throw new AppError("Task not found", 404);
+    await this.taskFiles.remove(id, attachmentId);
+    return (await this.present(owner, [saved]))[0];
+  }
+  async attachmentContent(owner: string, id: string, attachmentId: string) {
+    const task = await this.getTask(owner, id);
+    const file = task.attachments?.find((entry) => entry.id === attachmentId);
+    if (!file) throw new AppError("File not found", 404);
+    return { file, bytes: await this.taskFiles.read(id, attachmentId) };
   }
   async markNotesDelivered(owner: string, taskId: string, noteIds: string[]) {
     if (noteIds.length)

@@ -95,7 +95,8 @@ export async function createApp(
     "*",
     bodyLimit({
       maxSize: 12 * 1024 * 1024,
-      onError: (c) => c.json({ error: "Request is too large; PDFs must be 10 MB or smaller" }, 413),
+      onError: (c) =>
+        c.json({ error: "Request is too large; files must be 10 MB or smaller" }, 413),
     }),
   );
   app.onError((error, c) => {
@@ -196,7 +197,7 @@ export async function createApp(
   app.route("/api/hive-tools", hiveTools.routes);
   app.use("/api/*", async (c, next) => {
     const signedRoute =
-      /^\/api\/files\/[^/]+\/content$|^\/api\/browsers\/[^/]+\/(?:preview|console)$/.test(
+      /^\/api\/files\/[^/]+\/content$|^\/api\/agent\/tasks\/[^/]+\/attachments\/[^/]+\/content$|^\/api\/browsers\/[^/]+\/(?:preview|console)$/.test(
         c.req.path,
       );
     const owner =
