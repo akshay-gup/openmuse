@@ -150,17 +150,35 @@ export function agentRoutes(service: AgentService): Hono<{ Variables: { owner: s
   app.post("/channels/:id/files", async (c) => {
     const form = await c.req.parseBody();
     if (!(form.file instanceof File)) throw new AppError("Choose a file to add");
-    return c.json(
-      await service.channelFiles.save(
-        c.get("owner"),
-        c.req.param("id"),
-        typeof form.dir === "string" ? form.dir : undefined,
-        form.file.name,
-        new Uint8Array(await form.file.arrayBuffer()),
-      ),
-      201,
+    const owner = c.get("owner");
+    const id = c.req.param("id");
+    // A file added for an agent's request goes where the agent asked, and is recorded against it.
+    const request = typeof form.request === "string" && form.request ? form.request : undefined;
+    const saved = await service.channelFiles.save(
+      owner,
+      id,
+      request
+        ? await service.uploadRequests.folder(owner, id, request)
+        : typeof form.dir === "string"
+          ? form.dir
+          : undefined,
+      form.file.name,
+      new Uint8Array(await form.file.arrayBuffer()),
     );
+    if (request)
+      await service.uploadRequests.attach(owner, id, request, {
+        path: saved.path,
+        name: saved.name,
+        size: saved.size,
+        kind: saved.kind,
+      });
+    return c.json(saved, 201);
   });
+  app.get("/channels/:id/uploads/:requestId", async (c) =>
+    c.json(
+      await service.uploadRequests.get(c.get("owner"), c.req.param("id"), c.req.param("requestId")),
+    ),
+  );
   /**
    * A file's bytes, for a link made by `channelFiles.info` or `.list`. The token in the path is the
    * credential (and says what the link covers), so a page's relative links to the files beside it

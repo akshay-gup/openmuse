@@ -11,6 +11,20 @@ import { tanstackAgent } from "./tanstack-agent.ts";
 import { conversationTools } from "./tools.ts";
 import type { TaskContext } from "./worker.ts";
 
+/**
+ * The conversation tools a task run keeps. The worker's own tools win a name they share, and a task
+ * cannot wait for a person in the chat the way a conversation can: it asks with ask_user and is
+ * paused, so it is not offered request_upload.
+ */
+export function sharedTaskTools<T extends { name: string }>(
+  shared: readonly T[],
+  workerTools: readonly { name: string }[],
+): T[] {
+  return shared.filter(
+    (tool) => tool.name !== "request_upload" && !workerTools.some((own) => own.name === tool.name),
+  );
+}
+
 export async function executeModelTask(
   service: AgentService,
   owner: string,
@@ -306,17 +320,15 @@ export async function executeModelTask(
       },
     );
     const merged = [
-      ...shared
-        .filter((t) => !tools.some((workerTool) => workerTool.name === t.name))
-        .map((t) => ({
-          ...t,
-          execute: (args: unknown) =>
-            serial(async () => {
-              if (outcome) return { paused: true, status: outcome.status };
-              await ctx.guard();
-              return (t.execute as (args: unknown) => Promise<unknown>)(args);
-            }),
-        })),
+      ...sharedTaskTools(shared, tools).map((t) => ({
+        ...t,
+        execute: (args: unknown) =>
+          serial(async () => {
+            if (outcome) return { paused: true, status: outcome.status };
+            await ctx.guard();
+            return (t.execute as (args: unknown) => Promise<unknown>)(args);
+          }),
+      })),
       ...tools,
     ];
     const result = await runOpencodeTask(

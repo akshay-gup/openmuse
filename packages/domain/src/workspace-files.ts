@@ -214,3 +214,46 @@ export const sentFileSchema = z.object({
 /** `send_file` could not share the file, and says why, in words the agent can act on. */
 export const unsentFileSchema = z.object({ sent: z.literal(false), error: z.string() });
 export type SentFile = z.infer<typeof sentFileSchema>;
+
+/** How much an agent may ask a person for in one request, and how long it may take to say so. */
+export const uploadRequestLimits = { prompt: 500, files: 20, accept: 12 } as const;
+
+/**
+ * What `request_upload` returns: the agent has asked a person for files. It comes back at once
+ * (the agent cannot wait on a person), the chat shows an upload button for it, and what they
+ * upload is saved in `folder` and reaches the agent as their next message.
+ */
+export const uploadRequestSchema = z.object({
+  requested: z.literal(true),
+  channelId: z.string(),
+  requestId: z.string(),
+  prompt: z.string(),
+  /** Extensions the agent expects, such as `pdf`. Guidance for the picker, not a rule. */
+  accept: z.array(z.string()).optional(),
+  multiple: z.boolean(),
+  /** Where the files are saved, relative to the channel's workspace. */
+  folder: z.string(),
+});
+export type UploadRequest = z.infer<typeof uploadRequestSchema>;
+/** `request_upload` could not ask, and says why, in words the agent can act on. */
+export const unrequestedUploadSchema = z.object({ requested: z.literal(false), error: z.string() });
+
+/** A file a person added in answer to a request. */
+export interface UploadedFile {
+  path: string;
+  name: string;
+  size: number;
+  kind?: FileKind;
+  uploadedAt: string;
+  uploadedBy?: string;
+  /** Who added it, for display; filled in when the request is sent to a client. */
+  uploadedByName?: string;
+  /** True when the person it is sent to added it. Filled in when the request is sent to a client. */
+  mine?: boolean;
+}
+
+/** A request as a client sees it: what was asked, and what has been uploaded for it so far. */
+export interface UploadRequestState extends Omit<UploadRequest, "requested"> {
+  files: UploadedFile[];
+  createdAt: string;
+}

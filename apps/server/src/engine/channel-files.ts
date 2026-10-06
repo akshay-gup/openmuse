@@ -181,6 +181,14 @@ export class ChannelFiles {
     throw new AppError("Share files from inside this channel's workspace", 422);
   }
 
+  /** The folder files for a request go in: the uploads folder unless named, never hidden or Hive's own. */
+  async folderFor(owner: string, channelId: string, raw?: string): Promise<string> {
+    await this.root(owner, channelId, true);
+    const segments = segmentsOf(raw?.trim() || uploadsFolder);
+    if (!segments.length || hidden(segments)) throw new AppError("Choose a different folder", 422);
+    return segments.join("/");
+  }
+
   /** One folder: folders first, then files, each by name. Links are never followed. */
   async list(owner: string, channelId: string, path = ""): Promise<ChannelFolder> {
     const root = await this.root(owner, channelId);

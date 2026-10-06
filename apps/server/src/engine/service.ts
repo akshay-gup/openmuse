@@ -60,6 +60,7 @@ import {
   SHARED_OWNER,
   type ThreadBindingStore,
 } from "./threads.ts";
+import { UploadRequests } from "./upload-requests.ts";
 import { LostLeaseError, type TaskContext, TaskWorker } from "./worker.ts";
 
 const hash = (text: string) => createHash("sha256").update(text).digest("hex");
@@ -81,6 +82,8 @@ export class AgentService {
   readonly taskFiles: TaskFiles;
   /** What is in each channel's workspace: what the agent makes there and what people add. */
   readonly channelFiles: ChannelFiles;
+  /** What an agent has asked people to upload, and what they have uploaded for it. */
+  readonly uploadRequests: UploadRequests;
   constructor(
     readonly db: Store,
     readonly config: Config,
@@ -92,6 +95,7 @@ export class AgentService {
   ) {
     this.taskFiles = new TaskFiles(config.dataDir);
     this.channelFiles = new ChannelFiles(config, files, (owner, id) => this.getChannel(owner, id));
+    this.uploadRequests = new UploadRequests(db);
     this.worker = new TaskWorker(db, (owner, task, context) => this.execute(owner, task, context), {
       settled: (owner, task) => this.publishOutcome(owner, task),
       // In orchestrator mode the main process only runs orchestrator-channel tasks;

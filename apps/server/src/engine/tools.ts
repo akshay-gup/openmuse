@@ -13,6 +13,8 @@ import {
   describeFile,
   type SentFile,
   textKinds,
+  type UploadRequest,
+  uploadRequestLimits,
 } from "../../../../packages/domain/src/workspace-files.ts";
 import { AppError } from "../errors.ts";
 import type { JevService } from "../jev/service.ts";
@@ -299,6 +301,45 @@ export function conversationTools(
               ? `${error.message}. Use a path inside this channel's workspace, relative to its top, such as reports/q3.pdf.`
               : error.message,
           };
+        }
+      },
+    }),
+    defineTool({
+      name: "request_upload",
+      description:
+        "Ask a person to upload files you need. An Upload button appears in the chat; the files they choose are saved in this channel's workspace (in `folder`, which is uploads/ unless you name another) and arrive as their next message, with their paths. This returns at once, so after calling it say briefly what you asked for and stop: do not wait or poll. Say in `prompt` what you need and why. Use `accept` for the kinds of file you can use (extensions such as pdf or png), and set `multiple` to false when you need exactly one.",
+      parameters: z.object({
+        prompt: z.string().trim().min(1).max(uploadRequestLimits.prompt),
+        accept: z
+          .array(
+            z
+              .string()
+              .trim()
+              .regex(/^\.?[A-Za-z0-9]{1,10}$/, "Give extensions such as pdf or png"),
+          )
+          .max(uploadRequestLimits.accept)
+          .optional(),
+        multiple: z.boolean().default(true),
+        folder: z.string().trim().max(200).optional(),
+      }),
+      execute: async (args): Promise<UploadRequest | { requested: false; error: string }> => {
+        signal.throwIfAborted();
+        try {
+          const channel = await workspaceChannel();
+          const folder = await service.channelFiles.folderFor(owner, channel, args.folder);
+          const accept = [
+            ...new Set((args.accept ?? []).map((type) => type.replace(/^\./, "").toLowerCase())),
+          ];
+          return await service.uploadRequests.create(owner, channel, key("upload", args), {
+            prompt: args.prompt,
+            ...(accept.length ? { accept } : {}),
+            multiple: args.multiple,
+            folder,
+          });
+        } catch (error) {
+          signal.throwIfAborted();
+          if (!(error instanceof AppError)) throw error;
+          return { requested: false, error: error.message };
         }
       },
     }),

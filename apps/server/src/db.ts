@@ -30,6 +30,7 @@ export const SHARED_KINDS: ReadonlySet<string> = new Set([
   "goals",
   "monitors",
   "agent-artifacts",
+  "upload-requests",
   "actions",
   "activity",
   // The workspace's one Google connection, and what comes through it
