@@ -23,6 +23,8 @@ function taskLabel(status: TaskStatus): string {
       return "done";
     case "cancelled":
       return "cancelled";
+    case "in_review":
+      return "in review";
     default:
       return "waiting";
   }

@@ -32,6 +32,8 @@ function statusLabel(status: TaskStatus): string {
       return "Paused";
     case "cancelled":
       return "Cancelled";
+    case "in_review":
+      return "In Review";
     default:
       return status
         .split("_")

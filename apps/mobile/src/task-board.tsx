@@ -101,7 +101,10 @@ export function TaskBoardCard({
     runningStep?.title ??
     (task.status === "waiting_input" ? task.question : null) ??
     (task.status === "failed" ? task.error : null) ??
-    excerpt(task.status === "succeeded" ? task.result : task.prompt, 120);
+    excerpt(
+      task.status === "succeeded" || task.status === "in_review" ? task.result : task.prompt,
+      120,
+    );
 
   async function control(action: "pause" | "resume" | "retry") {
     if (!onControl || busy) return;

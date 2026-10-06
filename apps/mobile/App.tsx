@@ -384,7 +384,10 @@ function WorkspaceShell({
     workspace.actions.filter((a) => a.status === "awaiting_review").length;
   const activeTask =
     data?.tasks.find(
-      (task) => task.status === "waiting_approval" || task.status === "waiting_input",
+      (task) =>
+        task.status === "waiting_approval" ||
+        task.status === "waiting_input" ||
+        task.status === "in_review",
     ) || data?.tasks.find((task) => task.status === "running");
   const agentName = data?.identity.name || "Hive";
   const status = activeTask
@@ -392,7 +395,9 @@ function WorkspaceShell({
       ? `Ready to review · ${activeTask.title}`
       : activeTask.status === "waiting_input"
         ? `Needs your input · ${activeTask.title}`
-        : activeTask.plan.find((step) => step.status === "running")?.title || activeTask.title
+        : activeTask.status === "in_review"
+          ? `Ready for your review · ${activeTask.title}`
+          : activeTask.plan.find((step) => step.status === "running")?.title || activeTask.title
     : data?.tasks.some((task) => task.status === "queued")
       ? "Picking up your next task…"
       : "Here when you need me";

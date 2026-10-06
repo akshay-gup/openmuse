@@ -145,7 +145,7 @@ export function TaskCard({
   const { open } = useWorkspace();
   const done = task.plan.filter((step) => step.status === "succeeded").length;
   const next = task.plan.find((step) => ["running", "waiting"].includes(step.status));
-  const waiting = ["waiting_input", "waiting_approval"].includes(task.status);
+  const waiting = ["waiting_input", "waiting_approval", "in_review"].includes(task.status);
   const meta = statusMeta[task.status];
   const updated = ago(task.updatedAt);
   const due = formatDue(task.dueAt);
@@ -221,7 +221,11 @@ export function TaskCard({
         <View style={[s.row, { gap: 6, flexWrap: "wrap" }]}>
           {waiting && (
             <Chip tint={colors.warningBg} color={colors.text}>
-              {task.status === "waiting_approval" ? "Review requested" : "Your input is needed"}
+              {task.status === "waiting_approval"
+                ? "Review requested"
+                : task.status === "in_review"
+                  ? "Ready for your review"
+                  : "Your input is needed"}
             </Chip>
           )}
           {!!due && (
@@ -270,7 +274,9 @@ export function AgentActivityScreen() {
       (projectFilter === "none" ? !task.projectId : task.projectId === projectFilter),
   );
   const needsYou = (task: AgentTask) =>
-    task.status === "waiting_approval" || task.status === "waiting_input";
+    task.status === "waiting_approval" ||
+    task.status === "waiting_input" ||
+    task.status === "in_review";
   const needsYouCount = projectTasks.filter(needsYou).length;
   const tasks = projectTasks.filter((task) =>
     filter === "all"

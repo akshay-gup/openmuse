@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Text } from "react-native";
+import { Text, View } from "react-native";
 import type { Workspace } from "../../../packages/domain/src";
 import type { AgentTask } from "../../../packages/domain/src/agent";
 import { useAgentWorkspace } from "./agent-workspace";
@@ -11,8 +11,9 @@ function errorText(e: unknown) {
 }
 
 /**
- * What a task needs from a person: review of a prepared action, or missing details.
- * Every task sheet shows this first, so a waiting task can be acted on wherever it was opened.
+ * What a task needs from a person: review of a prepared action, missing details, or a decision on
+ * the agent's finished work (mark it done, or send it back with changes). Every task sheet shows
+ * this first, so a waiting task can be acted on wherever it was opened.
  */
 export function TaskAttention({
   task,
@@ -23,14 +24,20 @@ export function TaskAttention({
   onBeforeOpen?: () => void;
 }) {
   const { api, open, refresh: refreshWorkspace } = useWorkspace();
-  const { mutate } = useAgentWorkspace();
+  const { mutate, refresh: refreshAgent } = useAgentWorkspace();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [answer, setAnswer] = useState("");
   const [fieldJson, setFieldJson] = useState("");
   const [showFieldJson, setShowFieldJson] = useState(false);
   const [fields, setFields] = useState<Record<string, string | boolean>>({});
-  if (task.status !== "waiting_approval" && task.status !== "waiting_input") return null;
+  const [changes, setChanges] = useState("");
+  if (
+    task.status !== "waiting_approval" &&
+    task.status !== "waiting_input" &&
+    task.status !== "in_review"
+  )
+    return null;
 
   const missing = Array.isArray(task.state.missingFields) ? task.state.missingFields : [];
   const fieldNames = missing
@@ -90,6 +97,75 @@ export function TaskAttention({
     }
   }
 
+  /** Run one of the decisions below, and show what went wrong if it fails. */
+  async function decide(work: () => Promise<unknown>) {
+    setBusy(true);
+    setError("");
+    try {
+      await work();
+      setChanges("");
+    } catch (e) {
+      setError(errorText(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (task.status === "in_review") {
+    const unread = (task.notes ?? []).filter((note) => !note.delivered).length;
+    const unconfirmed = task.state.unconfirmed === true;
+    const asking = changes.trim().length > 0;
+    return (
+      <Card style={{ backgroundColor: colors.primarySoft, gap: 12 }}>
+        <Text style={s.heading}>
+          {unconfirmed ? "The agent stopped without saying it was done" : "Ready for your review"}
+        </Text>
+        <Text style={s.muted}>
+          {unconfirmed
+            ? "Read what it did below. If the work is finished, mark it done. If not, say what is missing and it will carry on."
+            : "Check the agent's result below. Mark it done, or say what to change and it will pick up where it left off."}
+        </Text>
+        {unread > 0 && (
+          <Text style={s.small}>
+            {unread === 1 ? "1 note has" : `${unread} notes have`} not been read by the agent yet.
+          </Text>
+        )}
+        <Field
+          label="What should change?"
+          value={changes}
+          onChangeText={setChanges}
+          multiline
+          placeholder="Leave this empty if you are happy with it…"
+          style={{ minHeight: 76 }}
+        />
+        <ErrorNotice error={error} />
+        <View style={[s.row, { gap: 8, flexWrap: "wrap" }]}>
+          <Button
+            primary
+            busy={busy}
+            onPress={() => void decide(() => mutate(`/tasks/${task.id}/accept`, {}))}
+          >
+            Mark done
+          </Button>
+          <Button
+            busy={busy}
+            disabled={!asking && !unread}
+            onPress={() =>
+              void decide(() =>
+                asking
+                  ? mutate(`/tasks/${task.id}/notes`, { text: changes.trim(), run: true })
+                  : api
+                      .request(`/api/agent/tasks/${task.id}`, { status: "queued" }, "PATCH")
+                      .then(() => refreshAgent()),
+              )
+            }
+          >
+            {asking ? "Send back with changes" : "Send notes to the agent"}
+          </Button>
+        </View>
+      </Card>
+    );
+  }
   if (task.status === "waiting_approval")
     return (
       <Card style={{ backgroundColor: colors.primarySoft, gap: 12 }}>
