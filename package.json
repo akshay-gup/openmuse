@@ -10,7 +10,6 @@
   },
   "scripts": {
     "dev": "tsx watch apps/server/src/index.ts",
-    "dev:demo": "tsx apps/server/src/demo/entry.ts",
     "dev:mobile": "pnpm --dir apps/mobile start",
     "dev:web": "pnpm --dir apps/mobile web",
     "test": "tsx --test tests/*.test.ts apps/mobile/test/*.test.ts",
