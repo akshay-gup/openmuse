@@ -34,14 +34,16 @@ export async function pickFiles(
 }
 
 /**
- * Add a chosen file to a channel's workspace, in `folder` (the uploads folder unless said). Throws
- * a message the person can read when it cannot be added.
+ * Add a chosen file to a channel's workspace, in `folder` (the uploads folder unless said). With
+ * `request`, it answers an agent's request for files and goes where the agent asked. Throws a
+ * message the person can read when it cannot be added.
  */
 export async function uploadChannelFile(
   api: MuseApi,
   channelId: string,
   picked: PickedFile,
   folder?: string,
+  request?: string,
 ): Promise<ChannelFile> {
   if (picked.size !== undefined && picked.size > channelFileLimits.uploadBytes)
     throw new Error(
@@ -53,6 +55,7 @@ export async function uploadChannelFile(
     const form = new FormData();
     form.append("file", picked.file, picked.name);
     if (folder) form.append("dir", folder);
+    if (request) form.append("request", request);
     return api.request<ChannelFile>(path, form);
   }
   const upload = await FileSystem.uploadAsync(`${API_URL}${path}`, picked.uri, {
@@ -60,7 +63,7 @@ export async function uploadChannelFile(
     uploadType: FileSystem.FileSystemUploadType.MULTIPART,
     fieldName: "file",
     mimeType: picked.mimeType ?? "application/octet-stream",
-    parameters: folder ? { dir: folder } : undefined,
+    parameters: { ...(folder ? { dir: folder } : {}), ...(request ? { request } : {}) },
     headers: { Authorization: `Bearer ${api.token}` },
   });
   let payload: { error?: string } & Partial<ChannelFile> = {};

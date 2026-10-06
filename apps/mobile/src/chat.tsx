@@ -66,6 +66,7 @@ import {
   shadow,
   TypingDots,
 } from "./ui";
+import { UploadRequestToolCard } from "./upload-request";
 import { useWorkspace } from "./workspace";
 
 const displayParameters = z.record(z.string(), z.unknown());
@@ -176,6 +177,14 @@ export function WorkspaceTools() {
     parameters: displayParameters,
     render: ({ result, status }) => (
       <SentFileToolCard result={result} loading={status !== "complete"} />
+    ),
+  });
+  useRenderTool({
+    name: "request_upload",
+    description: "Show the agent's request for files, with an upload button",
+    parameters: displayParameters,
+    render: ({ result, status }) => (
+      <UploadRequestToolCard result={result} loading={status !== "complete"} />
     ),
   });
   useRenderTool({

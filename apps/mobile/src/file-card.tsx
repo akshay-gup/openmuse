@@ -5,31 +5,14 @@ import {
   type ChannelFile,
   type FileKind,
   type SentFile,
-  sentFileSchema,
   textKinds,
-  unsentFileSchema,
 } from "../../../packages/domain/src/workspace-files";
 import { fileLine } from "./channel-files";
 import { HtmlFrame, MediaPlayer } from "./FileEmbed";
 import { kindIcon, openFile, TextBlock } from "./file-preview";
+import { parseSharedFile } from "./tool-results";
 import { Button, Card, colors, ErrorNotice, s } from "./ui";
 import { useWorkspace } from "./workspace";
-
-/** What a tool call returned: a file that was shared, or the reason it was not. Strings are JSON. */
-export function parseSharedFile(result: unknown): SentFile | { error: string } | null {
-  let value = result;
-  if (typeof value === "string") {
-    try {
-      value = JSON.parse(value);
-    } catch {
-      return null;
-    }
-  }
-  const sent = sentFileSchema.safeParse(value);
-  if (sent.success) return sent.data;
-  const unsent = unsentFileSchema.safeParse(value);
-  return unsent.success ? { error: unsent.data.error } : null;
-}
 
 /** The first lines of a text file, for a card. */
 const firstLines = (text: string, lines = 10) => {

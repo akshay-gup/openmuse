@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { ActivityIndicator, Platform, Pressable, ScrollView, Text, View } from "react-native";
 import type { AgentTask, RunEvent } from "../../../packages/domain/src/agent";
 import { AssistantResponse } from "./assistant-response";
-import { ChannelFileCard, parseSharedFile } from "./file-card";
+import { ChannelFileCard } from "./file-card";
+import { parseSharedFile } from "./tool-results";
 import { colors, ErrorNotice, fontSize, monoProps, radius, s } from "./ui";
 import { useWorkspace } from "./workspace";
 
