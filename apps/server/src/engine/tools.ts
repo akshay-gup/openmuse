@@ -181,13 +181,11 @@ export function conversationTools(
     defineTool({
       name: "update_task",
       description:
-        "Edit any task or issue: retitle, change priority or dates, move it on the board (status), link dependencies, set labels, assign. Set assignee to 'agent' to hand a manual issue to the worker — it builds an execution prompt from the ticket plus recent channel discussion and queues it. Set assignee to null to take it back (cancels an in-flight run and restores the manual issue). Manual tasks move freely between queued/running/paused/succeeded/failed/cancelled; worker tasks can only be queued, paused, or cancelled directly — their running and terminal states belong to the worker.",
+        "Edit any task or issue: retitle, change priority or dates, move it on the board (status), link dependencies, set labels, assign. Set assignee to 'agent' to hand a manual issue to the worker — its run is briefed from the ticket, the notes and files on it, and recent channel discussion. Set assignee to null to take it back (cancels an in-flight run and restores the manual issue). Manual tasks move freely between queued/running/paused/failed/cancelled; worker tasks can only be queued, paused, or cancelled directly — running belongs to the worker. You can never mark a task done: that is always a person's decision, made when they review the work. Say a task is ready and they will mark it done.",
       parameters: z.object({
         taskId: z.string().min(1),
         title: z.string().trim().min(1).max(160).optional(),
-        status: z
-          .enum(["queued", "running", "paused", "succeeded", "failed", "cancelled"])
-          .optional(),
+        status: z.enum(["queued", "running", "paused", "failed", "cancelled"]).optional(),
         priority: z.enum(["low", "medium", "high", "urgent"]).optional(),
         assignee: z.enum(["agent"]).nullable().optional(),
         startAt: z
@@ -207,7 +205,7 @@ export function conversationTools(
         goalId: z.string().nullable().optional(),
         projectId: z.string().nullable().optional(),
       }),
-      execute: async ({ taskId, ...patch }) => service.updateTask(owner, taskId, patch),
+      execute: async ({ taskId, ...patch }) => service.updateTask(owner, taskId, patch, "agent"),
     }),
     defineTool({
       name: "delete_task",

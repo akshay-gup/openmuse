@@ -191,6 +191,7 @@ function buildTaskPrompt(
     `${COMPLETE_MARKER} <concise summary of what was actually accomplished>`,
     `${BLOCKED_MARKER} <the question you need the user to answer before you can proceed>`,
     `Do not emit a marker until the outcome is real. Never emit both.`,
+    `A person reviews what you finish and marks the task done, or sends it back with notes. You never close a task yourself, so do not say that it is closed.`,
     ``,
     `## Context`,
     originNote,
@@ -409,15 +410,17 @@ export async function runOpencodeTask(
     task = await ctx.checkpoint({
       artifactIds: [...new Set([...task.artifactIds, artifact.id])],
     });
-    return service.finish(task, ctx, outcome.summary);
+    // The agent says it is finished; a person decides whether it is.
+    return service.submitForReview(task, ctx, outcome.summary);
   }
   if (outcome?.kind === "blocked") {
     return { status: "waiting_input", question: outcome.question };
   }
-  return {
-    status: "waiting_input",
-    question:
-      "The agent reached the end of this run without confirming completion. Give it a follow-up instruction to continue.",
-    state: { ...task.state, lastUpdate: text },
-  };
+  // No marker: the agent stopped without saying it was done. A person decides what happens next.
+  return service.submitForReview(
+    { ...task, state: { ...task.state, lastUpdate: text } },
+    ctx,
+    text.trim().slice(-12000) || "The agent stopped without a final message.",
+    { unconfirmed: true },
+  );
 }

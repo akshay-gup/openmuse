@@ -50,12 +50,16 @@ test("CopilotKit model worker executes server tools and persists the confirmed o
     });
     await server.agent.worker.tick();
     const result = await server.agent.detail("owner", task.id);
-    assert.equal(result.task.status, "succeeded", result.task.error ?? result.task.question);
+    // The agent hands its work in; it never closes the task itself.
+    assert.equal(result.task.status, "in_review", result.task.error ?? result.task.question);
+    assert.equal(result.task.state.unconfirmed, false);
     assert.equal(result.task.result, "Saved your weekend plan with two steps.");
     assert.ok(result.artifacts.some((a) => a.title === "Weekend plan"));
     assert.ok(
       result.events.some((event) => event.title === "Read the authorized workspace sources"),
     );
+    // A person marks it done.
+    assert.equal((await server.agent.accept("owner", task.id)).status, "succeeded");
     assert.ok(requests.length >= 3 && requests.length <= 6);
     assert.ok(requests.every((request) => request.path === "/v1/responses"));
     assert.ok(requests[0].body.includes('"name":"prepare_email"'));
@@ -87,7 +91,7 @@ test("CopilotKit model worker executes server tools and persists the confirmed o
     });
     await server.agent.worker.tick();
     const finished = await server.agent.getTask("owner", appointment.id);
-    assert.equal(finished.status, "succeeded", finished.error ?? finished.question);
+    assert.equal(finished.status, "in_review", finished.error ?? finished.question);
     assert.equal(finished.actionId, null);
     assert.ok(requests[0].body.includes("approvalResult"));
     assert.equal(
@@ -134,7 +138,10 @@ test("the model worker keeps the text a model replies with when it calls no tool
     const task = await server.agent.createTask("owner", { prompt: "Plan my week" });
     await server.agent.worker.tick();
     const result = await server.agent.detail("owner", task.id);
-    assert.equal(result.task.status, "waiting_input");
+    // The run ended without saying it was finished: a person is asked to decide, not told it is done.
+    assert.equal(result.task.status, "in_review");
+    assert.equal(result.task.state.unconfirmed, true);
+    assert.match(String(result.task.result), /Find cool stuff on Hacker News/);
     assert.match(String(result.task.state.lastUpdate), /Find cool stuff on Hacker News/);
     assert.ok(
       result.events.some(
@@ -200,7 +207,7 @@ test("replaying a completed prepared action returns its receipt without reopenin
     await server.agent.worker.tick();
 
     const finished = await server.agent.getTask("replay-owner", task.id);
-    assert.equal(finished.status, "succeeded", finished.error ?? finished.question);
+    assert.equal(finished.status, "in_review", finished.error ?? finished.question);
     assert.equal(finished.actionId, null);
     assert.equal(finished.state.approvalResult, completed.result);
     const actions = (await db.list<ActionProposal>("replay-owner", "actions")).filter(
@@ -265,7 +272,7 @@ test("browser reads keep observation identity distinct while reusing one session
   await app.agent.worker.tick();
 
   const saved = await app.agent.getTask("owner", task.id);
-  assert.equal(saved.status, "succeeded", saved.error ?? saved.question);
+  assert.equal(saved.status, "in_review", saved.error ?? saved.question);
   const webEvidence = saved.evidence.filter((item) => item.kind === "web");
   assert.equal(webEvidence.length, 2);
   assert.deepEqual(

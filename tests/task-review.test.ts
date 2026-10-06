@@ -9,13 +9,19 @@ import { createApp } from "../apps/server/src/app.ts";
 import type { Config } from "../apps/server/src/config.ts";
 import { createStore, type Store } from "../apps/server/src/db.ts";
 import { conversationTools } from "../apps/server/src/engine/tools.ts";
-import type { AgentTask, AgentWorkspace } from "../packages/domain/src/agent.ts";
+import type {
+  AgentNotification,
+  AgentTask,
+  AgentWorkspace,
+  Goal,
+  RunEvent,
+} from "../packages/domain/src/agent.ts";
 import { taskBriefLimits } from "../packages/domain/src/agent.ts";
 import type { Artifact } from "../packages/domain/src/index.ts";
 
 /**
- * Notes and files on a task: what the team tells the agent besides the task itself. Every run reads
- * all of them.
+ * Review and the task brief. The agent hands its work in and never closes a task; a person marks it
+ * done or sends it back. Notes and files are what the agent is told besides the task itself.
  */
 
 let db: Store, server: Awaited<ReturnType<typeof createApp>>, directory: string, token: string;
@@ -94,6 +100,102 @@ after(async () => {
   if (directory) await rm(directory, { recursive: true, force: true });
 });
 
+// ---- Review: the agent never closes a task -------------------------------------------------
+
+test("a person marks handed-in work done, and only then does it count as done", async () => {
+  const goal = await server.agent.createGoal(person, { title: "Offsite", description: "Plan it" });
+  const task = await inReview({ goalId: goal.id });
+  const detail = await read<{ task: AgentTask }>(`/tasks/${task.id}`);
+  assert.equal(detail.task.status, "in_review");
+  assert.equal((await db.get<Goal>(person, "goals", goal.id))?.milestones.length, 0);
+
+  const done = await read<AgentTask>(`/tasks/${task.id}/accept`, {});
+  assert.equal(done.status, "succeeded");
+  assert.equal(done.result, "Here is what I did.");
+  const events = (await server.agent.detail(person, task.id)).events;
+  const marked = events.find((event: RunEvent) => event.title === "Marked done");
+  assert.equal(marked?.detail, "By Pat");
+
+  // The outcome is published as it is accepted: a notification and the goal's milestone.
+  const workspace = await read<AgentWorkspace>("");
+  assert.ok(workspace.notifications.some((n: AgentNotification) => n.taskId === task.id));
+  const saved = await db.get<Goal>(person, "goals", goal.id);
+  assert.deepEqual(
+    saved?.milestones.map((m) => [m.id, m.done]),
+    [[task.id, true]],
+  );
+  // Accepting twice is refused.
+  await read(`/tasks/${task.id}/accept`, {}, 409);
+});
+
+test("only work that is ready for review can be marked done", async () => {
+  for (const status of ["queued", "running", "waiting_input", "failed", "paused", "cancelled"]) {
+    const task = await create();
+    await force(task.id, { status });
+    const refused = await read<{ error: string }>(`/tasks/${task.id}/accept`, {}, 409);
+    assert.match(refused.error, /ready for review/, status);
+    assert.equal((await server.agent.getTask(person, task.id)).status, status);
+  }
+  await read("/tasks/nope/accept", {}, 404);
+});
+
+test("agent work cannot be set to done by hand either, only accepted", async () => {
+  const task = await inReview();
+  const rejected = await read<{ error: string }>(
+    `/tasks/${task.id}`,
+    { status: "succeeded" },
+    422,
+    "PATCH",
+  );
+  assert.match(rejected.error, /marked done by a person/);
+  assert.equal((await server.agent.getTask(person, task.id)).status, "in_review");
+});
+
+test("the agent itself can never mark a task done", async () => {
+  const task = await inReview();
+  await assert.rejects(
+    server.agent.updateTask(person, task.id, { status: "succeeded" }, "agent"),
+    /Only a person can mark a task done/,
+  );
+  const manual = await create({ kind: "manual", prompt: undefined });
+  await assert.rejects(
+    server.agent.updateTask(person, manual.id, { status: "succeeded" }, "agent"),
+    /Only a person can mark a task done/,
+  );
+  // A person still can: manual issues move freely.
+  const moved = await server.agent.updateTask(person, manual.id, { status: "succeeded" });
+  assert.equal(moved.status, "succeeded");
+
+  // The tool the agent is given does not offer it, and refuses it if asked anyway.
+  const tools = conversationTools(
+    server.agent,
+    person,
+    {
+      threadId: "t",
+      runId: "r",
+      messages: [],
+      tools: [],
+      context: [],
+      state: {},
+      forwardedProps: {},
+    },
+    { signal: new AbortController().signal, requestKey: "test" },
+  );
+  const update = tools.find((tool) => tool.name === "update_task");
+  assert.ok(update);
+  const parameters = update.parameters as { safeParse: (value: unknown) => { success: boolean } };
+  assert.equal(parameters.safeParse({ taskId: task.id, status: "succeeded" }).success, false);
+  assert.equal(parameters.safeParse({ taskId: task.id, status: "paused" }).success, true);
+  await assert.rejects(
+    (update.execute as (args: unknown) => Promise<unknown>)({
+      taskId: task.id,
+      status: "succeeded",
+    }),
+    /Only a person can mark a task done/,
+  );
+  assert.equal((await server.agent.getTask(person, task.id)).status, "in_review");
+});
+
 test("what the agent reads about a task includes its notes and file names, but no download links", async () => {
   const task = await create();
   await server.agent.addNote(person, task.id, { text: "Mind the budget" });
@@ -124,6 +226,44 @@ test("what the agent reads about a task includes its notes and file names, but n
   // People still get their links.
   const snapshot = (await server.agent.snapshot(person)).tasks.find((t) => t.id === task.id);
   assert.ok(snapshot?.attachments?.[0].url?.includes("signature="));
+});
+
+test("handed-in work is announced once, as ready for review", async () => {
+  const task = await inReview({ title: "Venue shortlist" });
+  const publish = (
+    server.agent as unknown as { publishOutcome: (owner: string, task: AgentTask) => Promise<void> }
+  ).publishOutcome.bind(server.agent);
+  await publish(person, task);
+  await publish(person, task);
+  const notices = (await server.agent.snapshot(person)).notifications.filter(
+    (n) => n.taskId === task.id,
+  );
+  assert.equal(notices.length, 1);
+  assert.equal(notices[0].title, "Ready for your review");
+  assert.equal(notices[0].body, "Venue shortlist");
+});
+
+test("work in review has nothing to pause, can be cancelled, and stays in review when moved", async () => {
+  const task = await inReview();
+  assert.equal((await server.agent.control(person, task.id, "pause")).status, "in_review");
+  const moved = await server.agent.delegateTask(person, task.id, "orchestrator");
+  assert.equal(moved.status, "in_review");
+  assert.equal((await server.agent.control(person, task.id, "cancel")).status, "cancelled");
+});
+
+test("taking work in review back from the agent returns it to the to-do column, not done", async () => {
+  const issue = await create({ kind: "manual", prompt: "Draft it" });
+  await read(`/tasks/${issue.id}`, { assignee: "agent" }, 200, "PATCH");
+  await force(issue.id, { status: "in_review", result: "Drafted." });
+  const back = await read<AgentTask>(`/tasks/${issue.id}`, { assignee: null }, 200, "PATCH");
+  assert.equal(back.kind, "manual");
+  assert.equal(back.status, "queued");
+});
+
+test("the worker never picks up work in review", async () => {
+  const task = await inReview();
+  await server.agent.worker.tick();
+  assert.equal((await server.agent.getTask(person, task.id)).status, "in_review");
 });
 
 // ---- Notes -----------------------------------------------------------------------------------
@@ -575,4 +715,70 @@ test("a task with nothing added has no brief at all", async () => {
   const brief = await server.agent.prepareBrief(person, task);
   assert.equal(brief.text, "");
   assert.deepEqual(brief.noteIds, []);
+});
+
+// ---- A run that is not OpenCode ----------------------------------------------------------------
+
+test("a model run reads the notes and files, and hands its answer in for review", async (t) => {
+  const { modelFixture } = await import("./helpers/model.ts");
+  const calls: { name: string; arguments: object }[] = [
+    { name: "finish_task", arguments: { summary: "Shortlisted two venues." } },
+  ];
+  const { requests } = await modelFixture(t, (index) => calls[index]);
+  const folder = await mkdtemp(join(tmpdir(), "hive-model-brief-"));
+  const store = await createStore();
+  const app = await createApp(store, {
+    mode: "sample",
+    port: 8787,
+    host: "127.0.0.1",
+    publicUrl: "http://localhost:8787",
+    dataDir: folder,
+    agentBackend: "model",
+    intelligenceApiKey: "test-project-key-never-sent",
+    model: "openai/fixture",
+    googleRedirectUri: "http://localhost:8787/api/google/callback",
+    allowedOrigins: [],
+  });
+  t.after(async () => {
+    await app.agent.stop();
+    await store.close();
+    await rm(folder, { recursive: true, force: true });
+  });
+  const task = await app.agent.createTask("owner", { prompt: "Find an offsite venue" });
+  await app.agent.addNote("owner", task.id, { text: "Nothing over $5k" });
+  await app.agent.addAttachment("owner", task.id, {
+    name: "wishlist.txt",
+    bytes: text("Has a lake"),
+  });
+  await app.agent.worker.tick();
+
+  const body = requests[0].body;
+  assert.ok(body.includes("Find an offsite venue"));
+  assert.ok(body.includes("Nothing over $5k"));
+  assert.ok(body.includes("Has a lake"));
+  const saved = await app.agent.getTask("owner", task.id);
+  assert.equal(saved.status, "in_review", saved.error ?? saved.question);
+  assert.equal(saved.result, "Shortlisted two venues.");
+  assert.equal(saved.notes?.[0].delivered, true, "the run read the note");
+  assert.match(
+    JSON.stringify(
+      (await app.agent.detail("owner", task.id)).events.find(
+        (e) => e.title === "Ready for your review",
+      ),
+    ),
+    /Shortlisted two venues/,
+  );
+
+  // Sent back with a note, it runs again with the note and its own earlier result.
+  calls.splice(0, calls.length, {
+    name: "finish_task",
+    arguments: { summary: "Now under $4k." },
+  });
+  requests.length = 0;
+  await app.agent.addNote("owner", task.id, { text: "Cheaper, please", run: true });
+  await app.agent.worker.tick();
+  assert.ok(requests[0].body.includes("Cheaper, please"));
+  assert.ok(requests[0].body.includes("Shortlisted two venues."));
+  assert.equal((await app.agent.getTask("owner", task.id)).status, "in_review");
+  assert.equal((await app.agent.accept("owner", task.id)).status, "succeeded");
 });

@@ -402,7 +402,9 @@ export class AgentService {
       channelId: target,
       delegatedTo: target,
       delegationReason: reason?.slice(0, 500),
-      status: task.status === "paused" ? "paused" : "queued",
+      // Paused work stays paused, and work waiting for review stays that way: moving it to another
+      // channel must not send it back to the agent.
+      status: task.status === "paused" || task.status === "in_review" ? task.status : "queued",
       leaseId: null,
       leaseUntil: null,
       updatedAt: new Date().toISOString(),
@@ -607,7 +609,12 @@ export class AgentService {
       throw new AppError("Only failed tasks can be retried", 409);
     if (action === "resume" && task.status !== "paused")
       throw new AppError("Only paused tasks can be resumed", 409);
-    if (action === "pause" && (terminal.has(task.status) || task.status === "paused")) return task;
+    // Finished work waits for a person, not for the worker: there is nothing to pause.
+    if (
+      action === "pause" &&
+      (terminal.has(task.status) || task.status === "paused" || task.status === "in_review")
+    )
+      return task;
     const status =
       action === "cancel"
         ? "cancelled"
@@ -736,8 +743,14 @@ export class AgentService {
     patch.input = restInput;
     patch.leaseId = null;
     patch.leaseUntil = null;
-    // A ticket pulled back mid-run is stopped; an untouched one goes back to the to-do column.
-    patch.status = active.includes(task.status) ? "cancelled" : task.status;
+    // A ticket pulled back mid-run is stopped. Work waiting for review goes back to the to-do
+    // column, still not accepted. An untouched ticket keeps its column.
+    patch.status =
+      task.status === "in_review"
+        ? "queued"
+        : active.includes(task.status)
+          ? "cancelled"
+          : task.status;
   }
 
   /** Recent channel discussion to ground an agent-assigned issue. Null when there is nothing useful. */
@@ -778,9 +791,22 @@ export class AgentService {
     return { name: channel?.name ?? channelId, lines: lines.join("\n") };
   }
 
-  /** Update a task's fields. The agent uses this to manage the board. */
-  async updateTask(owner: string, id: string, raw: unknown): Promise<AgentTask> {
+  /**
+   * Update a task's fields. The agent uses this to manage the board, but only a person can mark a
+   * task done: the agent does the work, and whether it is good enough is their call.
+   */
+  async updateTask(
+    owner: string,
+    id: string,
+    raw: unknown,
+    by: "person" | "agent" = "person",
+  ): Promise<AgentTask> {
     const input = updateTaskSchema.parse(raw);
+    if (by === "agent" && input.status === "succeeded")
+      throw new AppError(
+        "Only a person can mark a task done. Tell them it is ready and they will mark it done.",
+        403,
+      );
     const task = await this.getTask(owner, id);
     const patch: Partial<AgentTask> = {};
     if (input.assignee !== undefined && input.assignee !== (task.assignee ?? null)) {
@@ -827,7 +853,7 @@ export class AgentService {
         throw new AppError(
           task.kind === "manual"
             ? `Manual tasks can move between ${[...AgentService.manualStatuses].join(", ")}`
-            : "Worker-executed tasks can only be queued, paused, or cancelled directly; running and terminal states belong to the worker",
+            : "Worker-executed tasks can only be queued, paused, or cancelled directly. Running belongs to the worker, and agent work is marked done by a person once it is ready for review",
           422,
         );
       // Terminal tasks can be reopened; the worker picks up a requeued
@@ -1189,6 +1215,36 @@ export class AgentService {
     if (noteIds.length)
       await this.db.patchItems(owner, "tasks", taskId, "notes", noteIds, { delivered: true });
   }
+  /**
+   * A person's decision that the agent's work is done. This is the only way agent work reaches
+   * "succeeded": the agent hands work in for review and never closes a task itself.
+   */
+  async accept(owner: string, id: string): Promise<AgentTask> {
+    const task = await this.getTask(owner, id);
+    if (task.status !== "in_review")
+      throw new AppError("Only work that is ready for review can be marked done", 409);
+    const updated = await this.db.compareAndSwap<AgentTask>(
+      owner,
+      "tasks",
+      id,
+      { status: "in_review" },
+      { status: "succeeded", error: null, updatedAt: date() },
+    );
+    if (!updated) throw new AppError("Task changed; refresh and try again", 409);
+    await this.db.put(owner, "run-events", {
+      id: randomUUID(),
+      taskId: id,
+      kind: "status",
+      date: date(),
+      title: "Marked done",
+      detail: `By ${await this.personName(owner)}`,
+    } satisfies RunEvent);
+    // The task is already done; a failure here is retried by maintenance.
+    await this.publishOutcome(owner, updated).catch((error) =>
+      backgroundFailure("publish accepted task", error),
+    );
+    return (await this.present(owner, [updated]))[0];
+  }
   async createGoal(owner: string, raw: unknown, id?: string) {
     const input = goalInputSchema.parse(raw);
     const goal: Goal = {
@@ -1426,7 +1482,11 @@ export class AgentService {
     );
     const completedSources = new Set(
       (await this.db.list<AgentTask>(owner, "tasks"))
-        .filter((task) => task.status === "succeeded" && typeof task.input.messageId === "string")
+        .filter(
+          (task) =>
+            (task.status === "succeeded" || task.status === "in_review") &&
+            typeof task.input.messageId === "string",
+        )
         .map((task) => `${task.kind}:${task.input.messageId}`),
     );
     const obsolete = (kind: AgentTask["kind"], messageId: unknown) =>
@@ -1725,6 +1785,7 @@ export class AgentService {
     }
     return executeModelTask(this, owner, task, context);
   }
+  /** Workflows that run as plain code (documents, watches, spending) finish themselves. */
   async finish(task: AgentTask, context: TaskContext, result: string) {
     await context.guard();
     await context.event("result", "Work completed", result);
@@ -1732,6 +1793,31 @@ export class AgentService {
       status: "succeeded" as const,
       result,
       plan: task.plan.map((s) => ({ ...s, status: "succeeded" as const })),
+    };
+  }
+  /**
+   * An agent's finished work goes to a person, who marks it done or sends it back (see `accept` and
+   * `addNote`). `unconfirmed` is for a run that stopped without saying the work was complete.
+   */
+  async submitForReview(
+    task: AgentTask,
+    context: TaskContext,
+    result: string,
+    options: { unconfirmed?: boolean } = {},
+  ) {
+    await context.guard();
+    await context.event(
+      "result",
+      options.unconfirmed ? "Stopped without saying it was done" : "Ready for your review",
+      result,
+    );
+    return {
+      status: "in_review" as const,
+      result,
+      state: { ...task.state, unconfirmed: Boolean(options.unconfirmed) },
+      ...(options.unconfirmed
+        ? {}
+        : { plan: task.plan.map((s) => ({ ...s, status: "succeeded" as const })) }),
     };
   }
   private async publishOutcome(owner: string, saved: AgentTask) {
@@ -1762,6 +1848,14 @@ export class AgentService {
             break;
         }
       }
+    } else if (task.status === "in_review") {
+      await this.notify(
+        owner,
+        "Ready for your review",
+        task.title,
+        task.id,
+        `task-review:${task.id}:${task.attempts}`,
+      );
     } else if (task.status === "failed") {
       await this.notify(
         owner,

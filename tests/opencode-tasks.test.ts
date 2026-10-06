@@ -137,6 +137,9 @@ test("an approved-tool waiting outcome takes precedence over agent completion te
         finish: async () => {
           assert.fail("Must not finish an action awaiting review");
         },
+        submitForReview: async () => {
+          assert.fail("Must not hand in work while an action awaits review");
+        },
       } as never,
       "owner",
       task as never,
