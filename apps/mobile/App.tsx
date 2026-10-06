@@ -3,6 +3,7 @@ import { StatusBar } from "expo-status-bar";
 import {
   Bell,
   Check,
+  FolderOpen,
   Lightbulb,
   type LucideIcon,
   Menu,
@@ -27,6 +28,7 @@ import {
 } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import type { Section, Workspace } from "../../packages/domain/src";
+import { ORCHESTRATOR_CHANNEL_ID } from "../../packages/domain/src/agent";
 import {
   AgentActivityScreen,
   AgentStatus,
@@ -477,6 +479,15 @@ function WorkspaceShell({
                   )}
                 </View>
                 {desktop && section === "chat" && !channelChat && <ComputerEntry />}
+                {section === "chat" && !channelChat && !richThreads && (
+                  <IconButton
+                    icon={FolderOpen}
+                    label="Files in this chat"
+                    onPress={() =>
+                      open({ type: "channelFiles", channelId: ORCHESTRATOR_CHANNEL_ID })
+                    }
+                  />
+                )}
                 <View>
                   <IconButton
                     icon={Bell}

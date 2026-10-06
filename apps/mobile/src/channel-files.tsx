@@ -11,6 +11,7 @@ import {
 } from "lucide-react-native";
 import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, Image, Platform, Pressable, Share, Text, View } from "react-native";
+import { ORCHESTRATOR_CHANNEL_ID } from "../../../packages/domain/src/agent";
 import type { ChannelFile, ChannelFolder } from "../../../packages/domain/src/workspace-files";
 import { crumbs, fileSize, fileType, parentOf } from "./file-format";
 import { FileBody, kindIcon, openFile } from "./file-preview";
@@ -291,7 +292,13 @@ export function ChannelFilesSheet({
   return (
     <Sheet
       title="Files"
-      subtitle={name ? `#${name} · what the agent makes and what people add` : undefined}
+      subtitle={
+        channelId === ORCHESTRATOR_CHANNEL_ID
+          ? "Private to you · what the agent makes and what you add"
+          : name
+            ? `#${name} · what the agent makes and what people add`
+            : undefined
+      }
       onClose={close}
       wide
     >
