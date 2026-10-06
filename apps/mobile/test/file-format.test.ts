@@ -1,6 +1,14 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { fileSize, parseTable, prettyJson } from "../src/file-format.ts";
+import {
+  crumbs,
+  fileSize,
+  fileType,
+  parentOf,
+  parseTable,
+  pickerTypes,
+  prettyJson,
+} from "../src/file-format.ts";
 
 test("sizes are said in whole kilobytes, then in megabytes", () => {
   assert.equal(fileSize(0), "1 KB");
@@ -67,4 +75,33 @@ test("a TSV is read with tabs, and a big file is cut where the limits say", () =
   // Exactly at the limit is not "more".
   assert.equal(parseTable("a\nb\nc", ",", { rows: 3, columns: 5 }).moreRows, false);
   assert.equal(parseTable("a\nb\nc\nd", ",", { rows: 3, columns: 5 }).moreRows, true);
+});
+
+test("a file says what it is, and a path says where it is", () => {
+  assert.equal(fileType({ name: "plan.md", kind: "markdown" }), "Markdown");
+  assert.equal(fileType({ name: "deck.pdf", kind: "pdf" }), "PDF");
+  assert.equal(fileType({ name: "build.py", kind: "code" }), "PY");
+  assert.equal(fileType({ name: "Makefile", kind: "code" }), "Code");
+  assert.equal(fileType({ name: "blob", kind: undefined }), "File");
+  assert.equal(parentOf("reports/2026/q3.pdf"), "reports/2026");
+  assert.equal(parentOf("q3.pdf"), "");
+  assert.deepEqual(crumbs("reports/2026"), [
+    { name: "reports", path: "reports" },
+    { name: "2026", path: "reports/2026" },
+  ]);
+  assert.deepEqual(crumbs(""), []);
+});
+
+test("a picker is told what to offer, and offers everything when it cannot tell", () => {
+  assert.deepEqual(pickerTypes(undefined, true), ["*/*"]);
+  assert.deepEqual(pickerTypes([], false), ["*/*"]);
+  assert.deepEqual(pickerTypes(["pdf", ".PNG"], true), [".pdf", ".png"]);
+  // Native pickers want types, and one image type covers every image.
+  assert.deepEqual(pickerTypes(["pdf", ".PNG", "jpg"], false), ["application/pdf", "image/*"]);
+  assert.deepEqual(pickerTypes(["csv", "md"], false), ["text/csv", "text/markdown"]);
+  // An extension we do not know, or one that is not an extension at all, turns the filter off.
+  assert.deepEqual(pickerTypes(["pdf", "xyz"], false), ["*/*"]);
+  assert.deepEqual(pickerTypes(["pdf", "xyz"], true), [".pdf", ".xyz"]);
+  assert.deepEqual(pickerTypes(["pdf", "a/b"], true), ["*/*"]);
+  assert.deepEqual(pickerTypes([""], true), ["*/*"]);
 });
