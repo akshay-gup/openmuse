@@ -37,8 +37,8 @@ function requestSummary(request: PendingRequest): string {
 
 /**
  * Pending permission approvals for a thread. Polls the opencode permission
- * API (which only exists when AGENT_BACKEND=opencode; a 404 hides the
- * component entirely). Rendered under the channel thread banner in chat.
+ * API (a 404 hides the component entirely). Rendered under the channel thread
+ * banner in chat.
  */
 export function PendingApprovals({ threadId }: { threadId: string }) {
   const { api } = useWorkspace();
@@ -54,7 +54,7 @@ export function PendingApprovals({ threadId }: { threadId: string }) {
       setPending(list);
       setError("");
     } catch (e) {
-      // Backend isn't opencode (route not mounted) — hide, don't error.
+      // A 404 means there is nothing to ask about here — hide, don't error.
       setPending(null);
       if (e instanceof Error && !/404/.test(e.message)) setError(e.message);
     }

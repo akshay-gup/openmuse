@@ -33,7 +33,6 @@ if [ -z "$(get WORKSPACE_MODE)" ]; then
 WORKSPACE_MODE=live
 HOST=127.0.0.1
 PORT=8787
-AGENT_BACKEND=opencode
 OPENCODE_SERVER_URL=http://127.0.0.1:4096
 AGENT_MENTION=@hive
 # --- fill in by hand ---

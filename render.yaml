@@ -1,3 +1,5 @@
+# Not maintained. Hive's agent is OpenCode, which needs `opencode serve` on the same host as the
+# API, and this blueprint does not run one, so the API stops at boot. See docs/vm-deploy.md.
 services:
   - type: web
     name: hive-api
@@ -20,8 +22,6 @@ services:
         value: 0.0.0.0
       - key: WORKSPACE_MODE
         value: live
-      - key: AGENT_BACKEND
-        value: model
       - key: MODEL
         value: openai/gpt-5
       - key: DATA_DIR

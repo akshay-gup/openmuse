@@ -11,13 +11,15 @@ API + web UI, OpenCode as the agent backend, threads as durable agent sessions.
   a layout that doubles as future OpenCode working directories); Docker computer,
   terminal, and computer routes/docs/tests fully removed. See `docs/vm-deploy.md`.
   `render.yaml` left as-is.
-- **OpenCode agent backend** (`AGENT_BACKEND=opencode`) — one `opencode serve`
+- **OpenCode agent** — one `opencode serve`
   process (a systemd unit on the VM; the API connects, healthchecks, and
   version-asserts, never spawns it); per-channel scoping via directory header;
   a single global SSE stream with per-thread filtering and serialized queues;
   busy/idle derived from status events only; an in-process AG-UI shim
   (`POST /api/agent/opencode/run`) so the mobile/web client is untouched;
   thread→session bindings persisted before the first prompt; single `MODEL` env.
+  It is the only agent: the in-process model agent, the scripted sample agent
+  and the external AG-UI agent are removed, and boot fails without OpenCode.
 - **Permissions** — default `ask`; `permission.asked` tracked per thread and
   surfaced as approve/deny in the thread UI; per-channel/per-thread rules stored
   under `DATA_DIR` and applied as session permission overrides (directory-level
@@ -50,15 +52,12 @@ API + web UI, OpenCode as the agent backend, threads as durable agent sessions.
 - [ ] Channel files: delete and rename from the browser; drag and drop into the
       upload modal; Markdown that links to images beside it (the previewer does
       not resolve relative links yet); a player for video and audio on iOS and
-      Android (they open in the system player); `list_files` and `read_file` for
-      the model-direct agent, which can share and request files but cannot read
-      an upload; checking `send_file` and `request_upload` against a real
-      `opencode serve` agent.
+      Android (they open in the system player); checking `send_file` and
+      `request_upload` against a real `opencode serve` agent.
 
-- [ ] Live notes for the model-direct backend (they are read when a run starts;
-      only the OpenCode backend takes them mid-run). Verifying the live path
-      against a real `opencode serve` — the stand-in session in the tests checks
-      our side of the conversation, not OpenCode's queueing.
+- [ ] Verifying live notes against a real `opencode serve` — the stand-in
+      session in the tests checks our side of the conversation, not OpenCode's
+      queueing.
 
 - [ ] Live VM verification: end-to-end task loop with real inference (needs
       provider keys on the VM); `opencode serve` systemd unit definition.

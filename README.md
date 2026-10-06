@@ -49,7 +49,7 @@ Chat threads are plain conversation until you mention `@hive` — then the agent
 | Surface | What runs in this alpha |
 | --- | --- |
 | **Chat** | CopilotKit headless chat with streamed AG-UI events, mailbox search and reading, send/stop in one input pill, a visible follow-up queue, retained drafts, delegated tasks, and inline email, browser, PDF, plan, and finance cards. The agent only runs when mentioned (`@hive` by default); everything else is plain chat. |
-| **Agent backend** | OpenCode via `AGENT_BACKEND=opencode`: one `opencode serve` process, durable thread→session bindings, a single global event stream, and an in-process AG-UI shim so the client is untouched. Permissions default to ask with approve/deny in the thread, plus per-channel/per-thread rules. |
+| **Agent** | OpenCode, the only agent: one `opencode serve` process, durable thread→session bindings, a single global event stream, and an AG-UI shim in the API so the client is untouched. Permissions default to ask with approve/deny in the thread, plus per-channel/per-thread rules. Optional choice cards (`present_choices`, Jev) are described in the [Jev walkthrough](docs/demos/jev-generative-ui.md). |
 | **Activity** | Durable task plans, progress, input requests, pause/resume/cancel/retry, approvals, and saved receipts. SQL leases recover interrupted work. Finished agent work waits **In Review** until a person marks it done or sends it back with notes; the agent never closes a task itself. See [Review and the task brief](#review-and-the-task-brief). |
 | **Files** | Every channel has a **Files** button: what its agent made and what people upload, as a list of recent changes or a folder browser, with previews (images, PDF, video and audio, Markdown, spreadsheets, JSON, code, and web pages that run in a sandbox). The agent can share any file in the chat as a card (`send_file`) and ask a person for files with an upload button and modal (`request_upload`). See [Channel files](#channel-files). |
 | **Ideas** | Suggestions with source evidence; edit, accept, or dismiss. Sent replies and completed matching work are excluded. |
@@ -68,7 +68,7 @@ Where this fork is headed — self-contained, agent-native team chat:
 
 **Shipped**
 - Single-process VM deployment: the API serves the web UI same-origin, threads/channels persist on local disk (`DATA_DIR`), Docker computer removed. See [docs/vm-deploy.md](docs/vm-deploy.md).
-- OpenCode agent backend: one `opencode serve` (systemd unit on the VM; the API connects, never spawns), durable thread→session bindings, a single global event stream, and an AG-UI shim so the client is untouched.
+- OpenCode as the agent: one `opencode serve` (systemd unit on the VM; the API connects, never spawns), durable thread→session bindings, a single global event stream, and an AG-UI shim so the client is untouched. It is the only agent: the in-process model agent, the scripted sample agent and the external AG-UI agent are gone, and the API does not start without OpenCode.
 - Permissions default to ask with approve/deny in the thread, plus per-channel/per-thread rules.
 - Delegated tasks run as OpenCode sessions in auto-mode; background permission requests surface in the originating thread.
 - Mention-only chat trigger: the agent runs only when the latest message contains `@hive` (env `AGENT_MENTION`); on trigger it receives the full conversation transcript plus attached files.
@@ -84,17 +84,23 @@ Details and open questions live in [ROADMAP.md](ROADMAP.md).
 
 ## Quick start
 
-**Requirements:** Node 24 LTS, pnpm 11.19.0, and a CopilotKit Intelligence project key. The local sample app needs no model or Google account.
+**Requirements:** Node 24 LTS, pnpm 11.19.0, and [OpenCode](https://opencode.ai) running as `opencode serve`: the API checks for it when it starts and stops if it cannot reach it, and the agent runs on the model you name in `MODEL`. The local sample workspace needs no Google account, and a CopilotKit Intelligence project key is optional.
 
 ```sh
 git clone https://github.com/CopilotKit/OpenMuse.git hive
 cd hive
 pnpm install --frozen-lockfile
-cp .env.example .env
+cp .env.example .env   # then set MODEL=provider/model-id in it
+```
+
+Start OpenCode and the API, each in its own terminal (provider keys such as `OPENAI_API_KEY` are read by `opencode serve`, so set them in the environment it runs in):
+
+```sh
+opencode serve --port 4096
 pnpm dev
 ```
 
-In another terminal:
+In a third terminal:
 
 ```sh
 pnpm dev:web
@@ -104,12 +110,11 @@ Open [localhost:8081](http://localhost:8081). The API runs at [localhost:8787/ap
 
 ### Try it
 
-1. In Chat, send **“Complete the permission slip”**. Open the task, supply fictional form values, inspect the saved PDF, and review the prepared reply. This writes only to the local mailbox.
+1. In **Menu → Delegate task → Document**, choose the school email with the permission slip and delegate it. Open the task, supply fictional form values, inspect the saved PDF, and review the prepared reply. This writes only to the local mailbox. You can also ask in Chat: **“@hive Complete the permission slip”**.
 2. In **Goals → Track**, create a built-in availability watch, then change the built-in test page to trigger an alert.
 3. In **Menu → Delegate task → Finance**, use **Try example transactions** to create an interactive spending tracker.
-4. Start the [browser worker](#browser-worker) and configure a model, then ask **“Check out Hacker News for cool stuff”** or **“Summarize copilotkit.ai”**. Follow the browser inline and use **Take control** to open its session.
-5. With `AGENT_BACKEND=opencode` and `opencode serve` running, mention **@hive** in a thread to summon the agent; messages without a mention are plain chat.
-6. To see the file cards without a model, tell the sample agent **“Can you make me a report on the launch?”** (it writes a brief and a first web page and shares both) or **“I'd like to upload the brand guidelines”** (it asks for a file with an Upload button). Then open **Files** from the channel header.
+4. Start the [browser worker](#browser-worker), then mention **@hive** and ask **“Check out Hacker News for cool stuff”** or **“Summarize copilotkit.ai”**. Messages without the mention are plain chat. Follow the browser inline and use **Take control** to open its session.
+5. Ask the agent to make something, such as **“@hive Write a one-page brief for our launch and share it”**: it shares the file as a card in the chat, and **Files** in the channel header shows everything it made. **“@hive Ask me for the brand guidelines”** gets you an Upload button.
 
 For iOS or Android, use `pnpm --dir apps/mobile ios` or `pnpm --dir apps/mobile android`. Xcode or Android tooling is required. The PDF reader needs an Expo development build; use [native setup](apps/mobile/README.md).
 
@@ -123,7 +128,6 @@ Key variables for the VM (see the deploy doc for the full table):
 
 | Variable | Purpose |
 |---|---|
-| `AGENT_BACKEND=opencode` | Routes chat through the OpenCode agent layer |
 | `OPENCODE_SERVER_URL` | The systemd-managed `opencode serve` (default `http://127.0.0.1:4096`); the API connects, never spawns it |
 | `OPENCODE_SERVER_PASSWORD` | Basic-auth password for `opencode serve`, if it requires one |
 | `MODEL` | Single model for all sessions, e.g. `openai/gpt-5`, plus the matching provider key |
@@ -137,14 +141,14 @@ Key variables for the VM (see the deploy doc for the full table):
 
 Copy the commented settings in [.env.example](.env.example) into your private `.env`:
 
-1. Set `AGENT_BACKEND=opencode`, `MODEL=provider/model-id`, and the matching provider key (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or `GOOGLE_API_KEY`). Provider keys stay on the server.
+1. Set `MODEL=provider/model-id` and the matching provider key (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or `GOOGLE_API_KEY`). Provider keys stay on the server, and `opencode serve` is what reads them.
 2. Run `opencode serve` as a systemd unit (see [docs/vm-deploy.md](docs/vm-deploy.md)); point `OPENCODE_SERVER_URL` at it and set `OPENCODE_SERVER_PASSWORD` if it requires auth. The API healthchecks the server and asserts a compatible version on boot — it never spawns the server itself.
 3. Optionally set `AGENT_MENTION` (default `@hive`): only a message containing it as a standalone token summons the agent in chat.
 4. For personal mail/calendar, set `WORKSPACE_MODE=live`, a random `HIVE_ACCESS_KEY` of at least 24 characters, and `TOKEN_ENCRYPTION_KEY` containing 32 random bytes encoded as base64. Restart the API.
 5. Configure a Google OAuth web client with Gmail and Calendar APIs enabled. Set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`; register `${PUBLIC_API_URL}/api/google/callback` as its redirect URI. Configure consent/test-user access in your Google project.
 6. Open **Apps → Gmail** (or **Google Calendar**), connect read access, and grant write access when needed. Every send or calendar change still requires its own stored review. Changing/disconnecting the account invalidates pending connection-bound work.
 
-`AGENT_BACKEND=model` (model-direct) and `AGENT_BACKEND=agui` (external AG-UI agent at `AGENT_URL`) remain as alternatives; `sample` keeps local fictional data on loopback.
+OpenCode is the only agent. `WORKSPACE_MODE=sample` (the default) keeps the workspace's mail, calendar and files local and fictional, on loopback, but chat and tasks still need OpenCode. A deployment that still sets `AGENT_BACKEND=opencode` keeps working; any other value stops the API with an error saying so.
 
 Google credentials are encrypted at rest. File URLs and browser consoles use short-lived signatures. Everyone who can sign in is a member of one team that shares the workspace's Google connection (see [Who sees what](#who-sees-what)); this is not a multi-tenant system with separate accounts per customer. Use HTTPS and restricted network access for a remote host. Keep the default local-data mode on loopback.
 
@@ -161,14 +165,14 @@ Or use `docker compose --env-file .env -f infra/compose.yaml up --build -d`. The
 
 ## Review and the task brief
 
-**The agent never marks a task done.** When it says it has finished (`TASK_COMPLETE:`, or `finish_task` on the model backend) the task moves to **In Review**, a person looks at the result, and either **Mark done** (the only way agent work reaches *Done*, and the moment a goal's milestone is recorded) or **Send back with changes**, which queues the task again with their note. A run that stops without saying it is finished lands in review too, flagged as such. Documents and spending summaries are plain code with no judgment to review, so they still finish themselves (a document task finishes once you approve its reply), and watches keep running on their schedule. The agent's `update_task` tool cannot set a task to done, and neither can a `PATCH` on a worker task.
+**The agent never marks a task done.** When it says it has finished (`finish_task`, or a final message that ends with `TASK_COMPLETE:`) the task moves to **In Review**, a person looks at the result, and either **Mark done** (the only way agent work reaches *Done*, and the moment a goal's milestone is recorded) or **Send back with changes**, which queues the task again with their note. A run that stops without saying it is finished lands in review too, flagged as such. Documents and spending summaries are plain code with no judgment to review, so they still finish themselves (a document task finishes once you approve its reply), and watches keep running on their schedule. The agent's `update_task` tool cannot set a task to done, and neither can a `PATCH` on a worker task.
 
 **Notes and files** are what the agent is told besides the task itself, and they belong to the task, not to a run:
 
 - *Notes* are the team's running instructions, oldest first, each with who wrote it. Every run reads all of them (a re-run also gets its own previous result), so changes requested in review, an answer to a question, and a plain note all travel the same way. Anyone can add one; only the author can remove their own, and only before the agent has read it.
-- *Files* are PDFs, images and text, Markdown, CSV or JSON files, up to 10 MB each, 10 per task and 25 MB in all, checked by their first bytes and not just their extension. They are stored under `DATA_DIR/task-files/<task id>/`, away from any workspace, and downloaded through signed links. On the OpenCode backend each run copies them into the channel workspace (`attachments/<task id>/`) and lists them in the prompt as data, never instructions. On the model backend short text files are pasted into the prompt. A PDF is also saved in Files, so the agent's `inspect_pdf` and `fill_pdf` can open it. The worker and the API must share `DATA_DIR`.
+- *Files* are PDFs, images and text, Markdown, CSV or JSON files, up to 10 MB each, 10 per task and 25 MB in all, checked by their first bytes and not just their extension. They are stored under `DATA_DIR/task-files/<task id>/`, away from any workspace, and downloaded through signed links. Each run copies them into the channel workspace (`attachments/<task id>/`) and lists them in the prompt as data, never instructions. A PDF is also saved in Files, so the agent's `inspect_pdf` and `fill_pdf` can open it. The worker and the API must share `DATA_DIR`.
 - *Handing an issue to the agent* is a step of its own: add the notes and files first, choose whether it gets the recent channel discussion, then confirm. The description stays as written.
-- *While the agent works*, a note or file added to a running OpenCode task is sent into the same session as a new message, the way a message typed into a running OpenCode session is taken up on its next step. The task row is the queue, so this works when the task runs in a separate worker process. Anything that arrives as the agent finishes is sent as a follow-up before the run is closed out; anything that cannot be sent stays marked *not read yet*, and review offers to send it. The model backend has no live path: it reads the notes when a run starts, so a note added mid-run waits for the next run.
+- *While the agent works*, a note or file added to a running task is sent into the same session as a new message, the way a message typed into a running OpenCode session is taken up on its next step. The task row is the queue, so this works when the task runs in a separate worker process. Anything that arrives as the agent finishes is sent as a follow-up before the run is closed out; anything that cannot be sent stays marked *not read yet*, and review offers to send it.
 
 ## Channel files
 
@@ -180,12 +184,12 @@ A channel's **workspace** is the folder its agent works in (`DATA_DIR/owners/<ow
 - *Links* expire after 15 minutes and carry what they are good for in the path, as `/api/agent/channels/<id>/view/<token>/<path>`: a plain file's link covers that file only, a web page's covers its folder. They need no sign-in, send `nosniff` and a sandbox policy, support `Range` requests (so video plays and skips), and take `?download=1` (save instead of show) and `?head=N` (only the first N bytes, which is what a text preview asks for). A signed link is a credential until it expires.
 - Uploads are limited to 10 MB each. A name already taken is kept and the new file becomes `name (2).ext`.
 
-The agent has two tools for it (both backends; an OpenCode task run gets `send_file` but not `request_upload`, since a task cannot wait in a chat: it asks with `ask_user` and is paused, and the waiting card has an **Attach a file** button):
+The agent has two tools for it (a task run gets `send_file` but not `request_upload`, since a task cannot wait in a chat: it asks with `ask_user` and is paused, and the waiting card has an **Attach a file** button):
 
-- **`send_file`** names a file in the workspace and the people in the chat get a card for it: an image in place, audio and video with controls, the start of Markdown, a spreadsheet, JSON or code, and a web page with a **Show preview** button, each with Open and Download. Use it instead of pasting a file's contents into a reply. For an agent with no file tools of its own (the model-direct backend), `content` writes a text file first; anything that is not text is refused. The result names the file and carries no link, so a card always asks the server for a fresh one, and says plainly when the file has since been moved or deleted.
-- **`request_upload`** asks a person for files: the chat shows what is needed and an **Upload** button that opens a modal (choose files, optionally limited to the kinds the agent named; one file if it asked for one). The call returns at once, because an OpenCode tool call is cut off after 30 seconds and a chat turn should end rather than wait. The files are saved in the folder the agent named (`uploads/` by default), recorded against the request (so the card shows who added what, even on a later visit), and the person's message to the agent, `@hive I've uploaded the files you asked for:` with each file's path, follows by itself. The mention is what makes an OpenCode agent in a thread answer.
+- **`send_file`** names a file in the workspace and the people in the chat get a card for it: an image in place, audio and video with controls, the start of Markdown, a spreadsheet, JSON or code, and a web page with a **Show preview** button, each with Open and Download. Use it instead of pasting a file's contents into a reply. Pass `content` only to create a text file as it is sent; anything that is not text is refused. The result names the file and carries no link, so a card always asks the server for a fresh one, and says plainly when the file has since been moved or deleted.
+- **`request_upload`** asks a person for files: the chat shows what is needed and an **Upload** button that opens a modal (choose files, optionally limited to the kinds the agent named; one file if it asked for one). The call returns at once, because an OpenCode tool call is cut off after 30 seconds and a chat turn should end rather than wait. The files are saved in the folder the agent named (`uploads/` by default), recorded against the request (so the card shows who added what, even on a later visit), and the person's message to the agent, `@hive I've uploaded the files you asked for:` with each file's path, follows by itself. The mention is what makes the agent in a thread answer.
 
-On the model-direct backend the agent can share files and ask for them, but has no tool to read what is uploaded; OpenCode agents read them from `uploads/` with their own file tools.
+The agent reads what is uploaded from `uploads/` with its own file tools.
 
 ## Persistence and operation
 

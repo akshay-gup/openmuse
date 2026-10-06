@@ -378,7 +378,7 @@ export interface ChannelThread {
    */
   parentMessageId?: string;
   /**
-   * Bound OpenCode session id (`AGENT_BACKEND=opencode`). Persisted before
+   * Bound OpenCode session id. Persisted before
    * the first prompt so the thread can always find its session.
    */
   opencodeSessionId?: string;
