@@ -26,6 +26,8 @@ import { LocalDiskThreadStore, type ThreadBindingStore } from "./engine/threads.
 import { AppError } from "./errors.ts";
 import { Files } from "./files.ts";
 import { GoogleAuth } from "./google-auth.ts";
+import type { JevAdapter } from "./jev/adapter.ts";
+import { createJevService } from "./jev/service.ts";
 import { HiveToolBridge } from "./opencode/hive-tools.ts";
 import {
   connectionFromConfig,
@@ -43,7 +45,7 @@ import { WorkspaceService } from "./workspace.ts";
 export async function createApp(
   db: Store,
   config: Config,
-  options: { threads?: ThreadBindingStore } = {},
+  options: { threads?: ThreadBindingStore; jevAdapter?: JevAdapter } = {},
 ) {
   const auth = await createAuth(db, config),
     files = new Files(db, config, auth),
@@ -65,6 +67,7 @@ export async function createApp(
     actions,
     browser,
     options.threads ?? new LocalDiskThreadStore(config.dataDir),
+    createJevService(db, config, options.jevAdapter),
   );
   // CopilotKit Intelligence is optional: without a key the runtime runs in
   // local-only mode and thread state lives in the local stores.

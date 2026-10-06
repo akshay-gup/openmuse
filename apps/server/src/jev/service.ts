@@ -8,8 +8,9 @@ import {
   jevOptionSchema,
   jevPanelSchema,
 } from "../../../../packages/domain/src/jev.ts";
+import type { Config } from "../config.ts";
 import type { Store } from "../db.ts";
-import { type JevAdapter, rankJevOptions } from "./adapter.ts";
+import { createJevAdapter, type JevAdapter, rankJevOptions } from "./adapter.ts";
 
 export type PresentChoicesInput = {
   /** The person's latest message; the tool always supplies it, direct callers fall back to `message`. */
@@ -45,6 +46,15 @@ export type JevHeadSnapshot = {
   revision: number;
   selectedId: string | null;
 };
+/** The choice cards for this configuration, or null when JEV_MODE is off. */
+export function createJevService(
+  store: Store,
+  config: Pick<Config, "jevMode" | "typesafeApiKey" | "jevModel">,
+  adapter: JevAdapter | undefined = createJevAdapter(config),
+): JevService | null {
+  if (!config.jevMode || config.jevMode === "off" || !adapter) return null;
+  return new JevService({ store, adapter, mode: config.jevMode });
+}
 export class JevService {
   constructor(
     private readonly deps: { store: Store; adapter: JevAdapter; mode: "sample" | "live" },

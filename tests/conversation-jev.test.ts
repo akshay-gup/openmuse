@@ -180,6 +180,7 @@ test("live choices reject unobserved source pages without creating a panel", asy
     agentBackend: "model" as const,
     model: "openai/fixture",
     jevMode: "live" as const,
+    typesafeApiKey: "test-key-never-sent",
   };
   const app = await createApp(browser.db, config);
   t.after(() => app.agent.stop());
@@ -231,6 +232,7 @@ test("a redirected browse does not prove the requested source URL", async (t) =>
     agentBackend: "model" as const,
     model: "openai/fixture",
     jevMode: "live" as const,
+    typesafeApiKey: "test-key-never-sent",
   };
   const app = await createApp(browser.db, config);
   t.after(() => app.agent.stop());
@@ -271,6 +273,7 @@ test("mail read in an earlier run does not authorize a new live clarification", 
     agentBackend: "model" as const,
     model: "openai/fixture",
     jevMode: "live" as const,
+    typesafeApiKey: "test-key-never-sent",
   };
   const app = await createApp(browser.db, config);
   t.after(() => app.agent.stop());
@@ -345,6 +348,7 @@ test("live refinement reuses the verified stored sources with no new browse or o
     agentBackend: "model" as const,
     model: "openai/fixture",
     jevMode: "live" as const,
+    typesafeApiKey: "test-key-never-sent",
   };
   const app = await createApp(browser.db, config);
   t.after(() => app.agent.stop());
@@ -400,6 +404,7 @@ test("generic live clarification succeeds without mail, but an unobserved mail t
     agentBackend: "model" as const,
     model: "openai/fixture",
     jevMode: "live" as const,
+    typesafeApiKey: "test-key-never-sent",
   };
   const app = await createApp(browser.db, config);
   t.after(() => app.agent.stop());
@@ -442,6 +447,7 @@ test("Jev judges the person's own message, not the agent's summary of it", async
     agentBackend: "model" as const,
     model: "openai/fixture",
     jevMode: "live" as const,
+    typesafeApiKey: "test-key-never-sent",
   };
   const app = await createApp(browser.db, config);
   t.after(() => app.agent.stop());
@@ -502,6 +508,7 @@ test("live comparison rejects a factual detail absent from the read page", async
     agentBackend: "model" as const,
     model: "openai/fixture",
     jevMode: "live" as const,
+    typesafeApiKey: "test-key-never-sent",
   };
   const app = await createApp(browser.db, config);
   t.after(() => app.agent.stop());
@@ -549,6 +556,7 @@ test("an empty browser read does not authorize a live comparison", async (t) => 
     agentBackend: "model" as const,
     model: "openai/fixture",
     jevMode: "live" as const,
+    typesafeApiKey: "test-key-never-sent",
   };
   const app = await createApp(browser.db, config);
   t.after(() => app.agent.stop());
@@ -626,6 +634,7 @@ for (const [name, candidate, error] of [
       agentBackend: "model" as const,
       model: "openai/fixture",
       jevMode: "live" as const,
+      typesafeApiKey: "test-key-never-sent",
     };
     const app = await createApp(browser.db, config);
     t.after(() => app.agent.stop());

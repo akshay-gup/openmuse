@@ -43,6 +43,7 @@ import type { Config } from "../config.ts";
 import type { Store } from "../db.ts";
 import { AppError } from "../errors.ts";
 import type { Files } from "../files.ts";
+import { createJevService, type JevService } from "../jev/service.ts";
 import { backgroundFailure } from "../log.ts";
 import type { OpencodeTaskRuntime } from "../opencode/index.ts";
 import { requesterNames, withRequester } from "../requesters.ts";
@@ -84,6 +85,8 @@ export class AgentService {
   readonly channelFiles: ChannelFiles;
   /** What an agent has asked people to upload, and what they have uploaded for it. */
   readonly uploadRequests: UploadRequests;
+  /** The choice cards an agent can show (`present_choices`), or null when JEV_MODE is off. */
+  readonly jev: JevService | null;
   constructor(
     readonly db: Store,
     readonly config: Config,
@@ -92,7 +95,9 @@ export class AgentService {
     readonly actions: ActionService,
     readonly browser: BrowserService,
     readonly threads: ThreadBindingStore = new LocalDiskThreadStore(config.dataDir),
+    jev: JevService | null = createJevService(db, config),
   ) {
+    this.jev = jev;
     this.taskFiles = new TaskFiles(config.dataDir);
     this.channelFiles = new ChannelFiles(config, files, (owner, id) => this.getChannel(owner, id));
     this.uploadRequests = new UploadRequests(db);

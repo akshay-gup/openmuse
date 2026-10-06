@@ -59,6 +59,11 @@ type RunInput = z.infer<typeof runInputSchema>;
 const RUN_TIMEOUT_MS = 10 * 60_000;
 /** Truncation for tool results forwarded as TOOL_CALL_RESULT content. */
 const TOOL_RESULT_LIMIT = 2_000;
+/**
+ * Tools whose result is the card itself, not a log of what happened: cut short, it is not JSON the
+ * client can show. Their size is bounded by the tool's own schema.
+ */
+const WHOLE_RESULT_TOOLS = new Set(["present_choices"]);
 
 export function parseModelRef(
   model: string | undefined,
@@ -67,6 +72,11 @@ export function parseModelRef(
   const slash = model.indexOf("/");
   if (slash <= 0 || slash === model.length - 1) return undefined;
   return { providerID: model.slice(0, slash), modelID: model.slice(slash + 1) };
+}
+
+/** A Hive tool's own name: OpenCode namespaces the ones the bridge offers per run. */
+function hiveToolName(tool: string): string {
+  return tool.replace(/^hive_[a-f0-9]{16}_/, "");
 }
 
 /** Last user message text, following ConversationAgent's convention. */
@@ -375,7 +385,7 @@ export class RunTranslator {
       this.send({
         type: "TOOL_CALL_START",
         toolCallId: callID,
-        toolCallName: tool.replace(/^hive_[a-f0-9]{16}_/, ""),
+        toolCallName: hiveToolName(tool),
         parentMessageId,
       });
       current.started = true;
@@ -399,7 +409,9 @@ export class RunTranslator {
         messageId: `toolresult-${callID}`,
         toolCallId: callID,
         role: "tool",
-        content: content.slice(0, TOOL_RESULT_LIMIT),
+        content: WHOLE_RESULT_TOOLS.has(hiveToolName(tool))
+          ? content
+          : content.slice(0, TOOL_RESULT_LIMIT),
       });
       track.ended = true;
     }
@@ -562,6 +574,8 @@ async function runOpencodeTurn(ctx: RunContext): Promise<void> {
     ctx.session = { sessionId, directory };
     deps.bus.track(input.threadId, sessionId);
 
+    // The person's own words, which the choice cards are judged against.
+    const stripped = stripMention(userText, mention);
     if (deps.hiveTools) {
       const toolInput = {
         ...input,
@@ -578,12 +592,14 @@ async function runOpencodeTurn(ctx: RunContext): Promise<void> {
           signal: toolAbort.signal,
           requestKey: `${input.threadId}:${input.runId}`,
           channelId: binding.channelId,
+          jev: deps.service.jev,
+          jevMode: deps.config.jevMode,
+          latestText: stripped,
         }),
         toolAbort.signal,
       );
     }
     const transcript = buildTranscript(messages);
-    const stripped = stripMention(userText, mention);
     // A bare mention ("@hive" and nothing else) still summons the agent;
     // point it at the conversation it just received.
     const promptText =

@@ -18,6 +18,8 @@ export interface AgentTurn {
   call: (name: string, args?: unknown) => Promise<unknown>;
   /** Say something as the assistant. */
   say: (words: string, messageID?: string) => void;
+  /** Send any event OpenCode would, such as a tool call as it runs. */
+  emit: (event: Record<string, unknown>) => void;
   /** Stop: the session has nothing left to do. */
   idle: () => void;
 }
@@ -68,9 +70,10 @@ export function opencodeStandIn(options: { dataDir: string; model?: string }) {
   const client = {
     session: {
       create: async () => ({ data: { id: "ses-1" } }),
+      get: async () => ({ data: { id: "ses-1" } }),
       promptAsync: async (prompt: Prompt) => {
         prompts.push(prompt);
-        await handler({ prompt, index: prompts.length, tools: offered, call, say, idle });
+        await handler({ prompt, index: prompts.length, tools: offered, call, say, emit, idle });
         return {};
       },
       abort: async () => ({}),
