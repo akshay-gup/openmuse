@@ -4,9 +4,8 @@ import type { HiveToolBridge } from "./hive-tools.ts";
 /**
  * AG-UI shim over OpenCode sessions.
  *
- * The CopilotKit runtime's `agents` factory points the "opencode" backend at
- * POST /api/agent/opencode/run on this same process (in-process shim, no
- * loopback HTTP hop). The shim translates:
+ * The CopilotKit runtime's `agents` factory points the chat agent at
+ * POST /api/agent/opencode/run on this same server. The shim translates:
  * - AG-UI RunAgentInput -> OpenCode `session.promptAsync`, with a synthetic
  *   context part (channel/thread metadata plus the full visible conversation
  *   transcript, which the model sees but that never surfaces as a real turn)
@@ -89,7 +88,7 @@ function lastUserIndex(messages: Array<Record<string, unknown>>): number {
   return -1;
 }
 
-/** Last user message text, following ConversationAgent's convention. */
+/** Text of the last user message that says something. */
 export function lastUserText(messages: Array<Record<string, unknown>>): string | undefined {
   const index = lastUserIndex(messages);
   return index < 0 ? undefined : messageText(messages[index]);

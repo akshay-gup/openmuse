@@ -74,7 +74,7 @@ export async function createApp(
   const intelligence = config.intelligenceApiKey
     ? new CopilotKitIntelligence({ apiKey: config.intelligenceApiKey })
     : undefined;
-  const runtime = makeRuntime(config, agent, auth, intelligence);
+  const runtime = makeRuntime(config, auth, intelligence);
   const app = new Hono<{ Variables: { owner: string } }>();
   const origins = new Set([...config.allowedOrigins, new URL(config.publicUrl).origin]);
   // A channel file's link is its own credential, and keeps its token in the path so the files a page

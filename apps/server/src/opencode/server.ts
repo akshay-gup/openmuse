@@ -2,8 +2,8 @@
  * Connection to the OpenCode server.
  *
  * `opencode serve` runs as a systemd unit on the host; this process NEVER
- * spawns it. When AGENT_BACKEND=opencode, boot healthchecks the server and
- * asserts a compatible version, failing loud when it is unreachable.
+ * spawns it. Boot healthchecks the server and asserts a compatible version
+ * (`opencode.start()` in app.ts), failing loud when it is unreachable.
  */
 import { createOpencodeClient } from "@opencode-ai/sdk/v2/client";
 
@@ -57,7 +57,7 @@ export function assertCompatibleServerVersion(version: string): void {
 /**
  * Healthcheck + version assert against a running `opencode serve`.
  * Throws when unreachable, unhealthy, or version-incompatible: boot must fail
- * loud rather than serve a dead agent backend.
+ * loud rather than serve a dead agent.
  */
 export async function ensureOpencodeServerReachable(
   conn: OpencodeConnection,

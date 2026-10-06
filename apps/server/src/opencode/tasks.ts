@@ -1,8 +1,7 @@
 /**
  * Task-worker execution through OpenCode sessions.
  *
- * When `AGENT_BACKEND=opencode`, `executeModelTask` delegates here instead of
- * the model-direct `tanstackAgent` path. Each task gets a fresh OpenCode
+ * `executeModelTask` delegates here. Each task gets a fresh OpenCode
  * session scoped to its channel's workspace directory (never the interactive
  * thread session — a background run must not interleave with chat).
  *
@@ -13,8 +12,8 @@
  *
  * Completion protocol: the task prompt instructs the model to end its final
  * message with `TASK_COMPLETE: <summary>` or `TASK_BLOCKED: <question>`.
- * The lifecycle (queued/working/done, delegation, orchestrator visibility)
- * is unchanged — only the execution backend differs.
+ * The task lifecycle (queued, working, review, delegation, orchestrator
+ * visibility) belongs to the task worker; this module only runs the session.
  */
 import { mkdir } from "node:fs/promises";
 import type { AgentTask } from "../../../../packages/domain/src/agent.ts";

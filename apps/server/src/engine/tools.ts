@@ -21,7 +21,7 @@ import type { JevService } from "../jev/service.ts";
 import { presentChoicesTool } from "../jev/tools.ts";
 import type { AgentService } from "./service.ts";
 
-/** The same server capabilities, validation and ownership rules for every agent backend. */
+/** The Hive tools an agent is offered, with the same validation and ownership rules in a chat reply and in a task run. */
 export function conversationTools(
   service: AgentService,
   owner: string,

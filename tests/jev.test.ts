@@ -7,6 +7,7 @@ import {
   LiveJevAdapter,
   rankJevOptions,
 } from "../apps/server/src/jev/adapter.ts";
+import { presentChoicesParameters } from "../apps/server/src/jev/tools.ts";
 import { encodeJevAction, jevPanelSchema, parseJevAction } from "../packages/domain/src/jev.ts";
 
 const option = (id: string) => ({
@@ -297,4 +298,32 @@ test("real client cancellation surfaces as the caller's abort", async () => {
   );
   const adapter = LiveJevAdapter.withKey("test-key", defaultJevModel, transport);
   await assert.rejects(adapter.decide(decideInput(), controller.signal), /run cancelled/);
+});
+
+test("refinement may omit options but new panels still need candidates", () => {
+  const base = {
+    message: "Refine",
+    context: "Earlier panel",
+    title: "Choices",
+    control: "comparison",
+  };
+  assert.doesNotThrow(() =>
+    presentChoicesParameters.parse({ ...base, options: [], refinementPanelId: "previous" }),
+  );
+  assert.throws(() => presentChoicesParameters.parse({ ...base, options: [] }));
+});
+
+test("mail-grounded choices name a thread, while generic clarification needs no mail reference", () => {
+  const base = {
+    message: "What next?",
+    context: "User asked for help",
+    title: "Next steps",
+    control: "clarification",
+    options: [{ id: "explore", label: "Explore exhibits", details: [], sources: [] }],
+  };
+  assert.doesNotThrow(() => presentChoicesParameters.parse(base));
+  assert.equal(
+    presentChoicesParameters.parse({ ...base, mailThreadId: "trip-thread" }).mailThreadId,
+    "trip-thread",
+  );
 });

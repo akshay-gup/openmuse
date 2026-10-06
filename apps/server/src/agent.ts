@@ -8,9 +8,6 @@ import {
 } from "@copilotkit/runtime/v2";
 import type { Auth } from "./auth.ts";
 import type { Config } from "./config.ts";
-import { ConversationAgent } from "./engine/conversation.ts";
-import type { AgentService } from "./engine/service.ts";
-import { createJevAdapter, type JevAdapter } from "./jev/adapter.ts";
 
 export function agentConfigured(config: Config) {
   if (config.agentBackend === "opencode") return true; // boot gates on server reachability
@@ -26,40 +23,18 @@ export function agentConfigured(config: Config) {
         ))
   );
 }
-export function makeRuntime(
-  config: Config,
-  service: AgentService,
-  auth: Auth,
-  intelligence?: CopilotKitIntelligence,
-) {
-  // Built on first use, then shared so live mode reuses one TypeSafe client across requests.
-  let jevAdapter: JevAdapter | undefined;
-  const sharedJevAdapter = () => (jevAdapter ??= createJevAdapter(config));
-  const agents: AgentsFactory = async ({ request }) => ({
-    default: await (async () => {
-      const authorization = request.headers.get("authorization") ?? undefined;
-      if (config.agentBackend === "agui") {
-        return new HttpAgent({
-          url: config.agentUrl ?? "http://127.0.0.1:1/unconfigured",
-          headers: config.agentToken ? { Authorization: `Bearer ${config.agentToken}` } : {},
-        });
-      }
-      if (config.agentBackend === "opencode") {
-        // In-process shim: forward the caller's auth so the shim route
-        // resolves the owner the same way this request did.
-        return new HttpAgent({
-          url: `${config.publicUrl}/api/agent/opencode/run`,
-          headers: authorization ? { authorization } : {},
-        });
-      }
-      return new ConversationAgent(
-        config,
-        service,
-        await auth.owner(authorization),
-        sharedJevAdapter(),
-      );
-    })(),
-  });
+export function makeRuntime(config: Config, auth: Auth, intelligence?: CopilotKitIntelligence) {
+  // The agent is OpenCode, reached through the AG-UI shim in this process. The caller's auth is
+  // forwarded so the shim route resolves the owner the same way this request did.
+  const agents: AgentsFactory = async ({ request }) => {
+    const authorization = request.headers.get("authorization") ?? undefined;
+    return {
+      default: new HttpAgent({
+        url: `${config.publicUrl}/api/agent/opencode/run`,
+        headers: authorization ? { authorization } : {},
+      }),
+    };
+  };
   // Without an Intelligence key the runtime runs in SSE mode: no hosted thread
   // persistence, no identifyUser (auth is enforced by the Hono middleware and
   // the agents factory resolves the owner from the request headers).
