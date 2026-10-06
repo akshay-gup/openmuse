@@ -45,6 +45,26 @@ export interface TaskStep {
   status: "pending" | "running" | "succeeded" | "failed" | "waiting";
   detail?: string;
 }
+/** What a task's brief may hold. The server enforces these; the client checks before it uploads. */
+export const taskBriefLimits = {
+  noteChars: 4000,
+  notes: 50,
+} as const;
+/** A line of guidance on a task. Notes are append-only: the agent reads them in order, every run. */
+export interface TaskNote {
+  id: string;
+  text: string;
+  /** A plain note, an answer to a question the agent asked, or changes requested in review. */
+  kind: "note" | "answer" | "feedback";
+  createdAt: string;
+  createdBy?: string;
+  /** Display name for `createdBy`, filled in when the task is sent to a client. */
+  createdByName?: string;
+  /** True when the person it is sent to wrote it. Filled in when the task is sent to a client. */
+  mine?: boolean;
+  /** False until the agent has seen it: in a run's prompt, or sent live to the running session. */
+  delivered: boolean;
+}
 export interface AgentTask {
   id: string;
   title: string;
@@ -83,6 +103,8 @@ export interface AgentTask {
   createdBy?: string;
   /** Display name for `createdBy`, filled in when the task is sent to a client. */
   createdByName?: string;
+  /** Guidance for whoever does the work, oldest first. The agent reads all of it on every run. */
+  notes?: TaskNote[];
   plan: TaskStep[];
   evidence: Evidence[];
   input: Record<string, unknown>;
@@ -112,7 +134,9 @@ export interface RunEvent {
     | "error"
     | "status"
     | "message"
-    | "tool";
+    | "tool"
+    /** Something a person told the agent while it worked, or sent it back with. */
+    | "instruction";
   runId?: string;
   sequence?: number;
   toolName?: string;
@@ -268,6 +292,12 @@ export const updateTaskSchema = z.object({
   assignee: z.enum(["agent"]).nullable().optional(),
 });
 export type UpdateTaskInput = z.infer<typeof updateTaskSchema>;
+/** A note on a task. `run` also sends the task back to the agent (from review, a failure or done). */
+export const addNoteSchema = z.object({
+  text: z.string().trim().min(1).max(taskBriefLimits.noteChars),
+  run: z.boolean().optional(),
+});
+export type AddNoteInput = z.infer<typeof addNoteSchema>;
 /** Fixed id of the orchestrator channel: the control-plane surface. */
 export const ORCHESTRATOR_CHANNEL_ID = "orchestrator";
 export type ChannelStatus = "active" | "idle" | "archived";

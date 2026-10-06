@@ -8,6 +8,7 @@ import {
   type AgentNotification,
   type AgentTask,
   type AgentWorkspace,
+  addNoteSchema,
   type Channel,
   type ChannelThread,
   createChannelSchema,
@@ -22,7 +23,9 @@ import {
   ORCHESTRATOR_CHANNEL_ID,
   type Project,
   type RunEvent,
+  type TaskNote,
   type TaskStatus,
+  taskBriefLimits,
   updateProjectSchema,
   updateTaskSchema,
 } from "../../../../packages/domain/src/agent.ts";
@@ -422,10 +425,6 @@ export class AgentService {
         this.db.list<AgentNotification>(owner, "notifications"),
         this.db.get<AgentIdentity>(owner, "agent-settings", "identity"),
       ]);
-    const names = await requesterNames(
-      this.db,
-      tasks.map((task) => task.createdBy),
-    );
     const heartbeat =
       (await this.db.get<{ lastTickAt: string }>("system", "worker-status", "tasks")) ??
       (await this.db.get<{ lastTickAt: string }>(
@@ -434,7 +433,7 @@ export class AgentService {
         `tasks:${ORCHESTRATOR_CHANNEL_ID}`,
       ));
     return {
-      tasks: tasks.map((task) => withRequester(task, names)),
+      tasks: await this.present(owner, tasks),
       goals,
       projects,
       monitors,
@@ -456,6 +455,32 @@ export class AgentService {
     if (!task) throw new AppError("Task not found", 404);
     return task;
   }
+  /**
+   * Tasks as a client sees them: who asked, and who wrote each note. The names are for display and
+   * are never stored.
+   */
+  private async present(owner: string, tasks: AgentTask[]): Promise<AgentTask[]> {
+    const names = await requesterNames(
+      this.db,
+      tasks.flatMap((task) => [
+        task.createdBy,
+        ...(task.notes ?? []).map((note) => note.createdBy),
+      ]),
+    );
+    const nameOf = (id?: string) => (id ? names.get(id) : undefined);
+    return tasks.map((task) => {
+      const named = withRequester(task, names);
+      if (!named.notes?.length) return named;
+      return {
+        ...named,
+        notes: named.notes.map((note) => ({
+          ...note,
+          createdByName: nameOf(note.createdBy),
+          mine: note.createdBy === owner,
+        })),
+      };
+    });
+  }
   async detail(owner: string, id: string) {
     const task = await this.getTask(owner, id);
     const files = (await this.db.list<Artifact>(owner, "files")).filter((file) =>
@@ -464,9 +489,8 @@ export class AgentService {
     const browsers = (await this.db.list<BrowserSession>(owner, "browsers")).filter((browser) =>
       [task.state.browserId, task.state.sessionId].includes(browser.id),
     );
-    const names = await requesterNames(this.db, [task.createdBy]);
     return {
-      task: withRequester(task, names),
+      task: (await this.present(owner, [task]))[0],
       files: files.map((file) => this.files.signed(owner, file)),
       browsers: browsers.map((browser) => this.browser.decorate(owner, browser)),
       events: (await this.db.listWhere<RunEvent>(owner, "run-events", "taskId", id)).sort(
@@ -847,6 +871,11 @@ export class AgentService {
         });
     return { deleted: id };
   }
+  /**
+   * Answer the question a task is waiting on. The answer joins the task's notes, so the agent keeps
+   * it in view on every later run, and the task is queued in the same statement: a worker can never
+   * pick it up without the answer.
+   */
   async answer(
     owner: string,
     id: string,
@@ -856,21 +885,141 @@ export class AgentService {
     const task = await this.getTask(owner, id);
     if (task.status !== "waiting_input")
       throw new AppError("This task is not waiting for input", 409);
-    const next = await this.db.compareAndSwap<AgentTask>(
+    const next = await this.db.appendItem<AgentTask>(
       owner,
       "tasks",
       id,
-      { status: "waiting_input" },
+      "notes",
+      this.newNote(owner, answer, "answer"),
       {
-        status: "queued",
-        question: null,
-        input: { ...task.input, ...(fields ? { fields } : {}) },
-        state: { ...task.state, answer },
-        updatedAt: date(),
+        where: { status: "waiting_input" },
+        merge: {
+          status: "queued",
+          question: null,
+          input: { ...task.input, ...(fields ? { fields } : {}) },
+          updatedAt: date(),
+        },
       },
     );
     if (!next) throw new AppError("Task changed; refresh and try again", 409);
     return next;
+  }
+  private newNote(owner: string, text: string, kind: TaskNote["kind"]): TaskNote {
+    return { id: randomUUID(), text, kind, createdAt: date(), createdBy: owner, delivered: false };
+  }
+  private async personName(owner: string): Promise<string> {
+    return (await requesterNames(this.db, [owner])).get(owner) ?? "Someone";
+  }
+  private async logInstruction(owner: string, taskId: string, title: string, detail: string) {
+    await this.db.put(owner, "run-events", {
+      id: randomUUID(),
+      taskId,
+      kind: "instruction",
+      date: date(),
+      title,
+      detail,
+    } satisfies RunEvent);
+  }
+  /** Where a task can be sent back from: the agent has stopped, and is waiting on or finished with the team. */
+  private static readonly sendBackFrom: ReadonlySet<TaskStatus> = new Set([
+    "in_review",
+    "waiting_input",
+    "failed",
+    "cancelled",
+    "succeeded",
+  ]);
+  /**
+   * Add a note to a task. Notes are the team's running instructions: every run reads all of them,
+   * and one added while the agent works is sent to its running session. With `run` the task also
+   * goes back to the agent (from review, a failure, a question, or done). The note and the new
+   * status land in one statement, so a worker never starts without the note.
+   */
+  async addNote(owner: string, id: string, raw: unknown): Promise<AgentTask> {
+    const input = addNoteSchema.parse(raw);
+    const task = await this.getTask(owner, id);
+    if (input.run) {
+      if (task.kind === "manual")
+        throw new AppError("Hand this task to the agent before sending it a note to run", 422);
+      if (task.kind !== "agent" && task.kind !== "plan")
+        throw new AppError("This kind of task does not take notes into a new run", 422);
+    }
+    const sendBack = Boolean(input.run) && AgentService.sendBackFrom.has(task.status);
+    // Running again after a failure or a stop is retrying: the same care applies as for a retry.
+    if (
+      sendBack &&
+      task.actionId &&
+      task.status !== "in_review" &&
+      task.status !== "waiting_input"
+    ) {
+      const action = await this.db.get<ActionProposal>(owner, "actions", task.actionId);
+      if (action && action.status !== "succeeded")
+        throw new AppError(
+          "Check the reviewed action before running this again; its outcome may be uncertain.",
+          409,
+        );
+    }
+    const note = this.newNote(
+      owner,
+      input.text,
+      sendBack && task.status === "waiting_input"
+        ? "answer"
+        : sendBack && task.status === "in_review"
+          ? "feedback"
+          : "note",
+    );
+    const max = taskBriefLimits.notes;
+    let saved = sendBack
+      ? await this.db.appendItem<AgentTask>(owner, "tasks", id, "notes", note, {
+          max,
+          where: { status: task.status, leaseId: task.leaseId ?? null },
+          merge: {
+            status: "queued",
+            error: null,
+            question: null,
+            leaseId: null,
+            leaseUntil: null,
+            updatedAt: date(),
+          },
+        })
+      : null;
+    // Not sent back, or the task moved on since it was read: the note is kept either way.
+    saved ??= await this.db.appendItem<AgentTask>(owner, "tasks", id, "notes", note, {
+      max,
+      merge: { updatedAt: date() },
+    });
+    if (!saved) {
+      if (!(await this.db.get(owner, "tasks", id))) throw new AppError("Task not found", 404);
+      throw new AppError(`A task can carry ${max} notes. Remove one first.`, 409);
+    }
+    const who = await this.personName(owner);
+    await this.logInstruction(
+      owner,
+      id,
+      `${who} ${note.kind === "feedback" ? "asked for changes" : note.kind === "answer" ? "answered" : "added a note"}`,
+      input.text,
+    );
+    return (await this.present(owner, [saved]))[0];
+  }
+  /** Take back a note before the agent has read it. Only its author can. */
+  async removeNote(owner: string, id: string, noteId: string): Promise<AgentTask> {
+    const task = await this.getTask(owner, id);
+    const note = task.notes?.find((entry) => entry.id === noteId);
+    if (!note) throw new AppError("Note not found", 404);
+    if (note.createdBy !== owner) throw new AppError("You can only remove your own notes", 403);
+    if (note.delivered)
+      throw new AppError(
+        "The agent has already read this note. Add a new note to change course.",
+        409,
+      );
+    const saved = await this.db.removeItem<AgentTask>(owner, "tasks", id, "notes", noteId, {
+      updatedAt: date(),
+    });
+    if (!saved) throw new AppError("Task not found", 404);
+    return (await this.present(owner, [saved]))[0];
+  }
+  async markNotesDelivered(owner: string, taskId: string, noteIds: string[]) {
+    if (noteIds.length)
+      await this.db.patchItems(owner, "tasks", taskId, "notes", noteIds, { delivered: true });
   }
   async createGoal(owner: string, raw: unknown, id?: string) {
     const input = goalInputSchema.parse(raw);
