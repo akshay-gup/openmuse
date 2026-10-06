@@ -7,6 +7,7 @@ The native and web agent core runs locally. This inventory describes the current
 | Area | Current implementation | Remaining extension |
 | --- | --- | --- |
 | Chat / delegated work | Native CopilotKit chat, server tools, durable tasks and confirmed outcomes | Live model/provider acceptance testing |
+| Task review and brief | Agent work waits In Review until a person marks it done or sends it back with a note; the agent cannot close a task. Notes and files (PDF, images, text) on every task are read by each run, and notes added to a running OpenCode task reach its session | Live notes for the model-direct backend; acceptance testing of live notes against a real `opencode serve` |
 | Ideas / personal context | Source-backed mail/goal rules, accept/edit/dismiss, identity, editable/forgettable memories | Broader model-derived cross-connector suggestions |
 | Goals / Tracking | Milestones, recurring watches, observations, retry/backoff, pause and cancellation | Adaptive long-term planning and calendar-driven reminders |
 | Browser | Persistent Chromium, public page reads, snapshots, console takeover, PDF downloads | Autonomous interactive booking and per-person VM orchestration |

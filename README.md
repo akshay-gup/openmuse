@@ -50,7 +50,7 @@ Chat threads are plain conversation until you mention `@hive` — then the agent
 | --- | --- |
 | **Chat** | CopilotKit headless chat with streamed AG-UI events, mailbox search and reading, send/stop in one input pill, a visible follow-up queue, retained drafts, delegated tasks, and inline email, browser, PDF, plan, and finance cards. The agent only runs when mentioned (`@hive` by default); everything else is plain chat. |
 | **Agent backend** | OpenCode via `AGENT_BACKEND=opencode`: one `opencode serve` process, durable thread→session bindings, a single global event stream, and an in-process AG-UI shim so the client is untouched. Permissions default to ask with approve/deny in the thread, plus per-channel/per-thread rules. |
-| **Activity** | Durable task plans, progress, input requests, pause/resume/cancel/retry, approvals, and saved receipts. SQL leases recover interrupted work. |
+| **Activity** | Durable task plans, progress, input requests, pause/resume/cancel/retry, approvals, and saved receipts. SQL leases recover interrupted work. Finished agent work waits **In Review** until a person marks it done or sends it back with notes; the agent never closes a task itself. See [Review and the task brief](#review-and-the-task-brief). |
 | **Ideas** | Suggestions with source evidence; edit, accept, or dismiss. Sent replies and completed matching work are excluded. |
 | **Goals & Tracking** | Goals and milestones; recurring public-page checks for changes, text availability, or USD price thresholds, with deduplicated alerts and failure backoff. |
 | **Documents** | Email attachment → PDF → requested form values → filled copy → reviewed reply → receipt. Native/web PDF viewing, paging, zoom, supported fields, and sharing. |
@@ -157,6 +157,17 @@ pnpm dev:browser
 
 Or use `docker compose --env-file .env -f infra/compose.yaml up --build -d`. The same token must reach the API and worker. Sessions have persistent Chromium profiles; the app can open a live screenshot console and import PDF downloads. Agent tools can read public pages and hand interactive work to the person. [Worker setup and boundaries](apps/worker/README.md).
 
+## Review and the task brief
+
+**The agent never marks a task done.** When it says it has finished (`TASK_COMPLETE:`, or `finish_task` on the model backend) the task moves to **In Review**, a person looks at the result, and either **Mark done** (the only way agent work reaches *Done*, and the moment a goal's milestone is recorded) or **Send back with changes**, which queues the task again with their note. A run that stops without saying it is finished lands in review too, flagged as such. Documents and spending summaries are plain code with no judgment to review, so they still finish themselves (a document task finishes once you approve its reply), and watches keep running on their schedule. The agent's `update_task` tool cannot set a task to done, and neither can a `PATCH` on a worker task.
+
+**Notes and files** are what the agent is told besides the task itself, and they belong to the task, not to a run:
+
+- *Notes* are the team's running instructions, oldest first, each with who wrote it. Every run reads all of them (a re-run also gets its own previous result), so changes requested in review, an answer to a question, and a plain note all travel the same way. Anyone can add one; only the author can remove their own, and only before the agent has read it.
+- *Files* are PDFs, images and text, Markdown, CSV or JSON files, up to 10 MB each, 10 per task and 25 MB in all, checked by their first bytes and not just their extension. They are stored under `DATA_DIR/task-files/<task id>/`, away from any workspace, and downloaded through signed links. On the OpenCode backend each run copies them into the channel workspace (`attachments/<task id>/`) and lists them in the prompt as data, never instructions. On the model backend short text files are pasted into the prompt. A PDF is also saved in Files, so the agent's `inspect_pdf` and `fill_pdf` can open it. The worker and the API must share `DATA_DIR`.
+- *Handing an issue to the agent* is a step of its own: add the notes and files first, choose whether it gets the recent channel discussion, then confirm. The description stays as written.
+- *While the agent works*, a note or file added to a running OpenCode task is sent into the same session as a new message, the way a message typed into a running OpenCode session is taken up on its next step. The task row is the queue, so this works when the task runs in a separate worker process. Anything that arrives as the agent finishes is sent as a follow-up before the run is closed out; anything that cannot be sent stays marked *not read yet*, and review offers to send it. The model backend has no live path: it reads the notes when a run starts, so a note added mid-run waits for the next run.
+
 ## Persistence and operation
 
 Channel workspace directories and thread bindings live on the API server's local disk under `DATA_DIR` (`channels/<channelId>/threads/<threadId>.json`), alongside the database.
@@ -173,7 +184,7 @@ Earlier builds kept these per person and nothing migrates them, so start a works
 
 ### Application storage
 
-By default, embedded PGlite, documents and the signing key live in `.hive/`; browser profiles live in `.hive/browser-profiles/`. Keep that directory private and back it up. The API hosts the task worker. The host must remain running for background work.
+By default, embedded PGlite, documents, files attached to tasks (`task-files/`) and the signing key live in `.hive/`; browser profiles live in `.hive/browser-profiles/`. Keep that directory private and back it up. The API hosts the task worker. The host must remain running for background work.
 
 For a separate task worker, configure the same `DATABASE_URL`, secrets and shared `DATA_DIR` for both processes, then set `TASK_WORKER_ENABLED=false` on the API and run `pnpm dev:worker`. PGlite cannot be opened by separate processes. Production commands are `pnpm build:server`, `pnpm start` and `pnpm start:worker`. Run one API instance; task workers coordinate through SQL leases.
 

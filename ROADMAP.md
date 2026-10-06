@@ -26,11 +26,24 @@ API + web UI, OpenCode as the agent backend, threads as durable agent sessions.
   auto-mode (default-ask would stall unattended runs); `TASK_COMPLETE:` /
   `TASK_BLOCKED:` markers parsed from final text; background permission requests
   surface in the originating thread.
+- **Review before done** — agent work (the OpenCode `TASK_COMPLETE:` marker and
+  the model backend's `finish_task`) goes to an `in_review` state; only a person
+  marks it done (`POST /tasks/:id/accept`) or sends it back with a note. The
+  agent's `update_task` cannot set `succeeded`.
+- **Task notes and files** — append-only notes and attached files (PDF, images,
+  text) on every task, read by every run; notes added to a running OpenCode task
+  are sent into its session by a watcher that polls the task row, so it works
+  across the API/worker process split.
 - **Channel/thread engine** — channels as worker scopes, threads as sessions,
   user-driven rename (display metadata only; ID-based paths stable), new channels
   start with zero threads.
 
 ## Next
+
+- [ ] Live notes for the model-direct backend (they are read when a run starts;
+      only the OpenCode backend takes them mid-run). Verifying the live path
+      against a real `opencode serve` — the stand-in session in the tests checks
+      our side of the conversation, not OpenCode's queueing.
 
 - [ ] Live VM verification: end-to-end task loop with real inference (needs
       provider keys on the VM); `opencode serve` systemd unit definition.
