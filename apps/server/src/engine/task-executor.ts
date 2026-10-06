@@ -35,7 +35,7 @@ export async function executeTask(
     return {
       status: "waiting_input",
       question:
-        "A model is required for this open-ended task. Configure MODEL and its provider key on the server, then reply ‘continue’. The document, monitor and finance workflows can run without a model.",
+        "A model is required for this open-ended task. Set MODEL (provider/model-id) on the server, with the provider’s key where `opencode serve` runs, then reply ‘continue’. The document, monitor and finance workflows can run without a model.",
     };
   const runtime = service.opencodeRuntime;
   if (!runtime) throw new Error("OpenCode is not connected, so this task cannot run");
