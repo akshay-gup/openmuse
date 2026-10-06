@@ -3,13 +3,22 @@ import { createHash, randomUUID } from "node:crypto";
 import { AbstractAgent } from "@ag-ui/client";
 import { type BaseEvent, EventType, type RunAgentInput } from "@ag-ui/core";
 import { Observable } from "rxjs";
+import type { AgentTask } from "../../../../packages/domain/src/agent.ts";
 import { jevActionPrefix, parseJevAction } from "../../../../packages/domain/src/jev.ts";
 import type { Config } from "../config.ts";
 import { createJevAdapter, type JevAdapter } from "../jev/adapter.ts";
 import { JevService } from "../jev/service.ts";
+import { sampleBrief, samplePage } from "./sample-files.ts";
 import type { AgentService } from "./service.ts";
 import { tanstackAgent } from "./tanstack-agent.ts";
 import { conversationTools } from "./tools.ts";
+
+/** A tool call the sample agent shows in the conversation, with the result the real tool gave. */
+interface SampleToolCall {
+  name: string;
+  args: unknown;
+  result: unknown;
+}
 
 export class ConversationAgent extends AbstractAgent {
   constructor(
@@ -72,8 +81,12 @@ export class ConversationAgent extends AbstractAgent {
             threadId: input.threadId,
             runId: input.runId,
           });
-          void this.sample(typeof latest?.content === "string" ? latest.content : "", requestKey)
-            .then(({ content, task }) => {
+          void this.sample(
+            typeof latest?.content === "string" ? latest.content : "",
+            requestKey,
+            input,
+          )
+            .then(({ content, task, tools = [] }) => {
               const id = randomUUID();
               subscriber.next({
                 type: EventType.TEXT_MESSAGE_START,
@@ -86,18 +99,30 @@ export class ConversationAgent extends AbstractAgent {
                 delta: content,
               });
               subscriber.next({ type: EventType.TEXT_MESSAGE_END, messageId: id });
-              if (task) {
+              const calls: SampleToolCall[] = [
+                ...(task
+                  ? [
+                      {
+                        name: "delegate_task",
+                        args: { prompt: task.prompt, kind: task.kind },
+                        result: { id: task.id },
+                      },
+                    ]
+                  : []),
+                ...tools,
+              ];
+              for (const call of calls) {
                 const toolCallId = randomUUID();
                 subscriber.next({
                   type: EventType.TOOL_CALL_START,
                   toolCallId,
-                  toolCallName: "delegate_task",
+                  toolCallName: call.name,
                   parentMessageId: id,
                 });
                 subscriber.next({
                   type: EventType.TOOL_CALL_ARGS,
                   toolCallId,
-                  delta: JSON.stringify({ prompt: task.prompt, kind: task.kind }),
+                  delta: JSON.stringify(call.args),
                 });
                 subscriber.next({ type: EventType.TOOL_CALL_END, toolCallId });
                 subscriber.next({
@@ -105,7 +130,7 @@ export class ConversationAgent extends AbstractAgent {
                   toolCallId,
                   messageId: randomUUID(),
                   role: "tool",
-                  content: JSON.stringify({ id: task.id }),
+                  content: JSON.stringify(call.result),
                 });
               }
               subscriber.next({
@@ -205,7 +230,76 @@ export class ConversationAgent extends AbstractAgent {
       };
     });
   }
-  private async sample(prompt: string, key: string) {
+  /**
+   * The sample agent has no model, so it answers a few requests it recognises. The file tools are
+   * among them, so the cards can be seen without one: it calls the same tools an agent would.
+   */
+  private async sampleFileTools(
+    prompt: string,
+    key: string,
+    input: RunAgentInput,
+  ): Promise<{ content: string; tools: SampleToolCall[] } | null> {
+    const call = async (name: string, args: Record<string, unknown>, shown = args) => {
+      const tool = conversationTools(this.service, this.owner, input, {
+        signal: new AbortController().signal,
+        requestKey: key,
+      }).find((candidate) => candidate.name === name);
+      if (!tool) throw new Error(`No ${name} tool`);
+      const parse = (tool.parameters as { parse: (value: unknown) => unknown }).parse;
+      const result = await (tool.execute as (args: unknown) => Promise<unknown>)(parse(args));
+      return { name, args: shown, result } satisfies SampleToolCall;
+    };
+    // What the upload card sends once the files are in.
+    if (/\bI['’]ve uploaded\b/i.test(prompt))
+      return {
+        content:
+          "Thanks, I can see them. With a model connected I would read them from the workspace and carry on from there.",
+        tools: [],
+      };
+    if (/\bupload\b|\bask me for (a |the |some )?files?\b/i.test(prompt))
+      return {
+        content: "I need a file from you first.",
+        tools: [
+          await call("request_upload", {
+            prompt: "Please upload the brand guidelines so I can match the tone and colours.",
+            accept: ["pdf", "png", "md"],
+          }),
+        ],
+      };
+    if (
+      /\b(make|create|generate|draft|write|build)\b[^.?!]*\b(report|page|brief|file|document|summary)\b|\bwhat you made\b/i.test(
+        prompt,
+      )
+    )
+      return {
+        content:
+          "I made a brief and a first pass at the page, and put both in this channel's files.",
+        tools: [
+          await call(
+            "send_file",
+            { path: "samples/launch-brief.md", content: sampleBrief, caption: "The launch brief" },
+            { path: "samples/launch-brief.md", caption: "The launch brief" },
+          ),
+          await call(
+            "send_file",
+            {
+              path: "samples/launch-page.html",
+              content: samplePage,
+              caption: "A first pass at the page. Show the preview to try it.",
+            },
+            { path: "samples/launch-page.html" },
+          ),
+        ],
+      };
+    return null;
+  }
+  private async sample(
+    prompt: string,
+    key: string,
+    input: RunAgentInput,
+  ): Promise<{ content: string; task?: AgentTask; tools?: SampleToolCall[] }> {
+    const files = await this.sampleFileTools(prompt, key, input);
+    if (files) return files;
     if (/show.*calendar|what.*calendar|plan my day/i.test(prompt)) {
       const w = await this.service.workspace.snapshot(this.owner);
       return {
