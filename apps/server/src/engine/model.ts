@@ -268,7 +268,7 @@ export async function executeModelTask(
     ),
     tool(
       "ask_user",
-      "Pause for a fact or decision that is missing",
+      "Pause for a fact, decision or file that is missing. The person answers, and can attach files to the task: they are listed in your brief, and copied into the workspace's attachments folder, when you continue",
       z.object({ question: z.string().min(1).max(2000) }),
       async ({ question }) => {
         outcome = { status: "waiting_input", question };

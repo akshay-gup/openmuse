@@ -1,8 +1,10 @@
+import { Paperclip } from "lucide-react-native";
 import { useState } from "react";
 import { Text, View } from "react-native";
 import type { Workspace } from "../../../packages/domain/src";
-import type { AgentTask } from "../../../packages/domain/src/agent";
+import { type AgentTask, taskBriefLimits } from "../../../packages/domain/src/agent";
 import { useAgentWorkspace } from "./agent-workspace";
+import { attachFile } from "./task-brief";
 import { Button, Card, CheckRow, colors, ErrorNotice, Field, s } from "./ui";
 import { useWorkspace } from "./workspace";
 
@@ -74,6 +76,18 @@ export function TaskAttention({
       });
       setAnswer("");
       setFields({});
+    } catch (e) {
+      setError(errorText(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+  /** The agent may be waiting for a file: it is added to the task, and the agent reads it on its next run. */
+  async function attach() {
+    setBusy(true);
+    setError("");
+    try {
+      if (await attachFile(api, task.id)) await refreshAgent();
     } catch (e) {
       setError(errorText(e));
     } finally {
@@ -225,6 +239,25 @@ export function TaskAttention({
           )}
         </>
       )}
+      <View style={[s.row, { gap: 10, flexWrap: "wrap" }]}>
+        <Button
+          small
+          icon={Paperclip}
+          busy={busy}
+          disabled={(task.attachments ?? []).length >= taskBriefLimits.attachments}
+          onPress={() => void attach()}
+        >
+          Attach a file
+        </Button>
+        {!!task.attachments?.length && (
+          <Text style={[s.small, { flex: 1 }]} numberOfLines={2}>
+            {task.attachments.length === 1
+              ? "1 file on this task"
+              : `${task.attachments.length} files on this task`}
+            : {task.attachments.map((file) => file.name).join(", ")}
+          </Text>
+        )}
+      </View>
       <ErrorNotice error={error} />
       <Button
         primary
