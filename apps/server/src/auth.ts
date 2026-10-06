@@ -6,6 +6,8 @@ import type { Store } from "./db.ts";
 import { AppError } from "./errors.ts";
 
 const digest = (value: string) => createHash("sha256").update(value).digest();
+const encode = (value: string) => Buffer.from(value, "utf8").toString("base64url");
+const decode = (value: string) => Buffer.from(value, "base64url").toString("utf8");
 export class Auth {
   constructor(
     private readonly db: Store,
@@ -69,6 +71,38 @@ export class Auth {
     if (!timingSafeEqual(Buffer.from(expected), Buffer.from(signature)))
       throw new AppError("Invalid access link", 403);
     return owner;
+  }
+  /**
+   * A time-limited token saying `owner` may use whatever `subject` names. The subject travels in the
+   * token and is covered by its signature, so a link can keep its scope in the path, where the
+   * relative links of a page keep it too, instead of in a query string they would drop.
+   */
+  signToken(owner: string, subject: string): string {
+    const body = `${Date.now() + 15 * 60 * 1000}.${encode(owner)}.${encode(subject)}`;
+    return `${body}.${this.mac(body)}`;
+  }
+  /** The owner and subject of a token this server issued, or an error saying why it is no good. */
+  verifyToken(token: string): { owner: string; subject: string } {
+    const parts = token.split(".");
+    const [expires, owner, subject, signature] = parts;
+    if (
+      parts.length !== 4 ||
+      !/^\d+$/.test(expires) ||
+      !/^[\w-]+$/.test(owner) ||
+      !/^[\w-]*$/.test(subject) ||
+      !/^[\w-]{43}$/.test(signature)
+    )
+      throw new AppError("This link is not valid; refresh and try again", 401);
+    if (Number(expires) < Date.now())
+      throw new AppError("This link expired; refresh and try again", 401);
+    const body = `${expires}.${owner}.${subject}`;
+    if (!timingSafeEqual(Buffer.from(this.mac(body)), Buffer.from(signature)))
+      throw new AppError("Invalid access link", 403);
+    return { owner: decode(owner), subject: decode(subject) };
+  }
+  /** Tokens are signed apart from `sign`'s links, so one kind of signature never stands for the other. */
+  private mac(body: string) {
+    return createHmac("sha256", this.signingKey).update(`token\n${body}`).digest("base64url");
   }
 }
 export async function createAuth(db: Store, config: Config) {

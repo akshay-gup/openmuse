@@ -54,6 +54,13 @@ export class Files {
   signPath(owner: string, path: string): string {
     return this.auth.sign(owner, path);
   }
+  /** A time-limited token for links that keep their scope in the path; see `Auth.signToken`. */
+  signToken(owner: string, subject: string): string {
+    return this.auth.signToken(owner, subject);
+  }
+  verifyToken(token: string): { owner: string; subject: string } {
+    return this.auth.verifyToken(token);
+  }
   async list(owner: string) {
     return (await this.db.list<Artifact>(owner, "files")).map((file) => this.signed(owner, file));
   }
