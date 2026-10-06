@@ -321,3 +321,73 @@ test("only the turn that retired a panel may refine it", async (t) => {
   assert.equal(result.panel, null);
   assert.match(result.error ?? "", /superseded/);
 });
+
+/** A channel the whole team shares, with a thread in it that alice started. */
+async function teamThread(f: Fixture, threadId = "design-thread") {
+  const channel = await f.agent.createChannel("alice", { name: "design" });
+  await f.agent.ensureThreadBinding("alice", threadId, channel.id, "Trip");
+  return threadId;
+}
+
+test("in a channel's thread the cards belong to the team, so a teammate can pick one", async (t) => {
+  const f = await shimFixture(t, { jevMode: "sample" });
+  const threadId = await teamThread(f);
+  f.whenPrompted(async ({ call, say, idle }) => {
+    await call("present_choices", choices([explore, other]));
+    say("Pick one.");
+    idle();
+  });
+  const first = await f.run("@hive What next?", { threadId, owner: "alice" });
+  const panel = jevToolResultSchema.parse(first.tools[0].result).panel;
+  assert.ok(panel);
+  // They are kept for the team, not for whoever happened to ask.
+  assert.ok(await f.db.get("shared", "jev_threads", threadId));
+  assert.equal(await f.db.get("alice", "jev_threads", threadId), null);
+
+  f.whenPrompted(({ say, idle }) => {
+    say("Great, exploring.");
+    idle();
+  });
+  const picked = await f.run(pickOf(panel), { threadId, owner: "bob" });
+  assert.equal(picked.last, "RUN_FINISHED");
+  assert.equal(
+    f.standIn.prompts.at(-1)?.parts.at(-1)?.text,
+    "I choose “Explore exhibits” from clarification choices. Continue with that preference.",
+  );
+  const head = await f.db.get<{ selectedId: string }>("shared", "jev_threads", threadId);
+  assert.equal(head?.selectedId, "explore");
+});
+
+test("a teammate's message makes the team's earlier cards stale, as it does in the transcript", async (t) => {
+  const f = await shimFixture(t, { jevMode: "sample" });
+  const threadId = await teamThread(f);
+  f.whenPrompted(async ({ call, idle }) => {
+    await call("present_choices", choices([explore, other]));
+    idle();
+  });
+  const first = await f.run("@hive What next?", { threadId, owner: "alice" });
+  const panel = jevToolResultSchema.parse(first.tools[0].result).panel;
+  assert.ok(panel);
+  await f.run("What a nice day", { threadId, owner: "bob" });
+  const head = await f.db.get<{ currentPanelId: string | null }>("shared", "jev_threads", threadId);
+  assert.equal(head?.currentPanelId, null);
+  assert.equal((await f.run(pickOf(panel), { threadId, owner: "alice" })).last, "RUN_ERROR");
+});
+
+test("in the orchestrator chat they stay private: another person cannot pick them", async (t) => {
+  const f = await shimFixture(t, { jevMode: "sample" });
+  f.whenPrompted(async ({ call, idle }) => {
+    await call("present_choices", choices([explore, other]));
+    idle();
+  });
+  const first = await f.run("@hive What next?", { threadId: "alice-main", owner: "alice" });
+  const panel = jevToolResultSchema.parse(first.tools[0].result).panel;
+  assert.ok(panel);
+  assert.ok(await f.db.get("alice", "jev_threads", "alice-main"));
+  assert.equal(await f.db.get("shared", "jev_threads", "alice-main"), null);
+  // Bob knows the thread and the panel, and still cannot touch them.
+  const intruder = await f.run(pickOf(panel), { threadId: "alice-main", owner: "bob" });
+  assert.equal(intruder.last, "RUN_ERROR");
+  const head = await f.db.get<{ selectedId: string | null }>("alice", "jev_threads", "alice-main");
+  assert.ok(!head?.selectedId);
+});

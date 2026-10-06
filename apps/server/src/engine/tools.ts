@@ -32,10 +32,23 @@ export function conversationTools(
     channelId?: string;
     jev?: JevService | null;
     jevMode?: string;
+    /**
+     * Whose records the choice cards are kept under: where the conversation lives, shared for a
+     * channel's threads and private for the orchestrator chat (see `diskOwnerForChannel`).
+     */
+    jevOwner?: string;
     latestText?: string;
   },
 ) {
-  const { signal, requestKey, channelId, jev, jevMode, latestText = "" } = options;
+  const {
+    signal,
+    requestKey,
+    channelId,
+    jev,
+    jevMode,
+    jevOwner = owner,
+    latestText = "",
+  } = options;
   const key = (name: string, value: unknown) =>
     `${requestKey}:${name}:${createHash("sha256").update(JSON.stringify(value)).digest("hex")}`;
   /** The channel whose workspace the agent is working in. A chat that is bound to none is the orchestrator's. */
@@ -48,7 +61,7 @@ export function conversationTools(
       ? [
           presentChoicesTool(
             jev,
-            owner,
+            jevOwner,
             input.threadId,
             input.runId,
             signal,
@@ -96,7 +109,7 @@ export function conversationTools(
         try {
           const messages = await service.workspace.thread(owner, threadId);
           if (jev && messages.length)
-            await jev.noteEvidence(owner, input.threadId, input.runId, "mail", threadId);
+            await jev.noteEvidence(jevOwner, input.threadId, input.runId, "mail", threadId);
           return {
             messages: messages.slice(-20).map((message) => ({
               ...message,
@@ -130,7 +143,14 @@ export function conversationTools(
             typeof page.text === "string" &&
             page.text.trim()
           )
-            await jev.noteEvidence(owner, input.threadId, input.runId, "web", page.url, page.text);
+            await jev.noteEvidence(
+              jevOwner,
+              input.threadId,
+              input.runId,
+              "web",
+              page.url,
+              page.text,
+            );
           return page;
         } catch (error) {
           signal.throwIfAborted();

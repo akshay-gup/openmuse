@@ -29,6 +29,7 @@ import { ORCHESTRATOR_CHANNEL_ID } from "../../../../packages/domain/src/agent.t
 import { jevActionPrefix, parseJevAction } from "../../../../packages/domain/src/jev.ts";
 import type { Config } from "../config.ts";
 import type { AgentService } from "../engine/service.ts";
+import { diskOwnerForChannel } from "../engine/threads.ts";
 import { conversationTools } from "../engine/tools.ts";
 import type { JevService } from "../jev/service.ts";
 import type { AskedPermissionProps, PermissionTracker } from "./approvals.ts";
@@ -531,6 +532,9 @@ async function runOpencodeTurn(ctx: RunContext): Promise<void> {
   // settleRun in the route's finally block.
   let messages = input.messages as Array<Record<string, unknown>>;
   let userText = lastUserText(messages);
+  // Choice panels belong to their conversation, as the transcript does: one set for everyone in a
+  // channel's threads, and private to the person in the orchestrator chat.
+  const jevHome = diskOwnerForChannel(binding.channelId, owner);
 
   // Picking a card is answering a question the agent asked, so it needs no mention. The pick is
   // checked against its panel, and the agent is told what it says in words rather than as the
@@ -538,7 +542,7 @@ async function runOpencodeTurn(ctx: RunContext): Promise<void> {
   let picked = false;
   if (userText?.startsWith(jevActionPrefix)) {
     try {
-      const continuation = await readChoice(deps.service.jev, owner, input.threadId, userText);
+      const continuation = await readChoice(deps.service.jev, jevHome, input.threadId, userText);
       const index = lastUserIndex(messages);
       messages = messages.map((message, i) =>
         i === index ? { ...message, content: continuation } : message,
@@ -561,9 +565,9 @@ async function runOpencodeTurn(ctx: RunContext): Promise<void> {
   const jev = deps.service.jev;
   if (jev && !picked && messages.at(-1)?.role === "user") {
     try {
-      const head = await jev.headSnapshot(owner, input.threadId);
+      const head = await jev.headSnapshot(jevHome, input.threadId);
       // False means another run already replaced the panel; that newer state wins.
-      if (head) await jev.expireIfUnchanged(owner, input.threadId, head, input.runId);
+      if (head) await jev.expireIfUnchanged(jevHome, input.threadId, head, input.runId);
     } catch {
       send({ type: "RUN_STARTED", threadId: input.threadId, runId: input.runId });
       send({ type: "RUN_ERROR", message: "Could not update earlier choices. Please retry." });
@@ -655,6 +659,7 @@ async function runOpencodeTurn(ctx: RunContext): Promise<void> {
           channelId: binding.channelId,
           jev: deps.service.jev,
           jevMode: deps.config.jevMode,
+          jevOwner: jevHome,
           latestText: stripped,
         }),
         toolAbort.signal,

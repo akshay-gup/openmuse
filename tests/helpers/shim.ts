@@ -48,8 +48,9 @@ export async function shimFixture(
   await server.workspace.ensureSample("local-user", server.actions);
   const standIn = opencodeStandIn({ dataDir: config.dataDir, model: config.model });
   const shim = new Hono<{ Variables: { owner: string } }>();
+  // Whoever signs in is read from a header here; the app derives it from the session.
   shim.use("*", async (c, next) => {
-    c.set("owner", "local-user");
+    c.set("owner", c.req.header("x-test-owner") ?? "local-user");
     await next();
   });
   shim.route(
@@ -101,14 +102,14 @@ export async function shimFixture(
   /** Send a message to the chat, as the client does, and collect what comes back. */
   async function run(
     message: string | { role: string; content: string }[],
-    run: { threadId?: string; runId?: string; signal?: AbortSignal } = {},
+    run: { threadId?: string; runId?: string; signal?: AbortSignal; owner?: string } = {},
   ) {
     const messages = (
       typeof message === "string" ? [{ role: "user", content: message }] : message
     ).map((item) => ({ id: randomUUID(), ...item }));
     const response = await shim.request("/run", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "x-test-owner": run.owner ?? "local-user" },
       body: JSON.stringify({
         threadId: run.threadId ?? "thread-1",
         runId: run.runId ?? randomUUID(),

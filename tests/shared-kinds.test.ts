@@ -15,7 +15,9 @@ const KEPT_PER_PERSON = new Set([
   "channels",
   "conversations",
   "conversation-authors",
-  // Choice panels are keyed by thread and run only when JEV_MODE is on.
+  // Choice panels live with their conversation, as its transcript does: the callers pass the
+  // conversation's home, so a channel's threads keep theirs in the shared workspace and only the
+  // orchestrator chat keeps its own.
   "jev_threads",
   "jev_panels",
   "jev_evidence",
