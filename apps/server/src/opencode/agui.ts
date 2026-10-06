@@ -1,4 +1,5 @@
 import { conversationTools } from "../engine/tools.ts";
+import type { JevService } from "../jev/service.ts";
 import type { HiveToolBridge } from "./hive-tools.ts";
 /**
  * AG-UI shim over OpenCode sessions.
@@ -29,6 +30,7 @@ import type { HiveToolBridge } from "./hive-tools.ts";
 import { Hono } from "hono";
 import { z } from "zod";
 import { ORCHESTRATOR_CHANNEL_ID } from "../../../../packages/domain/src/agent.ts";
+import { jevActionPrefix, parseJevAction } from "../../../../packages/domain/src/jev.ts";
 import type { Config } from "../config.ts";
 import type { AgentService } from "../engine/service.ts";
 import type { AskedPermissionProps, PermissionTracker } from "./approvals.ts";
@@ -79,13 +81,39 @@ function hiveToolName(tool: string): string {
   return tool.replace(/^hive_[a-f0-9]{16}_/, "");
 }
 
+/** Index of the last user message that says something, or -1. */
+function lastUserIndex(messages: Array<Record<string, unknown>>): number {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i]?.role === "user" && messageText(messages[i])) return i;
+  }
+  return -1;
+}
+
 /** Last user message text, following ConversationAgent's convention. */
 export function lastUserText(messages: Array<Record<string, unknown>>): string | undefined {
-  for (let i = messages.length - 1; i >= 0; i--) {
-    const text = messageText(messages[i]);
-    if (messages[i]?.role === "user" && text) return text;
+  const index = lastUserIndex(messages);
+  return index < 0 ? undefined : messageText(messages[index]);
+}
+
+/**
+ * What the agent is told when a person picks a card, once the pick has been checked against the
+ * panel it came from. A pick that does not check out throws, and says why.
+ */
+async function readChoice(
+  jev: JevService | null | undefined,
+  owner: string,
+  threadId: string,
+  text: string,
+): Promise<string> {
+  if (!jev) throw new Error("Choices are unavailable in this conversation");
+  let action: ReturnType<typeof parseJevAction>;
+  try {
+    action = parseJevAction(text);
+  } catch {
+    throw new Error("The choice could not be read");
   }
-  return undefined;
+  if (!action) throw new Error("The choice could not be read");
+  return (await jev.select(owner, threadId, action)).continuation;
 }
 
 /** Joined text of a message's text content parts (string content included). */
@@ -508,9 +536,33 @@ async function runOpencodeTurn(ctx: RunContext): Promise<void> {
   // already persisted by CopilotKit; the agent stays silent and OpenCode is
   // never touched (no session, no prompt). The in-flight slot is released by
   // settleRun in the route's finally block.
-  const messages = input.messages as Array<Record<string, unknown>>;
-  const userText = lastUserText(messages);
-  if (!userText || !mentionsAgent(userText, mention)) {
+  let messages = input.messages as Array<Record<string, unknown>>;
+  let userText = lastUserText(messages);
+
+  // Picking a card is answering a question the agent asked, so it needs no mention. The pick is
+  // checked against its panel, and the agent is told what it says in words rather than as the
+  // protocol message the client sent.
+  let picked = false;
+  if (userText?.startsWith(jevActionPrefix)) {
+    try {
+      const continuation = await readChoice(deps.service.jev, owner, input.threadId, userText);
+      const index = lastUserIndex(messages);
+      messages = messages.map((message, i) =>
+        i === index ? { ...message, content: continuation } : message,
+      );
+      userText = continuation;
+      picked = true;
+    } catch (error) {
+      send({ type: "RUN_STARTED", threadId: input.threadId, runId: input.runId });
+      send({
+        type: "RUN_ERROR",
+        message: error instanceof Error ? error.message : "Could not select this choice",
+      });
+      return;
+    }
+  }
+
+  if (!userText || (!picked && !mentionsAgent(userText, mention))) {
     send({ type: "RUN_STARTED", threadId: input.threadId, runId: input.runId });
     send({ type: "RUN_FINISHED", threadId: input.threadId, runId: input.runId });
     return;
