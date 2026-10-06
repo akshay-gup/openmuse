@@ -26,7 +26,7 @@ import { requesterNames } from "../requesters.ts";
 import { parseModelRef } from "./agui.ts";
 import type { PermissionTracker } from "./approvals.ts";
 import type { OpencodeClientPool } from "./client.ts";
-import type { OpenCodeEvent, OpencodeEventBus } from "./events.ts";
+import { type OpenCodeEvent, type OpencodeEventBus, sessionErrorMessage } from "./events.ts";
 import type { HiveTool, HiveToolBridge } from "./hive-tools.ts";
 import { taskSessionRuleset } from "./permissions.ts";
 import { sessionDirectory } from "./sessions.ts";
@@ -372,8 +372,14 @@ export async function runOpencodeTask(
       if (status?.type === "idle") onIdle();
       else if (status?.type) onBusy();
     } else if (event.type === "session.error") {
-      const error = event.properties.error as { message?: string } | undefined;
-      fail(new Error(error?.message || "The OpenCode task session reported an error"));
+      fail(
+        new Error(
+          sessionErrorMessage(
+            event.properties.error,
+            "The OpenCode task session reported an error",
+          ),
+        ),
+      );
     }
   });
 

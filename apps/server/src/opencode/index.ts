@@ -21,7 +21,7 @@ export {
   type TrackerReplyDeps,
 } from "./approvals.ts";
 export { type OpencodeClient, OpencodeClientPool } from "./client.ts";
-export { type OpenCodeEvent, OpencodeEventBus } from "./events.ts";
+export { type OpenCodeEvent, OpencodeEventBus, sessionErrorMessage } from "./events.ts";
 export {
   buildSessionRuleset,
   defaultSessionRuleset,

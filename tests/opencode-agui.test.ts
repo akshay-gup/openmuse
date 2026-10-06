@@ -254,19 +254,51 @@ describe("RunTranslator", () => {
     assert.equal(events[3].content, "file.txt");
   });
 
-  it("emits RUN_ERROR on session.error", () => {
+  it("emits RUN_ERROR on session.error, with the reason OpenCode gives", () => {
     const { translator, events, isDone } = collectTranslator();
+    // As OpenCode sends it: a named error with its message under `data` (captured from a real server).
     translator.handle({
       id: "e1",
       type: "session.error",
-      properties: { sessionID: "ses_1", error: { message: "boom" } },
+      properties: {
+        sessionID: "ses_1",
+        error: {
+          name: "APIError",
+          data: {
+            message: 'Forbidden: request blocked: no rule allows host "opencode.ai"',
+            statusCode: 403,
+          },
+        },
+      },
     });
     assert.equal(events[0].type, "RUN_ERROR");
-    assert.equal(events[0].message, "boom");
+    assert.equal(
+      events[0].message,
+      'Forbidden: request blocked: no rule allows host "opencode.ai"',
+    );
     assert.ok(isDone());
     // Events after finish are ignored.
     translator.handle({ id: "e2", type: "session.idle", properties: { sessionID: "ses_1" } });
     assert.equal(events.length, 1);
+  });
+
+  it("names the kind of error when OpenCode gives no message", () => {
+    for (const [error, expected] of [
+      [
+        { name: "ContextOverflowError", data: {} },
+        "The OpenCode session reported an error (ContextOverflowError)",
+      ],
+      [{ message: "boom" }, "boom"],
+      [undefined, "The OpenCode session reported an error"],
+    ] as const) {
+      const { translator, events } = collectTranslator();
+      translator.handle({
+        id: "e",
+        type: "session.error",
+        properties: { sessionID: "ses_1", error },
+      });
+      assert.equal(events[0].message, expected);
+    }
   });
 
   it("surfaces permission.asked as a CUSTOM event without ending the run", () => {

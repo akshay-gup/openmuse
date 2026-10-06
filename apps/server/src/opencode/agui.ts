@@ -1,6 +1,3 @@
-import { conversationTools } from "../engine/tools.ts";
-import type { JevService } from "../jev/service.ts";
-import type { HiveToolBridge } from "./hive-tools.ts";
 /**
  * AG-UI shim over OpenCode sessions.
  *
@@ -32,9 +29,12 @@ import { ORCHESTRATOR_CHANNEL_ID } from "../../../../packages/domain/src/agent.t
 import { jevActionPrefix, parseJevAction } from "../../../../packages/domain/src/jev.ts";
 import type { Config } from "../config.ts";
 import type { AgentService } from "../engine/service.ts";
+import { conversationTools } from "../engine/tools.ts";
+import type { JevService } from "../jev/service.ts";
 import type { AskedPermissionProps, PermissionTracker } from "./approvals.ts";
 import type { OpencodeClientPool } from "./client.ts";
-import type { OpenCodeEvent, OpencodeEventBus } from "./events.ts";
+import { type OpenCodeEvent, type OpencodeEventBus, sessionErrorMessage } from "./events.ts";
+import type { HiveToolBridge } from "./hive-tools.ts";
 import type { PermissionRulesStore } from "./rules.ts";
 import { ensureThreadSession } from "./sessions.ts";
 
@@ -326,15 +326,9 @@ export class RunTranslator {
       case "session.idle":
         this.finish();
         return;
-      case "session.error": {
-        const error = props.error as { message?: string } | undefined;
-        const message =
-          typeof error?.message === "string" && error.message
-            ? error.message
-            : "The OpenCode session reported an error";
-        this.fail(message);
+      case "session.error":
+        this.fail(sessionErrorMessage(props.error, "The OpenCode session reported an error"));
         return;
-      }
       case "permission.asked": {
         const asked: AskedPermissionProps = {
           id: props.id as string,

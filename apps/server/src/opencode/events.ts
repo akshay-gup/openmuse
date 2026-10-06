@@ -28,6 +28,22 @@ interface ThreadTrack {
   busy: boolean;
 }
 
+/**
+ * What a `session.error` event says went wrong. OpenCode names the error and keeps its message under
+ * `data` (`{ name: "APIError", data: { message: "Forbidden: …", statusCode: 403 } }`), so a provider
+ * failure such as a bad key, an unknown model or a rate limit reads as itself and not as "an error".
+ */
+export function sessionErrorMessage(error: unknown, fallback: string): string {
+  const failure = error as
+    | { name?: unknown; message?: unknown; data?: { message?: unknown } }
+    | undefined;
+  for (const text of [failure?.data?.message, failure?.message])
+    if (typeof text === "string" && text.trim()) return text;
+  return typeof failure?.name === "string" && failure.name
+    ? `${fallback} (${failure.name})`
+    : fallback;
+}
+
 const RECONNECT_BASE_MS = 500;
 const RECONNECT_MAX_MS = 30_000;
 
