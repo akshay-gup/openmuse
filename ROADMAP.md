@@ -34,11 +34,26 @@ API + web UI, OpenCode as the agent backend, threads as durable agent sessions.
   text) on every task, read by every run; notes added to a running OpenCode task
   are sent into its session by a watcher that polls the task row, so it works
   across the API/worker process split.
+- **Channel files** — a Files browser per channel over its workspace (recent
+  changes and folders, previews by kind, upload), served by 15-minute links that
+  keep their scope in the path (a web page's covers its folder) with a sandbox
+  policy and `Range` support; paths never leave the workspace (links are not
+  followed). The agent's `send_file` shares a file as a card and `request_upload`
+  asks for files with an upload button and modal (the call returns at once; the
+  upload is recorded against the request and a message back names each file).
 - **Channel/thread engine** — channels as worker scopes, threads as sessions,
   user-driven rename (display metadata only; ID-based paths stable), new channels
   start with zero threads.
 
 ## Next
+
+- [ ] Channel files: delete and rename from the browser; drag and drop into the
+      upload modal; Markdown that links to images beside it (the previewer does
+      not resolve relative links yet); a player for video and audio on iOS and
+      Android (they open in the system player); `list_files` and `read_file` for
+      the model-direct agent, which can share and request files but cannot read
+      an upload; checking `send_file` and `request_upload` against a real
+      `opencode serve` agent.
 
 - [ ] Live notes for the model-direct backend (they are read when a run starts;
       only the OpenCode backend takes them mid-run). Verifying the live path

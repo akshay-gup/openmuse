@@ -10,6 +10,8 @@ Hive currently supports one team per deployment. Everyone who can sign in with G
 
 The API holds provider credentials. Google tokens are encrypted at rest; short-lived signed URLs grant file and browser-console access. Protect `.env`, `.hive`, database backups, and browser profiles as private data. A signed URL is a credential until it expires.
 
+Files in a channel's workspace are made by the agent and added by people, so they are untrusted. They are served by links that expire in 15 minutes and are only ever shown, never run as part of Hive: every response carries `X-Content-Type-Options: nosniff` and a `sandbox` policy (PDFs excepted, because a sandboxed page cannot open the browser's reader), and a web page is shown in a frame without `allow-same-origin`, so its scripts have no access to Hive's origin, storage or sign-in. A page may load its own fonts and modules, so file links answer any origin; the token in the path is the credential. Paths are resolved to where they really are and must stay inside the channel's workspace: links in the workspace are never followed, and Hive's thread bindings, staged task files and hidden files are not reachable.
+
 The browser worker must remain private and require its own random token. It runs persistent Chromium with application-enforced public-network checks. Playwright disables Chromium's internal sandbox by default; this is not a full desktop VM or a security boundary for hostile tenants. The browser Docker image reduces host access but does not establish kernel-enforced network isolation. See [worker boundaries](apps/worker/README.md).
 
 ## Linux computer boundary
