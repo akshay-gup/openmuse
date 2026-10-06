@@ -12,15 +12,12 @@ import {
 } from "../../../packages/domain/src/agent";
 import { useAgentWorkspace } from "./agent-workspace";
 import { API_URL, type MuseApi } from "./api";
+import { fileSize } from "./file-format";
 import { ago } from "./task-board";
 import { Button, Chip, colors, ErrorNotice, Field, radius, s } from "./ui";
 import { useWorkspace } from "./workspace";
 
 const megabytes = (bytes: number) => bytes / (1024 * 1024);
-export const fileSize = (bytes: number) =>
-  bytes < 1024 * 1024
-    ? `${Math.max(1, Math.round(bytes / 1024))} KB`
-    : `${megabytes(bytes).toFixed(1)} MB`;
 
 const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
