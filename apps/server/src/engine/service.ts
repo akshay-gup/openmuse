@@ -52,7 +52,7 @@ import { inlineLimits, renderBrief } from "./brief.ts";
 import { ChannelFiles } from "./channel-files.ts";
 import { ChannelManager } from "./channels.ts";
 import { analyzeSpending } from "./finance.ts";
-import { executeModelTask } from "./model.ts";
+import { executeTask } from "./task-executor.ts";
 import { inspectAttachment, type StagedFile, TaskFiles } from "./task-files.ts";
 import {
   channelWorkspaceDir,
@@ -1804,7 +1804,7 @@ export class AgentService {
       });
       return this.finish(task, context, artifact.summary);
     }
-    return executeModelTask(this, owner, task, context);
+    return executeTask(this, owner, task, context);
   }
   /** Workflows that run as plain code (documents, watches, spending) finish themselves. */
   async finish(task: AgentTask, context: TaskContext, result: string) {

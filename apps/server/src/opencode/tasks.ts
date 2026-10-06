@@ -1,7 +1,7 @@
 /**
  * Task-worker execution through OpenCode sessions.
  *
- * `executeModelTask` delegates here. Each task gets a fresh OpenCode
+ * `executeTask` delegates here. Each task gets a fresh OpenCode
  * session scoped to its channel's workspace directory (never the interactive
  * thread session — a background run must not interleave with chat).
  *

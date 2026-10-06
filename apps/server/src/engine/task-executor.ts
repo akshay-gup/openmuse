@@ -23,7 +23,8 @@ export function sharedTaskTools<T extends { name: string }>(
   );
 }
 
-export async function executeModelTask(
+/** Runs an open-ended task as an OpenCode session, with Hive's tools to hand its outcome back. */
+export async function executeTask(
   service: AgentService,
   owner: string,
   initial: AgentTask,

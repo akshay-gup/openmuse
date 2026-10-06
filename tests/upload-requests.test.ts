@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { after, before, test } from "node:test";
 import { createApp } from "../apps/server/src/app.ts";
 import { createStore } from "../apps/server/src/db.ts";
-import { sharedTaskTools } from "../apps/server/src/engine/model.ts";
+import { sharedTaskTools } from "../apps/server/src/engine/task-executor.ts";
 import { channelWorkspaceDir } from "../apps/server/src/engine/threads.ts";
 import { conversationTools } from "../apps/server/src/engine/tools.ts";
 import { HiveToolBridge } from "../apps/server/src/opencode/hive-tools.ts";
