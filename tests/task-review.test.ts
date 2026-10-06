@@ -8,6 +8,7 @@ import { PDFDocument } from "pdf-lib";
 import { createApp } from "../apps/server/src/app.ts";
 import type { Config } from "../apps/server/src/config.ts";
 import { createStore, type Store } from "../apps/server/src/db.ts";
+import { channelWorkspaceDir, diskOwnerForChannel } from "../apps/server/src/engine/threads.ts";
 import { conversationTools } from "../apps/server/src/engine/tools.ts";
 import type {
   AgentNotification,
@@ -737,15 +738,11 @@ test("an update is whatever the agent has not yet read or been shown", async () 
   assert.equal(await server.agent.pendingUpdate(person, task.id, new Set([fileId])), null);
 });
 
-// ---- A run that is not OpenCode ----------------------------------------------------------------
+// ---- A whole run, through the worker -----------------------------------------------------------
 
-test("a model run reads the notes and files, and hands its answer in for review", async (t) => {
-  const { modelFixture } = await import("./helpers/model.ts");
-  const calls: { name: string; arguments: object }[] = [
-    { name: "finish_task", arguments: { summary: "Shortlisted two venues." } },
-  ];
-  const { requests } = await modelFixture(t, (index) => calls[index]);
-  const folder = await mkdtemp(join(tmpdir(), "hive-model-brief-"));
+test("a run reads the notes and files, and hands its answer in for review", async (t) => {
+  const { opencodeStandIn } = await import("./helpers/opencode.ts");
+  const folder = await mkdtemp(join(tmpdir(), "hive-run-brief-"));
   const store = await createStore();
   const app = await createApp(store, {
     mode: "sample",
@@ -753,16 +750,23 @@ test("a model run reads the notes and files, and hands its answer in for review"
     host: "127.0.0.1",
     publicUrl: "http://localhost:8787",
     dataDir: folder,
-    agentBackend: "model",
+    agentBackend: "sample",
     intelligenceApiKey: "test-project-key-never-sent",
     model: "openai/fixture",
     googleRedirectUri: "http://localhost:8787/api/google/callback",
     allowedOrigins: [],
   });
+  const standIn = opencodeStandIn({ dataDir: folder });
+  app.agent.opencodeRuntime = standIn.runtime as never;
   t.after(async () => {
     await app.agent.stop();
     await store.close();
     await rm(folder, { recursive: true, force: true });
+  });
+  const promptText = () => standIn.prompts[0].parts.map((part) => part.text).join("\n");
+  standIn.agent(async ({ call, idle }) => {
+    await call("finish_task", { summary: "Shortlisted two venues." });
+    idle();
   });
   const task = await app.agent.createTask("owner", { prompt: "Find an offsite venue" });
   await app.agent.addNote("owner", task.id, { text: "Nothing over $5k" });
@@ -772,10 +776,19 @@ test("a model run reads the notes and files, and hands its answer in for review"
   });
   await app.agent.worker.tick();
 
-  const body = requests[0].body;
-  assert.ok(body.includes("Find an offsite venue"));
-  assert.ok(body.includes("Nothing over $5k"));
-  assert.ok(body.includes("Has a lake"));
+  // The agent is told the task, the note, and where the file is, and the file is there to read.
+  assert.ok(promptText().includes("Find an offsite venue"));
+  assert.ok(promptText().includes("Nothing over $5k"));
+  assert.ok(promptText().includes(`attachments/${task.id}/wishlist.txt`));
+  const workspace = channelWorkspaceDir(
+    folder,
+    diskOwnerForChannel("orchestrator", "owner"),
+    "orchestrator",
+  );
+  assert.equal(
+    await readFile(join(workspace, "attachments", task.id, "wishlist.txt"), "utf8"),
+    "Has a lake",
+  );
   const saved = await app.agent.getTask("owner", task.id);
   assert.equal(saved.status, "in_review", saved.error ?? saved.question);
   assert.equal(saved.result, "Shortlisted two venues.");
@@ -790,15 +803,15 @@ test("a model run reads the notes and files, and hands its answer in for review"
   );
 
   // Sent back with a note, it runs again with the note and its own earlier result.
-  calls.splice(0, calls.length, {
-    name: "finish_task",
-    arguments: { summary: "Now under $4k." },
+  standIn.reset();
+  standIn.agent(async ({ call, idle }) => {
+    await call("finish_task", { summary: "Now under $4k." });
+    idle();
   });
-  requests.length = 0;
   await app.agent.addNote("owner", task.id, { text: "Cheaper, please", run: true });
   await app.agent.worker.tick();
-  assert.ok(requests[0].body.includes("Cheaper, please"));
-  assert.ok(requests[0].body.includes("Shortlisted two venues."));
+  assert.ok(promptText().includes("Cheaper, please"));
+  assert.ok(promptText().includes("Shortlisted two venues."));
   assert.equal((await app.agent.getTask("owner", task.id)).status, "in_review");
   assert.equal((await app.agent.accept("owner", task.id)).status, "succeeded");
 });
