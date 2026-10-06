@@ -204,8 +204,13 @@ export function agentRoutes(service: AgentService): Hono<{ Variables: { owner: s
         "sandbox allow-scripts allow-forms allow-popups allow-modals",
       );
     else if (file.kind !== "pdf") c.header("Content-Security-Policy", "sandbox");
+    // `?head=N` is for a viewer that only shows the start of a file, so a big log costs little.
+    const head = Number(c.req.query("head"));
     const first = range?.start ?? 0;
-    const last = range?.end ?? file.size - 1;
+    const last = Math.min(
+      range?.end ?? file.size - 1,
+      Number.isSafeInteger(head) && head > 0 ? first + head - 1 : Number.POSITIVE_INFINITY,
+    );
     c.header("Content-Length", String(file.size ? last - first + 1 : 0));
     if (range) c.header("Content-Range", `bytes ${first}-${last}/${file.size}`);
     if (!file.size) return c.body(null, 200);

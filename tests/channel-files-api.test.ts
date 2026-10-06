@@ -215,6 +215,14 @@ test("a video can be played and skipped through by asking for part of it", async
   const past = await open(info.url as string, { Range: "bytes=10-" });
   assert.equal(past.status, 416);
   assert.equal(past.headers.get("content-range"), "bytes */10");
+  // A viewer that shows only the start of a file can ask for just that.
+  const start = await open(`${info.url}?head=4`);
+  assert.equal(start.status, 200);
+  assert.equal(await start.text(), "0123");
+  assert.equal(start.headers.get("content-length"), "4");
+  assert.equal(await (await open(`${info.url}?head=500`)).text(), "0123456789");
+  assert.equal(await (await open(`${info.url}?head=0`)).text(), "0123456789");
+  assert.equal(await (await open(`${info.url}?head=abc`)).text(), "0123456789");
   await write("media/empty.mp4", "");
   const empty = await json<ChannelFile>(
     await api("/channels/general/files/info?path=media/empty.mp4"),
