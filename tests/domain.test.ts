@@ -126,3 +126,27 @@ test("a task's notes and files have fixed limits, and the agent is offered the t
   assert.equal(updateTaskSchema.safeParse({ prompt: "" }).success, true);
   assert.equal(updateTaskSchema.safeParse({ channelContext: false }).success, true);
 });
+
+test("files are told apart by name: how they are shown, and what a browser may do with them", async () => {
+  const { channelFileLimits, describeFile, textKinds } = await import(
+    "../packages/domain/src/workspace-files.ts"
+  );
+  assert.deepEqual(describeFile("report.PDF"), { mimeType: "application/pdf", kind: "pdf" });
+  assert.deepEqual(describeFile("photo.jpeg"), { mimeType: "image/jpeg", kind: "image" });
+  assert.equal(describeFile("notes.md").kind, "markdown");
+  assert.equal(describeFile("data.tsv").kind, "csv");
+  assert.equal(describeFile("clip.mov").mimeType, "video/quicktime");
+  assert.equal(describeFile("site/index.html").kind, "html");
+  // A page's own scripts and styles keep their types, or a browser refuses to use them.
+  assert.equal(describeFile("app.js").mimeType, "text/javascript");
+  assert.equal(describeFile("site.css").mimeType, "text/css");
+  // Every other source file is plain text, so it is shown and never run.
+  for (const name of ["main.ts", "tool.py", "setup.sh", "config.yaml", "feed.xml"])
+    assert.deepEqual(describeFile(name), { mimeType: "text/plain", kind: "code" }, name);
+  // Unknown and extensionless names are downloads; a leading dot is not an extension.
+  for (const name of ["README", ".gitignore", "blob.xyz", "archive."])
+    assert.deepEqual(describeFile(name), { mimeType: "application/octet-stream", kind: "other" });
+  assert.equal(describeFile("bundle.zip").kind, "archive");
+  assert.ok(textKinds.has("markdown") && textKinds.has("code") && !textKinds.has("image"));
+  assert.ok(channelFileLimits.writeBytes < channelFileLimits.uploadBytes);
+});
