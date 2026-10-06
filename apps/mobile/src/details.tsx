@@ -35,6 +35,7 @@ import {
 import { DelegateSheet, NotificationsSheet, TaskDetail } from "./agent-ui";
 import BrowserConsole from "./BrowserConsole";
 import { browserAddress, browserSite } from "./browser-address";
+import { ChannelFileSheet, ChannelFilesSheet } from "./channel-files";
 import { ComputerSheet } from "./computer";
 import DateTimeEditor from "./DateTimeEditor";
 import { localDateTime, zonedInstant } from "./date-time";
@@ -61,6 +62,10 @@ import { type Detail, useWorkspace } from "./workspace";
 export function Details({ detail }: { detail: Detail }) {
   const { close, navigate } = useWorkspace();
   if (detail.type === "computer") return <ComputerSheet />;
+  if (detail.type === "channelFiles")
+    return <ChannelFilesSheet channelId={detail.channelId} name={detail.name} path={detail.path} />;
+  if (detail.type === "channelFile")
+    return <ChannelFileSheet channelId={detail.channelId} path={detail.path} />;
   if (detail.type === "task") return <TaskDetail taskId={detail.taskId} />;
   if (detail.type === "delegate") return <DelegateSheet threadId={detail.threadId} />;
   if (detail.type === "notifications") return <NotificationsSheet />;

@@ -7,7 +7,16 @@ import {
   useRenderTool,
   useRenderToolCall,
 } from "@copilotkit/react-native/headless";
-import { ArrowDown, ArrowUp, FileText, Plus, RotateCcw, Square, X } from "lucide-react-native";
+import {
+  ArrowDown,
+  ArrowUp,
+  FileText,
+  FolderOpen,
+  Plus,
+  RotateCcw,
+  Square,
+  X,
+} from "lucide-react-native";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import {
   KeyboardAvoidingView,
@@ -85,7 +94,7 @@ function channelIdOf(selection: { id: string }): string | null {
 
 /** Banner for a channel chat: just the channel name, like a Slack channel header. */
 export function ChannelChatBanner({ channelId }: { channelId: string }) {
-  const { api } = useWorkspace();
+  const { api, open } = useWorkspace();
   const [name, setName] = useState<string | null>(null);
   useEffect(() => {
     let active = true;
@@ -102,10 +111,19 @@ export function ChannelChatBanner({ channelId }: { channelId: string }) {
     };
   }, [api, channelId]);
   return (
-    <View style={{ gap: 2 }}>
-      <Text style={[s.heading, { fontSize: fontSize.title }]} numberOfLines={1}>
+    <View style={[s.row, { gap: 12 }]}>
+      <Text style={[s.heading, { fontSize: fontSize.title, flexShrink: 1 }]} numberOfLines={1}>
         # {name ?? "channel"}
       </Text>
+      <View style={{ flex: 1 }} />
+      <Button
+        small
+        icon={FolderOpen}
+        accessibilityLabel="Files in this channel"
+        onPress={() => open({ type: "channelFiles", channelId, name: name ?? undefined })}
+      >
+        Files
+      </Button>
     </View>
   );
 }

@@ -1,5 +1,5 @@
 import { useAgentContext } from "@copilotkit/react-native/headless";
-import { ChevronDown, Hash, ShieldCheck } from "lucide-react-native";
+import { ChevronDown, FolderOpen, Hash, ShieldCheck } from "lucide-react-native";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import {
@@ -134,6 +134,21 @@ export function ChannelThreadBanner({
           {channelName ?? binding.channelId} · {binding.name}
         </Text>
         <View style={{ flex: 1 }} />
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Files in this channel"
+          onPress={() =>
+            open({
+              type: "channelFiles",
+              channelId: binding.channelId,
+              name: channelName ?? undefined,
+            })
+          }
+          style={[s.row, { gap: 4, alignItems: "center", paddingRight: 8 }]}
+        >
+          <FolderOpen size={14} color={colors.muted} />
+          <Text style={s.small}>Files</Text>
+        </Pressable>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Thread permission rules"

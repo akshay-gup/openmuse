@@ -19,6 +19,8 @@ export type Detail =
   | { type: "browser"; browser: BrowserSession }
   | { type: "review"; action: ActionProposal }
   | { type: "task"; taskId: string }
+  | { type: "channelFiles"; channelId: string; name?: string; path?: string }
+  | { type: "channelFile"; channelId: string; path: string }
   | { type: "delegate"; threadId?: string }
   | { type: "notifications" }
   | { type: "computer" }
