@@ -27,6 +27,8 @@ Start the API and the app as usual (`pnpm dev`, `pnpm dev:web`). The sample work
 4. Choose **Rocky Shore**. The agent acknowledges the preference and can offer to continue planning; no booking, send, or other external action occurs.
 5. Reload the page and confirm the historical cards and final choice remain visible. Earlier choice controls should be disabled: saying anything new makes the cards before it stale, whether or not the message mentions the agent.
 
+Cards belong to their conversation, like its messages. In a channel's thread they are the team's: anyone can pick one, and what anyone says makes the cards before it stale. In your orchestrator chat they are yours alone.
+
 In `live` mode a sourced comparison is only shown for pages the agent read in that same turn with the browser tool (`browse_web`), and only if their text supports each label, source title, and detail. If the aquarium site or browser worker fails, the agent cannot present a comparison. Public site availability and content can change, and live Jev may choose an ordinary agent response, so the exact card sequence is not guaranteed.
 
 For a recording, show the `Sample · scripted decisions` caption, email card, clarification controls, inline browser progress, all three source links, changed hands-on ordering, and selection acknowledgement. Aim for 60–90 seconds. Verify the visible source pages still support each claim before publishing a new capture. The existing [demo recording guide](../DEMO.md#record-your-own-demo) covers web and simulator capture.
