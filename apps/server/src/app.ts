@@ -1,4 +1,3 @@
-import { HiveToolBridge } from "./opencode/hive-tools.ts";
 import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import { readFile, stat } from "node:fs/promises";
@@ -27,6 +26,7 @@ import { LocalDiskThreadStore, type ThreadBindingStore } from "./engine/threads.
 import { AppError } from "./errors.ts";
 import { Files } from "./files.ts";
 import { GoogleAuth } from "./google-auth.ts";
+import { HiveToolBridge } from "./opencode/hive-tools.ts";
 import {
   connectionFromConfig,
   ensureOpencodeServerReachable,
@@ -200,8 +200,11 @@ export async function createApp(
       /^\/api\/files\/[^/]+\/content$|^\/api\/agent\/tasks\/[^/]+\/attachments\/[^/]+\/content$|^\/api\/browsers\/[^/]+\/(?:preview|console)$/.test(
         c.req.path,
       );
-    const owner =
-      signedRoute && c.req.query("signature")
+    // A channel file's link keeps its token in the path, so the files a page refers to inherit it.
+    const view = /^\/api\/agent\/channels\/[^/]+\/view\/([\w.-]+)\/./.exec(c.req.path);
+    const owner = view
+      ? files.verifyToken(view[1]).owner
+      : signedRoute && c.req.query("signature")
         ? auth.verify(new URL(c.req.url))
         : await auth.owner(c.req.header("authorization"));
     c.set("owner", owner);

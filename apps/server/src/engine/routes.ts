@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import { createReadStream } from "node:fs";
+import { Readable } from "node:stream";
 import { Hono } from "hono";
 import { z } from "zod";
 import type {
@@ -7,6 +9,7 @@ import type {
   AgentNotification,
 } from "../../../../packages/domain/src/agent.ts";
 import { AppError } from "../errors.ts";
+import { byteRange } from "./channel-files.ts";
 import type { AgentService } from "./service.ts";
 
 const text = z.string().trim().min(1).max(4000);
@@ -124,6 +127,93 @@ export function agentRoutes(service: AgentService): Hono<{ Variables: { owner: s
   app.post("/channels/:id/archive", async (c) =>
     c.json(await service.archiveChannel(c.req.param("id"))),
   );
+  app.get("/channels/:id/files", async (c) => {
+    const query = z
+      .object({
+        path: z.string().max(1024).optional(),
+        recent: z.enum(["1", "true"]).optional(),
+        limit: z.coerce.number().int().min(1).max(100).optional(),
+      })
+      .parse(c.req.query());
+    const owner = c.get("owner");
+    const id = c.req.param("id");
+    return c.json(
+      query.recent
+        ? await service.channelFiles.recent(owner, id, query.limit)
+        : await service.channelFiles.list(owner, id, query.path),
+    );
+  });
+  app.get("/channels/:id/files/info", async (c) => {
+    const { path } = z.object({ path: z.string().max(1024) }).parse(c.req.query());
+    return c.json(await service.channelFiles.info(c.get("owner"), c.req.param("id"), path));
+  });
+  app.post("/channels/:id/files", async (c) => {
+    const form = await c.req.parseBody();
+    if (!(form.file instanceof File)) throw new AppError("Choose a file to add");
+    return c.json(
+      await service.channelFiles.save(
+        c.get("owner"),
+        c.req.param("id"),
+        typeof form.dir === "string" ? form.dir : undefined,
+        form.file.name,
+        new Uint8Array(await form.file.arrayBuffer()),
+      ),
+      201,
+    );
+  });
+  /**
+   * A file's bytes, for a link made by `channelFiles.info` or `.list`. The token in the path is the
+   * credential (and says what the link covers), so a page's relative links to the files beside it
+   * work. Served so a browser never runs what an agent or a person put there as part of Hive.
+   */
+  app.get("/channels/:id/view/:token/*", async (c) => {
+    const token = c.req.param("token");
+    const marker = `/view/${token}/`;
+    const pathname = new URL(c.req.url).pathname;
+    let path: string;
+    try {
+      path = pathname
+        .slice(pathname.indexOf(marker) + marker.length)
+        .split("/")
+        .map(decodeURIComponent)
+        .join("/");
+    } catch {
+      throw new AppError("That path is not valid");
+    }
+    const { file, real } = await service.channelFiles.byLink(token, c.req.param("id"), path);
+    const range = byteRange(c.req.header("range"), file.size);
+    if (range === "unsatisfiable")
+      return c.body(null, 416, { "Content-Range": `bytes */${file.size}` });
+    const mimeType = file.mimeType ?? "application/octet-stream";
+    const text = mimeType.startsWith("text/") || mimeType === "application/json";
+    const inline =
+      c.req.query("download") !== "1" && !["archive", "other"].includes(file.kind ?? "other");
+    c.header("Content-Type", text ? `${mimeType}; charset=utf-8` : mimeType);
+    c.header(
+      "Content-Disposition",
+      `${inline ? "inline" : "attachment"}; filename*=UTF-8''${encodeURIComponent(file.name)}`,
+    );
+    c.header("Accept-Ranges", "bytes");
+    c.header("X-Content-Type-Options", "nosniff");
+    // What a person or an agent put here is not Hive's to run: no script reaches Hive's own page
+    // or storage. A web page may run its own scripts, in a sandbox of its own. (A sandboxed page
+    // cannot open a PDF in the browser's reader, so PDFs get no policy.)
+    if (file.kind === "html")
+      c.header(
+        "Content-Security-Policy",
+        "sandbox allow-scripts allow-forms allow-popups allow-modals",
+      );
+    else if (file.kind !== "pdf") c.header("Content-Security-Policy", "sandbox");
+    const first = range?.start ?? 0;
+    const last = range?.end ?? file.size - 1;
+    c.header("Content-Length", String(file.size ? last - first + 1 : 0));
+    if (range) c.header("Content-Range", `bytes ${first}-${last}/${file.size}`);
+    if (!file.size) return c.body(null, 200);
+    return c.body(
+      Readable.toWeb(createReadStream(real, { start: first, end: last })) as ReadableStream,
+      range ? 206 : 200,
+    );
+  });
   app.get("/channels/:id/tasks", async (c) =>
     c.json(await service.channelTasks(c.get("owner"), c.req.param("id"))),
   );

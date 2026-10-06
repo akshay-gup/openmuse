@@ -48,6 +48,7 @@ import type { OpencodeTaskRuntime } from "../opencode/index.ts";
 import { requesterNames, withRequester } from "../requesters.ts";
 import type { WorkspaceService } from "../workspace.ts";
 import { inlineLimits, renderBrief } from "./brief.ts";
+import { ChannelFiles } from "./channel-files.ts";
 import { ChannelManager } from "./channels.ts";
 import { analyzeSpending } from "./finance.ts";
 import { executeModelTask } from "./model.ts";
@@ -78,6 +79,8 @@ export class AgentService {
   opencodeRuntime?: OpencodeTaskRuntime;
   /** The bytes of the files attached to tasks, and how they reach an agent. */
   readonly taskFiles: TaskFiles;
+  /** What is in each channel's workspace: what the agent makes there and what people add. */
+  readonly channelFiles: ChannelFiles;
   constructor(
     readonly db: Store,
     readonly config: Config,
@@ -88,6 +91,7 @@ export class AgentService {
     readonly threads: ThreadBindingStore = new LocalDiskThreadStore(config.dataDir),
   ) {
     this.taskFiles = new TaskFiles(config.dataDir);
+    this.channelFiles = new ChannelFiles(config, files, (owner, id) => this.getChannel(owner, id));
     this.worker = new TaskWorker(db, (owner, task, context) => this.execute(owner, task, context), {
       settled: (owner, task) => this.publishOutcome(owner, task),
       // In orchestrator mode the main process only runs orchestrator-channel tasks;
