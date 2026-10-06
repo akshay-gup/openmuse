@@ -134,6 +134,7 @@ test("an approved-tool waiting outcome takes precedence over agent completion te
           noteIds: [],
         }),
         markNotesDelivered: async () => {},
+        pendingUpdate: async () => null,
         finish: async () => {
           assert.fail("Must not finish an action awaiting review");
         },

@@ -717,6 +717,26 @@ test("a task with nothing added has no brief at all", async () => {
   assert.deepEqual(brief.noteIds, []);
 });
 
+test("an update is whatever the agent has not yet read or been shown", async () => {
+  const task = await create();
+  assert.equal(await server.agent.pendingUpdate(person, task.id, new Set()), null);
+  const noted = await server.agent.addNote(person, task.id, { text: "Heads up" });
+  const withFile = await server.agent.addAttachment(person, task.id, {
+    name: "a.txt",
+    bytes: text("a"),
+  });
+  const fileId = withFile.attachments?.[0].id ?? "";
+  const pending = await server.agent.pendingUpdate(person, task.id, new Set());
+  assert.deepEqual(
+    [pending?.notes.map((n) => n.text), pending?.files.map((f) => f.id)],
+    [["Heads up"], [fileId]],
+  );
+  await server.agent.markNotesDelivered(person, task.id, [noted.notes?.[0].id ?? ""]);
+  const afterNote = await server.agent.pendingUpdate(person, task.id, new Set());
+  assert.deepEqual(afterNote?.notes, []);
+  assert.equal(await server.agent.pendingUpdate(person, task.id, new Set([fileId])), null);
+});
+
 // ---- A run that is not OpenCode ----------------------------------------------------------------
 
 test("a model run reads the notes and files, and hands its answer in for review", async (t) => {

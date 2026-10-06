@@ -1211,6 +1211,14 @@ export class AgentService {
       noteIds: (task.notes ?? []).filter((note) => !note.delivered).map((note) => note.id),
     };
   }
+  /** What was added to a task since its agent last heard: notes it has not read, files not yet in its workspace. */
+  async pendingUpdate(owner: string, taskId: string, known: ReadonlySet<string>) {
+    const task = await this.db.get<AgentTask>(owner, "tasks", taskId);
+    if (!task) return null;
+    const notes = (task.notes ?? []).filter((note) => !note.delivered);
+    const files = (task.attachments ?? []).filter((file) => !known.has(file.id));
+    return notes.length || files.length ? { task, notes, files } : null;
+  }
   async markNotesDelivered(owner: string, taskId: string, noteIds: string[]) {
     if (noteIds.length)
       await this.db.patchItems(owner, "tasks", taskId, "notes", noteIds, { delivered: true });
