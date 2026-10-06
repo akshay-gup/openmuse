@@ -33,7 +33,7 @@ function sources(directory: string): string[] {
 test("every kind of record kept for a person is shared, or deliberately kept per person", () => {
   const root = new URL("../apps/server/src", import.meta.url).pathname;
   const call =
-    /\.(?:get|list|listWhere|put|remove|take|insertIfAbsent|compareAndSwap)(?:<[^>]*>)?\(\s*([^,()]+?),\s*"([\w-]+)"/g;
+    /\.(?:get|list|listWhere|put|remove|take|insertIfAbsent|compareAndSwap|appendItem|removeItem|patchItems)(?:<[^>]*>)?\(\s*([^,()]+?),\s*"([\w-]+)"/g;
   const unplaced = new Set<string>();
   for (const file of sources(root)) {
     for (const [, owner, kind] of readFileSync(file, "utf8").matchAll(call)) {

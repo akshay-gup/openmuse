@@ -113,6 +113,82 @@ export class Store {
     );
     return (result.rows[0]?.data as T | undefined) ?? null;
   }
+  /**
+   * Append `item` to the array in `field`, in one statement. Reading the record and writing it
+   * back (or `compareAndSwap`, whose `@>` check treats an array as a superset) would drop an entry
+   * when two people add one at the same moment. Options: `max` refuses the append once the array is
+   * that long; `where` only appends while the record contains it (the way `compareAndSwap`
+   * expects); `merge` sets other fields in the same statement. Returns the record, or null when it
+   * is missing, full, or no longer matches `where`.
+   */
+  async appendItem<T>(
+    owner: string,
+    kind: string,
+    id: string,
+    field: string,
+    item: unknown,
+    options: {
+      max?: number;
+      where?: Record<string, unknown>;
+      merge?: Record<string, unknown>;
+    } = {},
+  ): Promise<T | null> {
+    const result = await this.db.query(
+      `UPDATE records SET data=jsonb_set(data,ARRAY[$4::text],COALESCE(data->$4::text,'[]'::jsonb)||jsonb_build_array($5::jsonb),true)||$6::jsonb,updated_at=now()
+       WHERE owner=$1 AND kind=$2 AND id=$3 AND data @> $7::jsonb
+       AND ($8::int IS NULL OR jsonb_array_length(COALESCE(data->$4::text,'[]'::jsonb))<$8::int) RETURNING data`,
+      [
+        homeOf(owner, kind),
+        kind,
+        id,
+        field,
+        JSON.stringify(item),
+        JSON.stringify(options.merge ?? {}),
+        JSON.stringify(options.where ?? {}),
+        options.max ?? null,
+      ],
+    );
+    return (result.rows[0]?.data as T | undefined) ?? null;
+  }
+  /** Drop the entry of the array in `field` whose `id` is `itemId`; `merge` sets other fields in the same statement. Returns the record, or null if it is missing. */
+  async removeItem<T>(
+    owner: string,
+    kind: string,
+    id: string,
+    field: string,
+    itemId: string,
+    merge: Record<string, unknown> = {},
+  ): Promise<T | null> {
+    const result = await this.db.query(
+      `UPDATE records SET data=jsonb_set(data,ARRAY[$4::text],COALESCE((
+         SELECT jsonb_agg(entry ORDER BY position)
+         FROM jsonb_array_elements(COALESCE(data->$4::text,'[]'::jsonb)) WITH ORDINALITY AS entries(entry,position)
+         WHERE entry->>'id' IS DISTINCT FROM $5::text
+       ),'[]'::jsonb),true)||$6::jsonb,updated_at=now()
+       WHERE owner=$1 AND kind=$2 AND id=$3 RETURNING data`,
+      [homeOf(owner, kind), kind, id, field, itemId, JSON.stringify(merge)],
+    );
+    return (result.rows[0]?.data as T | undefined) ?? null;
+  }
+  /** Merge `patch` into the entries of the array in `field` whose `id` is in `itemIds`. Returns the record, or null if it is missing. */
+  async patchItems<T>(
+    owner: string,
+    kind: string,
+    id: string,
+    field: string,
+    itemIds: string[],
+    patch: Record<string, unknown>,
+  ): Promise<T | null> {
+    const result = await this.db.query(
+      `UPDATE records SET data=jsonb_set(data,ARRAY[$4::text],COALESCE((
+         SELECT jsonb_agg(CASE WHEN entry->>'id' IN (SELECT jsonb_array_elements_text($5::jsonb)) THEN entry||$6::jsonb ELSE entry END ORDER BY position)
+         FROM jsonb_array_elements(COALESCE(data->$4::text,'[]'::jsonb)) WITH ORDINALITY AS entries(entry,position)
+       ),'[]'::jsonb),true),updated_at=now()
+       WHERE owner=$1 AND kind=$2 AND id=$3 RETURNING data`,
+      [homeOf(owner, kind), kind, id, field, JSON.stringify(itemIds), JSON.stringify(patch)],
+    );
+    return (result.rows[0]?.data as T | undefined) ?? null;
+  }
   async insertIfAbsent<T extends { id: string }>(
     owner: string,
     kind: string,
