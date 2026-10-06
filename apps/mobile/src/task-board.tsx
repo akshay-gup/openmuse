@@ -94,6 +94,8 @@ export function TaskBoardCard({
   const doneSteps = task.plan.filter((step) => step.status === "succeeded").length;
   const updated = ago(task.updatedAt);
   const overdue = isOverdue(task);
+  const noteCount = task.notes?.length ?? 0;
+  const fileCount = task.attachments?.length ?? 0;
 
   // What the card leads with under the title: the live step, a question or
   // error needing attention, or the task's own description.
@@ -210,6 +212,34 @@ export function TaskBoardCard({
               }}
             >
               <Text style={[s.small, { fontWeight: "700" }]}>Assigned</Text>
+            </View>
+          )}
+          {noteCount > 0 && (
+            <View
+              style={{
+                backgroundColor: colors.surfaceMuted,
+                borderRadius: radius.md,
+                paddingHorizontal: 9,
+                paddingVertical: 4,
+              }}
+            >
+              <Text style={s.small}>
+                {noteCount} {noteCount === 1 ? "note" : "notes"}
+              </Text>
+            </View>
+          )}
+          {fileCount > 0 && (
+            <View
+              style={{
+                backgroundColor: colors.surfaceMuted,
+                borderRadius: radius.md,
+                paddingHorizontal: 9,
+                paddingVertical: 4,
+              }}
+            >
+              <Text style={s.small}>
+                {fileCount} {fileCount === 1 ? "file" : "files"}
+              </Text>
             </View>
           )}
           {!!due && (

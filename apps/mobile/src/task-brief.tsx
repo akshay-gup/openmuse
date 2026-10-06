@@ -1,0 +1,260 @@
+import * as DocumentPicker from "expo-document-picker";
+import * as FileSystem from "expo-file-system/legacy";
+import { FileText, Image as ImageIcon, Paperclip } from "lucide-react-native";
+import { useState } from "react";
+import { Linking, Platform, Pressable, Text, View } from "react-native";
+import {
+  type AgentTask,
+  attachmentTypes,
+  type TaskAttachment,
+  type TaskNote,
+  taskBriefLimits,
+} from "../../../packages/domain/src/agent";
+import { useAgentWorkspace } from "./agent-workspace";
+import { API_URL, type MuseApi } from "./api";
+import { ago } from "./task-board";
+import { Button, Chip, colors, ErrorNotice, Field, radius, s } from "./ui";
+import { useWorkspace } from "./workspace";
+
+const megabytes = (bytes: number) => bytes / (1024 * 1024);
+export const fileSize = (bytes: number) =>
+  bytes < 1024 * 1024
+    ? `${Math.max(1, Math.round(bytes / 1024))} KB`
+    : `${megabytes(bytes).toFixed(1)} MB`;
+
+const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e));
+
+/** Web pickers take extensions; native pickers take MIME types. */
+const pickerTypes =
+  Platform.OS === "web"
+    ? Object.keys(attachmentTypes)
+    : [...new Set(Object.values(attachmentTypes))].map((type) =>
+        type.startsWith("image/") ? "image/*" : type,
+      );
+
+/**
+ * Choose a file and attach it to the task. Resolves to false when the person backs out; throws a
+ * message they can read when the file cannot be attached.
+ */
+export async function attachFile(api: MuseApi, taskId: string): Promise<boolean> {
+  const result = await DocumentPicker.getDocumentAsync({
+    type: pickerTypes,
+    copyToCacheDirectory: true,
+  });
+  if (result.canceled) return false;
+  const file = result.assets[0];
+  if (file.size !== undefined && file.size > taskBriefLimits.attachmentBytes)
+    throw new Error(`Files must be ${megabytes(taskBriefLimits.attachmentBytes)} MB or smaller.`);
+  const path = `/api/agent/tasks/${taskId}/attachments`;
+  if (Platform.OS === "web") {
+    if (!file.file) throw new Error("The selected file could not be read. Please choose it again.");
+    const form = new FormData();
+    form.append("file", file.file, file.name);
+    await api.request(path, form);
+  } else {
+    const upload = await FileSystem.uploadAsync(`${API_URL}${path}`, file.uri, {
+      httpMethod: "POST",
+      uploadType: FileSystem.FileSystemUploadType.MULTIPART,
+      fieldName: "file",
+      mimeType: file.mimeType ?? "application/octet-stream",
+      headers: { Authorization: `Bearer ${api.token}` },
+    });
+    const payload = JSON.parse(upload.body);
+    if (upload.status < 200 || upload.status >= 300)
+      throw new Error(payload.error || "Could not attach this file.");
+  }
+  return true;
+}
+
+const noteAbout: Record<TaskNote["kind"], string> = {
+  note: "",
+  answer: " · answered a question",
+  feedback: " · asked for changes",
+};
+
+function NoteRow({
+  note,
+  agentTask,
+  onRemove,
+}: {
+  note: TaskNote;
+  agentTask: boolean;
+  onRemove: () => void;
+}) {
+  return (
+    <View
+      style={{
+        gap: 4,
+        paddingLeft: 12,
+        borderLeftWidth: 2,
+        borderLeftColor:
+          note.kind === "feedback"
+            ? colors.warning
+            : note.kind === "answer"
+              ? colors.primary
+              : colors.line,
+      }}
+    >
+      <View style={[s.row, { gap: 8, flexWrap: "wrap" }]}>
+        <Text style={[s.small, { fontWeight: "600", color: colors.text }]}>
+          {note.mine ? "You" : (note.createdByName ?? "A teammate")}
+        </Text>
+        <Text style={s.small}>
+          {ago(note.createdAt)}
+          {noteAbout[note.kind]}
+        </Text>
+        {agentTask && !note.delivered && (
+          <Chip tint={colors.warningBg} color={colors.warningText}>
+            Agent hasn't read this yet
+          </Chip>
+        )}
+      </View>
+      <Text selectable style={s.text}>
+        {note.text}
+      </Text>
+      {note.mine && !note.delivered && (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Remove this note"
+          onPress={onRemove}
+          style={{ alignSelf: "flex-start", paddingVertical: 4 }}
+        >
+          <Text style={[s.small, { color: colors.primaryText }]}>Remove</Text>
+        </Pressable>
+      )}
+    </View>
+  );
+}
+
+function FileRow({ file, onRemove }: { file: TaskAttachment; onRemove: () => void }) {
+  const Icon = file.mimeType.startsWith("image/") ? ImageIcon : FileText;
+  return (
+    <View
+      style={[
+        s.row,
+        {
+          gap: 12,
+          padding: 12,
+          borderWidth: 1,
+          borderColor: colors.line,
+          borderRadius: radius.lg,
+          backgroundColor: colors.surface,
+        },
+      ]}
+    >
+      <Icon size={18} color={colors.muted} />
+      <Pressable
+        accessibilityRole="link"
+        accessibilityLabel={`Open ${file.name}`}
+        disabled={!file.url}
+        onPress={() => file.url && void Linking.openURL(file.url)}
+        style={{ flex: 1, minWidth: 0 }}
+      >
+        <Text style={[s.text, { color: colors.primaryText }]} numberOfLines={1}>
+          {file.name}
+        </Text>
+        <Text style={s.small} numberOfLines={1}>
+          {fileSize(file.size)} · {file.mine ? "you" : (file.addedByName ?? "a teammate")},{" "}
+          {ago(file.addedAt)}
+        </Text>
+      </Pressable>
+      {file.mine && (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Remove ${file.name}`}
+          onPress={onRemove}
+          style={{ paddingVertical: 6, paddingHorizontal: 4 }}
+        >
+          <Text style={[s.small, { color: colors.primaryText }]}>Remove</Text>
+        </Pressable>
+      )}
+    </View>
+  );
+}
+
+/**
+ * What the agent is told besides the task itself: the team's notes, in order, and the files it
+ * should read. Every run reads all of it, and a note added while the agent works reaches it then.
+ */
+export function TaskBrief({ task }: { task: AgentTask }) {
+  const { api } = useWorkspace();
+  const { refresh, mutate } = useAgentWorkspace();
+  const [text, setText] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const notes = task.notes ?? [];
+  const files = task.attachments ?? [];
+  const agentTask = task.kind !== "manual";
+
+  async function run(work: () => Promise<unknown>) {
+    setError("");
+    setBusy(true);
+    try {
+      await work();
+      await refresh().catch(() => {});
+    } catch (e) {
+      setError(errorText(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+  const addNote = () =>
+    run(async () => {
+      await mutate(`/tasks/${task.id}/notes`, { text: text.trim() });
+      setText("");
+    });
+  const removeNote = (note: TaskNote) =>
+    run(() => api.request(`/api/agent/tasks/${task.id}/notes/${note.id}`, undefined, "DELETE"));
+  const removeFile = (file: TaskAttachment) =>
+    run(() =>
+      api.request(`/api/agent/tasks/${task.id}/attachments/${file.id}`, undefined, "DELETE"),
+    );
+
+  const hint = !agentTask
+    ? "Context for whoever picks this up. If you hand it to the agent, it reads all of this."
+    : task.status === "running"
+      ? "The agent is working now and picks up a new note or file as it goes."
+      : "The agent reads all of this each time it runs.";
+  return (
+    <View style={{ gap: 14 }}>
+      <View style={{ gap: 4 }}>
+        <Text style={s.heading}>Notes &amp; files</Text>
+        <Text style={s.small}>{hint}</Text>
+      </View>
+      {notes.map((note) => (
+        <NoteRow
+          key={note.id}
+          note={note}
+          agentTask={agentTask}
+          onRemove={() => void removeNote(note)}
+        />
+      ))}
+      {files.map((file) => (
+        <FileRow key={file.id} file={file} onRemove={() => void removeFile(file)} />
+      ))}
+      <ErrorNotice error={error} />
+      <Field
+        label="Add a note"
+        value={text}
+        onChangeText={setText}
+        multiline
+        maxLength={taskBriefLimits.noteChars}
+        placeholder="Anything the agent should know or do differently…"
+        style={{ minHeight: 76 }}
+      />
+      <View style={[s.row, { gap: 8, flexWrap: "wrap" }]}>
+        <Button primary small busy={busy} disabled={!text.trim()} onPress={() => void addNote()}>
+          Add note
+        </Button>
+        <Button
+          small
+          icon={Paperclip}
+          disabled={busy || files.length >= taskBriefLimits.attachments}
+          onPress={() => void run(() => attachFile(api, task.id))}
+        >
+          Attach a file
+        </Button>
+      </View>
+    </View>
+  );
+}

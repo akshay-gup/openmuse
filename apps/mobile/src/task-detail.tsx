@@ -11,8 +11,9 @@ import { useAgentWorkspace } from "./agent-workspace";
 import DateOnlyField from "./DateOnlyField";
 import { TaskAttention } from "./task-attention";
 import { priorityColors } from "./task-board";
+import { TaskBrief } from "./task-brief";
 import { TaskRunView } from "./task-run";
-import { Button, colors, ErrorNotice, Field, Segmented, Sheet, s } from "./ui";
+import { Button, Card, CheckRow, colors, ErrorNotice, Field, Segmented, Sheet, s } from "./ui";
 import { useWorkspace } from "./workspace";
 
 const manualTransitions: TaskStatus[] = ["queued", "running", "succeeded", "failed"];
@@ -62,24 +63,33 @@ export function TaskDetail({
   const [startAt, setStartAt] = useState(task.startAt ?? "");
   const [dueAt, setDueAt] = useState(task.dueAt ?? "");
   const [labels, setLabels] = useState(task.labels.join(", "));
+  const [description, setDescription] = useState(task.prompt);
+  const [handing, setHanding] = useState(false);
+  const [includeDiscussion, setIncludeDiscussion] = useState(true);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [armed, setArmed] = useState(false);
 
   const manual = task.kind === "manual";
+  // Issues have a description; agent tasks have the instructions they were given.
+  const hasDescription = manual || task.kind === "agent" || task.kind === "plan";
+  const channelName = task.channelId && task.channelId !== "orchestrator" ? task.channelId : null;
   const transitions = manual ? manualTransitions : workerTransitions;
   const blockers = task.blockedBy
     .map((id) => tasks.find((t) => t.id === id))
     .filter((t): t is AgentTask => !!t);
 
-  async function patch(body: Record<string, unknown>) {
+  /** Save a change to the task. Resolves to whether it was saved; the error is shown above. */
+  async function patch(body: Record<string, unknown>): Promise<boolean> {
     setError("");
     setBusy(true);
     try {
       await api.request(`/api/agent/tasks/${task.id}`, body, "PATCH");
       await refresh();
+      return true;
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
+      return false;
     } finally {
       setBusy(false);
     }
@@ -99,8 +109,15 @@ export function TaskDetail({
         return;
       }
     }
+    if (hasDescription && !manual && !description.trim()) {
+      setError("Instructions are required for an agent task.");
+      return;
+    }
     void patch({
       title: title.trim(),
+      ...(hasDescription && description.trim() !== task.prompt.trim()
+        ? { prompt: description.trim() }
+        : {}),
       startAt: startAt.trim() || null,
       dueAt: dueAt.trim() || null,
       labels: labels
@@ -132,7 +149,16 @@ export function TaskDetail({
       <View style={{ gap: 20 }}>
         <ErrorNotice error={error} />
         {!manual && <TaskAttention task={task} onBeforeOpen={onClose} />}
+        {hasDescription && !!task.prompt.trim() && (
+          <View style={{ gap: 6 }}>
+            <Text style={s.label}>{manual ? "Description" : "Instructions"}</Text>
+            <Text selectable numberOfLines={8} style={s.text}>
+              {task.prompt}
+            </Text>
+          </View>
+        )}
         {(!manual || task.attempts > 0) && <TaskRunView task={task} />}
+        <TaskBrief task={task} />
 
         <View style={{ gap: 6 }}>
           <Text style={s.label}>Status</Text>
@@ -169,21 +195,62 @@ export function TaskDetail({
           <Text style={s.label}>Assignee</Text>
           <Segmented<"none" | "agent">
             label="Assignee"
-            value={task.assignee === "agent" ? "agent" : "none"}
+            value={handing || task.assignee === "agent" ? "agent" : "none"}
             disabled={busy}
-            onChange={(assignee) => void patch({ assignee: assignee === "agent" ? "agent" : null })}
+            onChange={(assignee) => {
+              if (assignee === "agent") {
+                // Handing a ticket over is a step of its own: say what the agent needs first.
+                if (task.assignee !== "agent") setHanding(true);
+                return;
+              }
+              setHanding(false);
+              if (task.assignee === "agent") void patch({ assignee: null });
+            }}
             options={[
               { id: "none", label: "Unassigned" },
               { id: "agent", label: "Agent" },
             ]}
           />
-          {manual && !task.assignee && (
+          {manual && !task.assignee && !handing && (
             <Text style={s.small}>Assign to the agent to have it run this issue.</Text>
           )}
           {task.assignee === "agent" && (
             <Text style={s.small}>
-              The agent runs this ticket, grounded in the channel discussion.
+              The agent runs this ticket and hands it back to you to check. Only you mark it done.
             </Text>
+          )}
+          {handing && (
+            <Card style={{ backgroundColor: colors.primarySoft, gap: 12 }}>
+              <Text style={s.heading}>Hand this to the agent</Text>
+              <Text style={s.muted}>
+                It reads the description, notes and files above, and starts as soon as you confirm.
+                When it finishes it comes back to you to check, and you decide whether it is done.
+              </Text>
+              {channelName && (
+                <CheckRow
+                  label={`Include the recent discussion in #${channelName}`}
+                  checked={includeDiscussion}
+                  onPress={() => setIncludeDiscussion(!includeDiscussion)}
+                />
+              )}
+              <View style={[s.row, { gap: 8, flexWrap: "wrap" }]}>
+                <Button
+                  primary
+                  busy={busy}
+                  onPress={() => {
+                    void patch({
+                      assignee: "agent",
+                      ...(channelName ? { channelContext: includeDiscussion } : {}),
+                    }).then((saved) => saved && setHanding(false));
+                  }}
+                >
+                  Hand to agent
+                </Button>
+                <Button disabled={busy} onPress={() => setHanding(false)}>
+                  Cancel
+                </Button>
+              </View>
+            </Card>
           )}
         </View>
 
@@ -211,6 +278,16 @@ export function TaskDetail({
         </View>
         <View>
           <Field label="Title" value={title} onChangeText={setTitle} />
+          {hasDescription && (
+            <Field
+              label={manual ? "Description" : "Instructions"}
+              value={description}
+              onChangeText={setDescription}
+              multiline
+              placeholder={manual ? "What is this about, and what does done look like?" : undefined}
+              style={{ minHeight: 96 }}
+            />
+          )}
           <View style={[s.row, { gap: 10, alignItems: "flex-start" }]}>
             <View style={{ flex: 1 }}>
               <DateOnlyField label="Start date" value={startAt} onChange={setStartAt} />

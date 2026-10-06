@@ -11,6 +11,7 @@ const datePattern = /^\d{4}-\d{2}-\d{2}$/;
 export function TaskCreate({ onClose }: { onClose: () => void }) {
   const { refresh, mutate } = useAgentWorkspace();
   const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
   const [priority, setPriority] = useState<TaskPriority>("medium");
   const [startAt, setStartAt] = useState("");
   const [dueAt, setDueAt] = useState("");
@@ -38,6 +39,7 @@ export function TaskCreate({ onClose }: { onClose: () => void }) {
     try {
       await mutate("/tasks", {
         title: trimmed,
+        ...(description.trim() ? { prompt: description.trim() } : {}),
         kind: "manual",
         priority,
         startAt: startAt.trim() || null,
@@ -64,6 +66,14 @@ export function TaskCreate({ onClose }: { onClose: () => void }) {
           value={title}
           onChangeText={setTitle}
           placeholder="What needs doing?"
+        />
+        <Field
+          label="Description"
+          value={description}
+          onChangeText={setDescription}
+          multiline
+          placeholder="Details, links, what done looks like. Optional."
+          style={{ minHeight: 96 }}
         />
         <View style={{ gap: 6 }}>
           <Text style={s.label}>Priority</Text>
