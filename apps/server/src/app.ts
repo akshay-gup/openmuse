@@ -10,7 +10,7 @@ import { cors } from "hono/cors";
 import { z } from "zod";
 import { emailDraftSchema, proposalSchema } from "../../../packages/domain/src/index.ts";
 import { ActionService } from "./actions.ts";
-import { agentConfigured, makeRuntime } from "./agent.ts";
+import { makeRuntime } from "./agent.ts";
 import { createAuth } from "./auth.ts";
 import { BrowserService } from "./browser.ts";
 import type { Config } from "./config.ts";
@@ -131,7 +131,6 @@ export async function createApp(
     c.json({
       ok: true,
       mode: config.mode,
-      agentConfigured: agentConfigured(config),
       browserConfigured: Boolean(config.workerUrl && config.workerToken),
     }),
   );
@@ -447,11 +446,6 @@ export async function createApp(
     return c.json({ ok: true });
   });
   app.all("/api/copilotkit/*", async (c) => {
-    if (!agentConfigured(config))
-      throw new AppError(
-        "Configure a model and provider API key, or a valid AG-UI endpoint, to start chat",
-        503,
-      );
     const response = await runtime.fetch(c.req.raw);
     // Runtime 1.70 emits SSE strings; a WHATWG Response body requires byte chunks.
     const encoder = new TextEncoder();

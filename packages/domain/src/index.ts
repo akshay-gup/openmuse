@@ -187,8 +187,6 @@ export interface Workspace {
   activity: ActivityEntry[];
   connections: Connection[];
   runtime: {
-    provider: "sample" | "model" | "openbot";
-    configured: boolean;
     openbotConfigured: boolean;
     richThreads?: boolean;
   };

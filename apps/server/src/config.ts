@@ -58,14 +58,12 @@ export interface Config {
   /** Override for the served web UI directory; defaults to apps/mobile/dist/web. */
   webDir?: string;
   encryptionKey?: string;
+  /** The `provider/model-id` OpenCode runs the agent on (MODEL). */
   model?: string;
   jevMode?: "off" | "sample" | "live";
   typesafeApiKey?: string;
   jevModel?: string;
-  agentBackend: "sample" | "model" | "agui" | "opencode";
-  agentUrl?: string;
-  agentToken?: string;
-  /** Base URL of the systemd-managed `opencode serve` (AGENT_BACKEND=opencode). */
+  /** Base URL of the systemd-managed `opencode serve`. */
   opencodeServerUrl?: string;
   /** OPENCODE_SERVER_PASSWORD; enables Basic auth against `opencode serve`. */
   opencodeServerPassword?: string;
@@ -106,11 +104,13 @@ export function readConfig(): Config {
   const mode = process.env.WORKSPACE_MODE ?? "sample";
   if (mode !== "sample" && mode !== "live")
     throw new Error("WORKSPACE_MODE must be sample or live");
-  const backend = process.env.AGENT_BACKEND ?? (mode === "sample" ? "sample" : "model");
-  if (backend !== "sample" && backend !== "model" && backend !== "agui" && backend !== "opencode")
-    throw new Error("AGENT_BACKEND must be sample, model, agui or opencode");
-  if (mode === "live" && backend === "sample")
-    throw new Error("Live workspaces cannot use the sample agent");
+  // The agent is OpenCode and nothing else. The setting is only read so that a deployment that
+  // still has AGENT_BACKEND=opencode keeps booting, and one that picks another backend is told.
+  const backend = process.env.AGENT_BACKEND?.trim();
+  if (backend && backend !== "opencode")
+    throw new Error(
+      `AGENT_BACKEND=${backend} is no longer supported: Hive's agent is OpenCode. Remove AGENT_BACKEND.`,
+    );
   const jevMode = process.env.JEV_MODE ?? "off";
   if (jevMode !== "off" && jevMode !== "sample" && jevMode !== "live")
     throw new Error("JEV_MODE must be off, sample or live");
@@ -134,9 +134,6 @@ export function readConfig(): Config {
     jevMode,
     typesafeApiKey,
     jevModel: process.env.JEV_MODEL?.trim() || defaultJevModel,
-    agentBackend: backend,
-    agentUrl: process.env.AGENT_URL,
-    agentToken: process.env.AGENT_TOKEN,
     opencodeServerUrl: process.env.OPENCODE_SERVER_URL?.trim() || undefined,
     opencodeServerPassword: process.env.OPENCODE_SERVER_PASSWORD?.trim() || undefined,
     agentMention: normalizeMention(process.env.AGENT_MENTION),

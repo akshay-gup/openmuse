@@ -43,7 +43,6 @@ async function app(t: TestContext, opencodeServerUrl: string) {
     host: "127.0.0.1",
     publicUrl: "http://localhost:8787",
     dataDir,
-    agentBackend: "opencode",
     googleRedirectUri: "http://localhost:8787/api/google/callback",
     allowedOrigins: [],
     opencodeServerUrl,

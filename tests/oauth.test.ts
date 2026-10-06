@@ -23,7 +23,6 @@ function oauthConfig(): Config {
     host: "127.0.0.1",
     publicUrl: "http://localhost:8787",
     dataDir: "unused",
-    agentBackend: "model",
     allowedOrigins: [],
     googleRedirectUri: "http://localhost:8787/api/google/callback",
     googleClientId: "synthetic-client",
@@ -42,7 +41,6 @@ test("old refresh cannot overwrite a newly connected Google account", async (t) 
     host: "127.0.0.1",
     publicUrl: "http://localhost:8787",
     dataDir: "unused",
-    agentBackend: "model",
     googleRedirectUri: "http://localhost:8787/api/google/callback",
     allowedOrigins: [],
     encryptionKey: key,
@@ -101,7 +99,6 @@ test("OAuth callbacks require a known, single-use state", async (t) => {
     host: "127.0.0.1",
     publicUrl: "http://localhost:8787",
     dataDir: "unused",
-    agentBackend: "model",
     googleRedirectUri: "http://localhost:8787/api/google/callback",
     allowedOrigins: [],
   };

@@ -79,7 +79,6 @@ before(async () => {
     host: "127.0.0.1",
     publicUrl: "http://localhost:8787",
     dataDir: directory,
-    agentBackend: "sample",
     googleRedirectUri: "http://localhost:8787/api/google/callback",
     allowedOrigins: ["http://localhost:8081"],
   };

@@ -9,20 +9,6 @@ import {
 import type { Auth } from "./auth.ts";
 import type { Config } from "./config.ts";
 
-export function agentConfigured(config: Config) {
-  if (config.agentBackend === "opencode") return true; // boot gates on server reachability
-  return (
-    config.agentBackend === "sample" ||
-    (config.agentBackend === "agui"
-      ? Boolean(config.agentUrl)
-      : Boolean(
-          config.model &&
-            (process.env.OPENAI_API_KEY ||
-              process.env.ANTHROPIC_API_KEY ||
-              process.env.GOOGLE_API_KEY),
-        ))
-  );
-}
 export function makeRuntime(config: Config, auth: Auth, intelligence?: CopilotKitIntelligence) {
   // The agent is OpenCode, reached through the AG-UI shim in this process. The caller's auth is
   // forwarded so the shim route resolves the owner the same way this request did.

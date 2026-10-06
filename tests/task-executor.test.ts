@@ -24,7 +24,6 @@ async function executor(t: TestContext, name: string, adjust: Partial<Config> = 
     host: "127.0.0.1",
     publicUrl: "http://localhost:8787",
     dataDir: directory,
-    agentBackend: "sample",
     intelligenceApiKey: "test-project-key-never-sent",
     model: "openai/fixture",
     googleRedirectUri: "http://localhost:8787/api/google/callback",
@@ -243,7 +242,7 @@ test("browser reads keep observation identity distinct while reusing one session
   const { server, standIn } = await executor(
     t,
     "executor-browser",
-    { ...browser.config, agentBackend: "sample", model: "openai/fixture" },
+    { ...browser.config, model: "openai/fixture" },
     browser.db,
   );
   standIn.agent(async ({ call, idle }) => {

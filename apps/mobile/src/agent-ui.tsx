@@ -1076,12 +1076,6 @@ export function DelegateSheet({ threadId }: { threadId?: string }) {
           </Text>
         </>
       )}
-      {kind === "agent" && !workspace.runtime.configured && (
-        <Text style={[s.muted, { marginBottom: 16 }]}>
-          General tasks and plans require a configured model. Document jobs, page watches and
-          spending summaries have guided workflows.
-        </Text>
-      )}
       <ErrorNotice error={error} />
       <Button
         primary

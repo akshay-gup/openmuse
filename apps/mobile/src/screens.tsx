@@ -1409,16 +1409,7 @@ export function ConnectionsScreen({ query = "" }: { query?: string }) {
                 label="Environment"
                 value={w.mode === "sample" ? "Local · example data" : "Live workspace"}
               />
-              <SettingsLine
-                label="Assistant"
-                value={
-                  w.runtime.provider === "sample"
-                    ? "Guided workflows"
-                    : w.runtime.configured
-                      ? "Model connected"
-                      : "Model not configured"
-                }
-              />
+              <SettingsLine label="Assistant" value="OpenCode" />
               <SettingsLine
                 label="Rich Threads"
                 value={w.runtime.richThreads ? "CopilotKit Intelligence" : "Not connected"}
