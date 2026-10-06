@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { ActivityIndicator, Platform, Pressable, ScrollView, Text, View } from "react-native";
 import type { AgentTask, RunEvent } from "../../../packages/domain/src/agent";
 import { AssistantResponse } from "./assistant-response";
+import { ChannelFileCard, parseSharedFile } from "./file-card";
 import { colors, ErrorNotice, fontSize, monoProps, radius, s } from "./ui";
 import { useWorkspace } from "./workspace";
 
@@ -11,6 +12,9 @@ function publicText(text: string) {
 function ToolActivity({ event }: { event: RunEvent }) {
   const [expanded, setExpanded] = useState(false);
   const running = ["pending", "running"].includes(event.toolState ?? "");
+  // A file the agent shared is shown as it is in a chat, not as the JSON it came back as.
+  const sent = event.toolName === "send_file" ? parseSharedFile(event.detail) : null;
+  const shared = sent && "channelId" in sent ? <ChannelFileCard sent={sent} /> : null;
   return (
     <View
       style={{
@@ -38,6 +42,7 @@ function ToolActivity({ event }: { event: RunEvent }) {
           {event.toolState ?? "completed"} · {expanded ? "Hide" : "Details"}
         </Text>
       </Pressable>
+      {shared && <View style={{ padding: 12, paddingTop: 0 }}>{shared}</View>}
       {expanded && (
         <View
           style={{

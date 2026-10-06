@@ -44,6 +44,7 @@ import { BrowserThreadCard } from "./computer";
 import { ConversationQueue, type QueuedMessage } from "./conversation-queue";
 import { runConversationTurn } from "./conversation-run";
 import { DraftReply } from "./draft-reply";
+import { SentFileToolCard } from "./file-card";
 import { confirmedJevSelection, displayJevUserMessage, latestJevPanelId } from "./jev-actions";
 import { JevInteractionContext, JevToolCard } from "./jev-tool-card";
 import { MailToolCard } from "./mail-tool-card";
@@ -168,6 +169,14 @@ export function WorkspaceTools() {
     description: "Show prepared choices for the conversation",
     parameters: displayParameters,
     render: ({ result, status }) => <JevToolCard result={result} loading={status !== "complete"} />,
+  });
+  useRenderTool({
+    name: "send_file",
+    description: "Show a file the agent shared",
+    parameters: displayParameters,
+    render: ({ result, status }) => (
+      <SentFileToolCard result={result} loading={status !== "complete"} />
+    ),
   });
   useRenderTool({
     name: "delegate_task",
