@@ -1,0 +1,200 @@
+import assert from "node:assert/strict";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { type TestContext, test } from "node:test";
+import { EventSchemas } from "@ag-ui/core";
+import { createApp } from "../apps/server/src/app.ts";
+import type { Config } from "../apps/server/src/config.ts";
+import { createStore } from "../apps/server/src/db.ts";
+import { encodeJevAction } from "../packages/domain/src/jev.ts";
+import { type FakeTurn, fakeOpencode } from "./helpers/fake-opencode.ts";
+
+/**
+ * Hive against something that speaks OpenCode's HTTP API, with nothing stubbed on Hive's side: the
+ * SDK client, the global event stream, session binding, the AG-UI shim, the task worker and the tool
+ * bridge, which the agent reaches over HTTP. Only what the agent decides to do is the test's.
+ */
+async function wired(
+  t: TestContext,
+  behave: (turn: FakeTurn) => void | Promise<void>,
+  adjust: Partial<Config> = {},
+) {
+  const dataDir = await mkdtemp(join(tmpdir(), "hive-wire-"));
+  const db = await createStore();
+  let app: Awaited<ReturnType<typeof createApp>>["app"] | undefined;
+  const opencode = await fakeOpencode({
+    behave,
+    // The bridge's URL is the API's own port; reach the same route without listening on one.
+    fetchTools: (_url, init) => {
+      assert.ok(app, "the app has not been built yet");
+      return Promise.resolve(app.request("/api/hive-tools", init));
+    },
+  });
+  const config: Config = {
+    mode: "sample",
+    port: 8787,
+    host: "127.0.0.1",
+    publicUrl: "http://localhost:8787",
+    dataDir,
+    model: "openai/fixture",
+    opencodeServerUrl: opencode.url,
+    googleRedirectUri: "http://localhost:8787/api/google/callback",
+    allowedOrigins: [],
+    ...adjust,
+  };
+  const server = await createApp(db, config);
+  app = server.app;
+  await server.opencode.start();
+  const { token } = await server.auth.session();
+  t.after(async () => {
+    await server.opencode.stop();
+    await server.agent.stop();
+    await opencode.close();
+    await db.close();
+    await rm(dataDir, { recursive: true, force: true });
+  });
+
+  /** Send a chat message to the agent as the app does, and collect the events that come back. */
+  async function chat(content: string, options: { threadId?: string; signal?: AbortSignal } = {}) {
+    const response = await server.app.request("/api/agent/opencode/run", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        threadId: options.threadId ?? "wire-thread",
+        runId: crypto.randomUUID(),
+        messages: [{ id: crypto.randomUUID(), role: "user", content }],
+      }),
+      signal: options.signal,
+    });
+    assert.equal(response.status, 200);
+    const events = (await response.text())
+      .split("\n\n")
+      .filter((frame) => frame.startsWith("data: "))
+      .map((frame) => JSON.parse(frame.slice("data: ".length)) as Record<string, unknown>);
+    return { events, types: events.map((event) => String(event.type)) };
+  }
+  return { ...server, db, config, opencode, chat };
+}
+
+test("a reply travels over OpenCode's protocol and comes back as AG-UI events", async (t) => {
+  const f = await wired(t, ({ say }) => say("Hello from the agent."));
+  const first = await f.chat("@hive hi there");
+  for (const event of first.events) EventSchemas.parse(event);
+  assert.deepEqual(first.types, [
+    "RUN_STARTED",
+    "TEXT_MESSAGE_START",
+    "TEXT_MESSAGE_CONTENT",
+    "TEXT_MESSAGE_END",
+    "RUN_FINISHED",
+  ]);
+  assert.equal(
+    first.events.find((event) => event.type === "TEXT_MESSAGE_CONTENT")?.delta,
+    "Hello from the agent.",
+  );
+  const [prompt] = f.opencode.prompts;
+  assert.deepEqual(prompt.model, { providerID: "openai", modelID: "fixture" });
+  assert.equal(prompt.text, "hi there", "the mention is not part of what the agent is asked");
+  assert.match(prompt.context, /\[hive context\]/);
+
+  // A message that does not mention the agent never reaches OpenCode, and the next one that does
+  // goes to the same session.
+  assert.deepEqual((await f.chat("just us chatting")).types, ["RUN_STARTED", "RUN_FINISHED"]);
+  assert.equal(f.opencode.prompts.length, 1);
+  await f.chat("@hive and again");
+  assert.equal(f.opencode.prompts.length, 2);
+  assert.equal(f.opencode.prompts[1].sessionID, prompt.sessionID);
+});
+
+test("the agent reaches Hive's tools over HTTP, and their results come back as tool events", async (t) => {
+  let offered: string[] = [];
+  const f = await wired(t, async ({ tools, call, say }) => {
+    offered = tools;
+    const found = (await call("search_mail", { query: "aquarium" })) as {
+      matches: { threadId: string }[];
+    };
+    await call("read_mail_thread", { threadId: found.matches[0].threadId });
+    say("It leaves at 8:15.");
+  });
+  await f.workspace.ensureSample("local-user", f.actions);
+  const chat = await f.chat("@hive Check my emails for the school trip");
+  for (const event of chat.events) EventSchemas.parse(event);
+  for (const name of [
+    "search_mail",
+    "read_mail_thread",
+    "browse_web",
+    "send_file",
+    "delegate_task",
+  ])
+    assert.ok(offered.includes(name), name);
+  const results = chat.events.filter((event) => event.type === "TOOL_CALL_RESULT");
+  assert.equal(results.length, 2);
+  assert.match(String(results[1].content), /8:15 AM/);
+  assert.deepEqual(
+    chat.events.filter((event) => event.type === "TOOL_CALL_START").map((e) => e.toolCallName),
+    ["search_mail", "read_mail_thread"],
+  );
+});
+
+test("a task runs as an OpenCode session, and the agent hands its work in for review", async (t) => {
+  const f = await wired(t, async ({ call, text }) => {
+    await call("finish_task", { summary: `Done: ${text.split("\n")[0]}` });
+  });
+  const task = await f.agent.createTask("owner", { prompt: "Plan my week", kind: "agent" });
+  await f.agent.worker.tick();
+  const result = await f.agent.detail("owner", task.id);
+  assert.equal(result.task.status, "in_review", result.task.error ?? result.task.question);
+  assert.match(String(result.task.result), /^Done: /);
+  assert.deepEqual(f.opencode.prompts[0].model, { providerID: "openai", modelID: "fixture" });
+  assert.match(f.opencode.prompts[0].parts.map((part) => part.text).join("\n"), /Plan my week/);
+});
+
+test("stopping a reply stops the OpenCode session", async (t) => {
+  const stop = new AbortController();
+  const f = await wired(t, async () => {
+    stop.abort();
+    // The agent is still working when the person stops the reply.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  });
+  await f.chat("@hive take your time", { signal: stop.signal });
+  assert.deepEqual(f.opencode.aborted, [f.opencode.prompts[0].sessionID]);
+});
+
+test("choice cards: a panel the agent shows can be picked, and the pick reaches OpenCode in words", async (t) => {
+  const f = await wired(
+    t,
+    async ({ call, say, index }) => {
+      if (index === 1)
+        await call("present_choices", {
+          message: "What next?",
+          context: "A school email",
+          title: "Next steps",
+          control: "clarification",
+          options: [
+            { id: "explore", label: "Explore exhibits", details: [], sources: [] },
+            { id: "slip", label: "Complete permission slip", details: [], sources: [] },
+          ],
+        });
+      say(index === 1 ? "Pick one." : "Great, exploring.");
+    },
+    { jevMode: "sample" },
+  );
+  const first = await f.chat("@hive Help me get ready for the trip");
+  const shown = first.events.find((event) => event.type === "TOOL_CALL_RESULT");
+  const panel = JSON.parse(String(shown?.content)).panel;
+  assert.equal(panel.options.length, 2);
+  const pick = encodeJevAction({
+    panelId: panel.id,
+    threadId: panel.threadId,
+    candidateSetVersion: panel.candidateSetVersion,
+    optionId: "explore",
+  });
+  // No @hive: a pick answers the agent's own question.
+  const second = await f.chat(pick);
+  assert.equal(second.types.at(-1), "RUN_FINISHED");
+  assert.equal(
+    f.opencode.prompts[1].text,
+    "I choose “Explore exhibits” from clarification choices. Continue with that preference.",
+  );
+  assert.equal(f.opencode.prompts[1].sessionID, f.opencode.prompts[0].sessionID);
+});
