@@ -101,3 +101,28 @@ test("work waiting for review is in progress, not done", async () => {
   assert.equal(taskColumn("in_review"), "doing");
   assert.equal(taskColumn("succeeded"), "done");
 });
+
+test("a task's notes and files have fixed limits, and the agent is offered the types it can read", async () => {
+  const { addNoteSchema, attachmentTypes, taskBriefLimits, updateTaskSchema } = await import(
+    "../packages/domain/src/agent.ts"
+  );
+  assert.equal(addNoteSchema.safeParse({ text: "  hello  " }).data?.text, "hello");
+  assert.equal(addNoteSchema.safeParse({ text: "   " }).success, false);
+  assert.equal(
+    addNoteSchema.safeParse({ text: "x".repeat(taskBriefLimits.noteChars) }).success,
+    true,
+  );
+  assert.equal(
+    addNoteSchema.safeParse({ text: "x".repeat(taskBriefLimits.noteChars + 1) }).success,
+    false,
+  );
+  assert.equal(addNoteSchema.safeParse({ text: "go", run: true }).data?.run, true);
+  // No type that a browser would run from a download.
+  for (const extension of Object.keys(attachmentTypes))
+    assert.ok(!/^\.(?:html?|svg|js|mjs|xml|exe|sh)$/.test(extension), extension);
+  assert.equal(attachmentTypes[".pdf"], "application/pdf");
+  // Review is a status a task can be moved to by name, and an empty description is allowed.
+  assert.equal(updateTaskSchema.safeParse({ status: "in_review" }).success, true);
+  assert.equal(updateTaskSchema.safeParse({ prompt: "" }).success, true);
+  assert.equal(updateTaskSchema.safeParse({ channelContext: false }).success, true);
+});

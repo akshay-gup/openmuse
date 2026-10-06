@@ -302,7 +302,8 @@ export const createTaskSchema = z.object({
 export type CreateTaskInput = z.infer<typeof createTaskSchema>;
 export const updateTaskSchema = z.object({
   title: z.string().trim().min(1).max(160).optional(),
-  prompt: z.string().trim().min(1).max(12000).optional(),
+  /** An agent task's instructions, or a manual task's description (which may be cleared). */
+  prompt: z.string().trim().max(12000).optional(),
   status: z
     .enum([
       "queued",
@@ -325,6 +326,8 @@ export const updateTaskSchema = z.object({
   blockedBy: z.array(z.string().trim().min(1).max(80)).max(20).optional(),
   labels: z.array(z.string().trim().min(1).max(40)).max(20).optional(),
   assignee: z.enum(["agent"]).nullable().optional(),
+  /** With `assignee: "agent"`: whether the agent also gets the channel's recent discussion. */
+  channelContext: z.boolean().optional(),
 });
 export type UpdateTaskInput = z.infer<typeof updateTaskSchema>;
 /** A note on a task. `run` also sends the task back to the agent (from review, a failure or done). */

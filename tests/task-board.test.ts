@@ -257,7 +257,12 @@ test("assigning a manual issue to the agent queues it with channel context", asy
   });
   const issue = await read<AgentTask>(
     "/tasks",
-    { title: "Prep launch", kind: "manual", prompt: "Draft the announcement", channelId: "general" },
+    {
+      title: "Prep launch",
+      kind: "manual",
+      prompt: "Draft the announcement",
+      channelId: "general",
+    },
     201,
   );
   assert.equal(issue.kind, "manual");
@@ -266,17 +271,86 @@ test("assigning a manual issue to the agent queues it with channel context", asy
   assert.equal(assigned.kind, "agent");
   assert.equal(assigned.status, "queued");
   assert.equal(assigned.assignee, "agent");
-  // The execution prompt carries the ticket plus the channel discussion.
-  assert.ok(assigned.prompt.includes("Prep launch"));
-  assert.ok(assigned.prompt.includes("Draft the announcement"));
-  assert.ok(assigned.prompt.includes("We should launch Tuesday"));
-  assert.ok(assigned.prompt.includes("Bob: Agreed"));
+  // The description stays as written. The channel discussion is a snapshot taken at hand-off,
+  // and each run's brief is built from both.
+  assert.equal(assigned.prompt, "Draft the announcement");
+  const discussion = assigned.input.discussion as { channel: string; lines: string };
+  assert.equal(discussion.channel, "General");
+  assert.ok(discussion.lines.includes("Alice: We should launch Tuesday"));
+  assert.ok(discussion.lines.includes("Bob: Agreed"));
 
-  // Unassigning restores the manual issue with its original notes.
+  // Unassigning restores the manual issue with its description, and drops the snapshot.
   const unassigned = await read<AgentTask>(`/tasks/${issue.id}`, { assignee: null }, 200, "PATCH");
   assert.equal(unassigned.kind, "manual");
   assert.equal(unassigned.assignee ?? null, null);
   assert.equal(unassigned.prompt, "Draft the announcement");
+  assert.equal(unassigned.input.discussion, undefined);
+});
+
+test("the person decides whether the agent gets the channel discussion", async () => {
+  await db.put("shared", "channels", { id: "ops", name: "Ops" });
+  await db.put("shared", "conversations", {
+    id: "channel:ops",
+    messages: [{ id: "c1", role: "user", name: "Alice", content: "Ship it Friday" }],
+  });
+  const issue = await read<AgentTask>(
+    "/tasks",
+    { title: "Ship", kind: "manual", channelId: "ops" },
+    201,
+  );
+  const assigned = await read<AgentTask>(
+    `/tasks/${issue.id}`,
+    { assignee: "agent", channelContext: false },
+    200,
+    "PATCH",
+  );
+  assert.equal(assigned.kind, "agent");
+  assert.equal(assigned.input.discussion, undefined);
+});
+
+test("a manual issue's description can be edited and cleared", async () => {
+  const issue = await read<AgentTask>(
+    "/tasks",
+    { title: "Describe me", kind: "manual", prompt: "First draft" },
+    201,
+  );
+  const edited = await read<AgentTask>(
+    `/tasks/${issue.id}`,
+    { prompt: "Second draft" },
+    200,
+    "PATCH",
+  );
+  assert.equal(edited.prompt, "Second draft");
+  const cleared = await read<AgentTask>(`/tasks/${issue.id}`, { prompt: "" }, 200, "PATCH");
+  assert.equal(cleared.prompt, "");
+  // An agent task's instructions can be changed but not emptied.
+  const job = await read<AgentTask>("/tasks", { title: "Job", prompt: "do it" }, 201);
+  await read(`/tasks/${job.id}`, { prompt: "" }, 422, "PATCH");
+});
+
+test("an issue handed over before descriptions were kept as written is restored from its saved notes", async () => {
+  const issue = await read<AgentTask>(
+    "/tasks",
+    { title: "Old hand-off", kind: "manual", prompt: "Original" },
+    201,
+  );
+  // The earlier scheme replaced the prompt with a built one and set the original aside.
+  await db.compareAndSwap(
+    "owner",
+    "tasks",
+    issue.id,
+    {},
+    {
+      kind: "agent",
+      assignee: "agent",
+      prompt: "Old hand-off\n\nNotes:\nOriginal\n\nCarry out the task above.",
+      input: { manualNotes: "Original" },
+    },
+  );
+  const restored = await read<AgentTask>(`/tasks/${issue.id}`, { assignee: null }, 200, "PATCH");
+  assert.equal(restored.kind, "manual");
+  assert.equal(restored.prompt, "Original");
+  assert.equal(restored.input.manualNotes, undefined);
 });
 
 test("assigning a non-manual task to the agent is rejected", async () => {

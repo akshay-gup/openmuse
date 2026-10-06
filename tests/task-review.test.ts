@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, test } from "node:test";
@@ -490,4 +490,89 @@ test("deleting a task deletes its files", async () => {
   assert.ok(existsSync(folder));
   await read(`/tasks/${task.id}`, undefined, 200, "DELETE");
   assert.ok(!existsSync(folder));
+});
+
+// ---- The brief a run starts from -----------------------------------------------------------------
+
+test("a run's brief carries the notes and files, copies the files into its workspace, and marks the notes read", async () => {
+  const task = await create({ prompt: "Plan the offsite" });
+  await server.agent.addNote("alice", task.id, { text: "Budget is $5k" });
+  await server.agent.addAttachment("alice", task.id, { name: "form.pdf", bytes: await pdf() });
+  await server.agent.addAttachment("bob", task.id, { name: "form.txt", bytes: text("Name: ____") });
+  await server.agent.addAttachment("bob", task.id, { name: "form.txt", bytes: text("Second") });
+  await force(task.id, {
+    input: { discussion: { channel: "ops", lines: "Alice: ship Friday" } },
+  });
+  const workspace = join(directory, "workspace");
+  await mkdir(workspace, { recursive: true });
+  const claimed = await server.agent.getTask(person, task.id);
+  // The brief is built from the task as it is now, not as it was when the worker claimed it.
+  const stale = { ...claimed, notes: [], attachments: [] };
+
+  const brief = await server.agent.prepareBrief(person, stale, workspace);
+  assert.match(brief.text, /1\. Alice · .* UTC\n {3}Budget is \$5k/);
+  assert.match(brief.text, /Recent discussion in #ops/);
+  assert.deepEqual(
+    brief.files.map((f) => f.path),
+    [
+      `attachments/${task.id}/form.pdf`,
+      `attachments/${task.id}/form.txt`,
+      `attachments/${task.id}/form-2.txt`,
+    ],
+    "two files with one name keep both",
+  );
+  assert.equal(await readFile(join(workspace, brief.files[1].path), "utf8"), "Name: ____");
+  assert.equal(await readFile(join(workspace, brief.files[2].path), "utf8"), "Second");
+  assert.equal(brief.noteIds.length, 1);
+  assert.match(brief.text, /also in Files as/);
+
+  // Once the agent has the notes they are marked read; a later brief carries them again, as history.
+  await server.agent.markNotesDelivered(person, task.id, brief.noteIds);
+  const rerun = await server.agent.prepareBrief(
+    person,
+    await server.agent.getTask(person, task.id),
+    workspace,
+  );
+  assert.deepEqual(rerun.noteIds, []);
+  assert.match(rerun.text, /Budget is \$5k/);
+
+  // Staging starts from an empty folder, so a removed file does not linger. Taking away the first
+  // form.txt leaves the other one under that name, and form-2.txt is gone.
+  const removed = rerun.files.find((f) => f.name === "form.txt");
+  assert.ok(removed);
+  await server.agent.removeAttachment("bob", task.id, removed.id);
+  const after = await server.agent.prepareBrief(
+    person,
+    await server.agent.getTask(person, task.id),
+    workspace,
+  );
+  assert.deepEqual(
+    after.files.map((f) => f.path),
+    [`attachments/${task.id}/form.pdf`, `attachments/${task.id}/form.txt`],
+  );
+  assert.equal(await readFile(join(workspace, after.files[1].path), "utf8"), "Second");
+  assert.ok(!existsSync(join(workspace, `attachments/${task.id}/form-2.txt`)));
+});
+
+test("without a workspace the brief pastes text files in and points the agent at Files for PDFs", async () => {
+  const task = await create();
+  await server.agent.addAttachment(person, task.id, {
+    name: "notes.txt",
+    bytes: text("remember the milk"),
+  });
+  await server.agent.addAttachment(person, task.id, { name: "form.pdf", bytes: await pdf() });
+  const brief = await server.agent.prepareBrief(
+    person,
+    await server.agent.getTask(person, task.id),
+  );
+  assert.match(brief.text, /### notes\.txt\n```\nremember the milk\n```/);
+  assert.match(brief.text, /form\.pdf — PDF.*also in Files as/);
+  assert.ok(!existsSync(join(directory, "attachments", task.id)));
+});
+
+test("a task with nothing added has no brief at all", async () => {
+  const task = await create();
+  const brief = await server.agent.prepareBrief(person, task);
+  assert.equal(brief.text, "");
+  assert.deepEqual(brief.noteIds, []);
 });

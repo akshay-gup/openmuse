@@ -47,10 +47,11 @@ import { backgroundFailure } from "../log.ts";
 import type { OpencodeTaskRuntime } from "../opencode/index.ts";
 import { requesterNames, withRequester } from "../requesters.ts";
 import type { WorkspaceService } from "../workspace.ts";
+import { inlineLimits, renderBrief } from "./brief.ts";
 import { ChannelManager } from "./channels.ts";
 import { analyzeSpending } from "./finance.ts";
 import { executeModelTask } from "./model.ts";
-import { inspectAttachment, TaskFiles } from "./task-files.ts";
+import { inspectAttachment, type StagedFile, TaskFiles } from "./task-files.ts";
 import {
   channelWorkspaceDir,
   diskOwnerForChannel,
@@ -691,27 +692,28 @@ export class AgentService {
     "cancelled",
   ]);
   /**
-   * Hand a manual issue to the agent: build an execution prompt from the
-   * ticket plus recent discussion in the channel it came from, then queue it
-   * so the worker claims it like any agent task.
+   * Hand a manual issue to the agent and queue it, so the worker claims it like any agent task. The
+   * description stays as written. Each run's brief is built from it, the notes and files on the
+   * task, and (unless the person declines) a snapshot of the channel discussion taken now.
    */
-  private async assignToAgent(task: AgentTask, patch: Partial<AgentTask>): Promise<void> {
+  private async assignToAgent(
+    task: AgentTask,
+    patch: Partial<AgentTask>,
+    channelContext: boolean,
+  ): Promise<void> {
     if (task.kind !== "manual")
       throw new AppError("Only manual issues can be assigned to the agent", 422);
-    const context = await this.channelContextForTask(task);
-    const parts = [task.title.trim()];
-    if (task.prompt.trim()) parts.push(`\nNotes:\n${task.prompt.trim()}`);
-    if (context) parts.push(`\n---\nRecent discussion in #${context.name}:\n${context.lines}\n---`);
-    parts.push(
-      "\nCarry out the task above. Use the channel discussion for context on what was decided and who asked for what.",
-    );
-    patch.prompt = parts.join("\n");
+    const context = channelContext ? await this.channelContextForTask(task) : null;
+    const { discussion: _earlier, ...input } = task.input ?? {};
     patch.kind = "agent";
     patch.status = "queued";
     patch.assignee = "agent";
     patch.leaseId = null;
     patch.leaseUntil = null;
-    patch.input = { ...(task.input ?? {}), manualNotes: task.prompt };
+    patch.input = {
+      ...input,
+      ...(context ? { discussion: { channel: context.name, lines: context.lines } } : {}),
+    };
   }
 
   /** Take a ticket back from the agent: cancel any in-flight run and restore the manual issue. */
@@ -726,10 +728,11 @@ export class AgentService {
       "waiting_approval",
       "waiting_input",
     ];
-    const { manualNotes, ...restInput } = task.input ?? {};
+    // Issues handed over before descriptions were kept as written had the original text set aside.
+    const { manualNotes, discussion: _discussion, ...restInput } = task.input ?? {};
     patch.kind = "manual";
     patch.assignee = null;
-    patch.prompt = typeof manualNotes === "string" ? manualNotes : "";
+    patch.prompt = typeof manualNotes === "string" ? manualNotes : task.prompt;
     patch.input = restInput;
     patch.leaseId = null;
     patch.leaseUntil = null;
@@ -783,12 +786,15 @@ export class AgentService {
     if (input.assignee !== undefined && input.assignee !== (task.assignee ?? null)) {
       if (input.status !== undefined || input.prompt !== undefined)
         throw new AppError("Cannot change assignee together with status or prompt", 422);
-      if (input.assignee === "agent") await this.assignToAgent(task, patch);
+      if (input.assignee === "agent")
+        await this.assignToAgent(task, patch, input.channelContext ?? true);
       else this.unassignFromAgent(task, patch);
     }
     if (input.title !== undefined) patch.title = input.title;
     if (input.prompt !== undefined) {
-      if (task.kind === "manual") throw new AppError("Manual tasks have no prompt", 422);
+      // A manual task's description may be cleared; an agent's instructions may not.
+      if (!input.prompt && task.kind !== "manual")
+        throw new AppError("A prompt is required for agent-executed tasks", 422);
       patch.prompt = input.prompt;
     }
     if (input.priority !== undefined) patch.priority = input.priority;
@@ -1147,6 +1153,37 @@ export class AgentService {
     const file = task.attachments?.find((entry) => entry.id === attachmentId);
     if (!file) throw new AppError("File not found", 404);
     return { file, bytes: await this.taskFiles.read(id, attachmentId) };
+  }
+  /**
+   * The brief a run starts from, built from the task as it is now: notes and files can arrive
+   * between a worker claiming the task and the run starting. With a `workspace` the files are copied
+   * there for the agent to read; without one, short text files are pasted into the brief.
+   */
+  async prepareBrief(owner: string, claimed: AgentTask, workspace?: string) {
+    const current = await this.db.get<AgentTask>(owner, "tasks", claimed.id);
+    const task: AgentTask = {
+      ...claimed,
+      notes: current?.notes ?? claimed.notes,
+      attachments: current?.attachments ?? claimed.attachments,
+    };
+    const names = await requesterNames(this.db, [
+      ...(task.notes ?? []).map((note) => note.createdBy),
+      ...(task.attachments ?? []).map((file) => file.addedBy),
+    ]);
+    const files: StagedFile[] = workspace
+      ? await this.taskFiles.stage(task, workspace)
+      : this.taskFiles.layout(task);
+    const inline = workspace
+      ? undefined
+      : await this.taskFiles.readText(task, files, inlineLimits.file + 1);
+    return {
+      task,
+      files,
+      names,
+      text: renderBrief({ task, names, files, staged: Boolean(workspace), inline }),
+      /** The notes this brief is the first to carry. Mark them delivered once the agent has it. */
+      noteIds: (task.notes ?? []).filter((note) => !note.delivered).map((note) => note.id),
+    };
   }
   async markNotesDelivered(owner: string, taskId: string, noteIds: string[]) {
     if (noteIds.length)

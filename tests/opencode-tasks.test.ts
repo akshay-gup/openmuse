@@ -126,6 +126,14 @@ test("an approved-tool waiting outcome takes precedence over agent completion te
       } as never,
       {
         db: { get: async () => null, list: async () => [] },
+        prepareBrief: async (_owner: string, claimed: unknown) => ({
+          task: claimed,
+          files: [],
+          names: new Map(),
+          text: "",
+          noteIds: [],
+        }),
+        markNotesDelivered: async () => {},
         finish: async () => {
           assert.fail("Must not finish an action awaiting review");
         },
