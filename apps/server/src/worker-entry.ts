@@ -9,6 +9,7 @@ if (!config.databaseUrl)
   );
 const db = await createStore({ databaseUrl: config.databaseUrl });
 const { agent, opencode } = await createApp(db, config);
+await opencode.start();
 agent.start();
 console.log("Hive task worker running");
 let stopping = false;
@@ -16,7 +17,7 @@ const stop = async () => {
   if (stopping) return;
   stopping = true;
   await agent.stop();
-  await opencode?.stop();
+  await opencode.stop();
   await db.close();
   process.exit(0);
 };

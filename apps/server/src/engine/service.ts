@@ -74,8 +74,8 @@ export class AgentService {
   /** threadId → binding, keyed `${owner}/${threadId}`. Invalidated on write. */
   private readonly threadChannelCache = new Map<string, ChannelThread>();
   /**
-   * Set by createApp when AGENT_BACKEND=opencode. Routes task-worker
-   * execution through OpenCode sessions; also enables session title sync.
+   * Set by createApp. Task-worker execution runs as OpenCode sessions through it, and a renamed
+   * thread's session title follows.
    */
   opencodeRuntime?: OpencodeTaskRuntime;
   /** The bytes of the files attached to tasks, and how they reach an agent. */

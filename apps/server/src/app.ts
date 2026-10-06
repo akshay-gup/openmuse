@@ -235,24 +235,27 @@ export async function createApp(
     return c.json(snapshot);
   });
   app.route("/api/agent", agentRoutes(agent));
-  // OpenCode backend: fail loud on boot if the systemd-managed server is
-  // unreachable, then start the global event bus and mount the AG-UI shim.
-  let opencode: { stop(): Promise<void> } | undefined;
-  if (config.agentBackend === "opencode") {
-    const connection = connectionFromConfig(config);
-    const { version } = await ensureOpencodeServerReachable(connection);
-    console.log(`OpenCode server reachable at ${connection.url} (v${version})`);
-    const bus = new OpencodeEventBus(connection);
-    const pool = new OpencodeClientPool(connection);
-    const tracker = new PermissionTracker();
-    const rules = new PermissionRulesStore(config.dataDir);
-    bus.start();
-    const shimDeps = { service: agent, bus, pool, config, tracker, rules, hiveTools };
-    app.route("/api/agent/opencode", opencodeShimRoutes(shimDeps));
-    app.route("/api/agent/opencode", opencodePermissionRoutes(shimDeps));
-    agent.opencodeRuntime = { bus, pool, tracker, config, hiveTools };
-    opencode = { stop: () => bus.stop() };
-  }
+  // OpenCode is the agent: chat runs through the AG-UI shim and tasks run as OpenCode sessions.
+  // Building these does no I/O, so a test can swap the runtime for a stand-in. `opencode.start()`
+  // is what reaches the server, and the entry points call it before they serve anything.
+  const connection = connectionFromConfig(config);
+  const bus = new OpencodeEventBus(connection);
+  const pool = new OpencodeClientPool(connection);
+  const tracker = new PermissionTracker();
+  const rules = new PermissionRulesStore(config.dataDir);
+  const shimDeps = { service: agent, bus, pool, config, tracker, rules, hiveTools };
+  app.route("/api/agent/opencode", opencodeShimRoutes(shimDeps));
+  app.route("/api/agent/opencode", opencodePermissionRoutes(shimDeps));
+  agent.opencodeRuntime = { bus, pool, tracker, config, hiveTools };
+  const opencode = {
+    /** Fails loudly when `opencode serve` cannot be reached, rather than serving a dead agent. */
+    async start() {
+      const { version } = await ensureOpencodeServerReachable(connection);
+      console.log(`OpenCode server reachable at ${connection.url} (v${version})`);
+      bus.start();
+    },
+    stop: () => bus.stop(),
+  };
   app.get("/api/calendars", async (c) => c.json(await workspace.calendars(c.get("owner"))));
   app.get("/api/calendar/events", async (c) => {
     const query = z

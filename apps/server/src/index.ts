@@ -10,6 +10,7 @@ const db = await createStore({
 });
 await db.recoverInterruptedActions();
 const { app, agent, opencode } = await createApp(db, config);
+await opencode.start();
 if (config.taskWorkerEnabled) agent.start();
 const server = serve({ fetch: app.fetch, port: config.port, hostname: config.host }, () =>
   console.log(`Hive ${config.mode} API ready at ${config.publicUrl}`),
@@ -18,7 +19,7 @@ const shutdown = () => {
   server.close(() => {
     void agent
       .stop()
-      .then(() => opencode?.stop())
+      .then(() => opencode.stop())
       .then(() => db.close())
       .then(() => process.exit(0));
   });
