@@ -95,3 +95,9 @@ test("proposal schema discriminates on kind and validates nested data", () => {
   );
   assert.equal(proposalSchema.safeParse({ kind: "unknown.kind", data: {} }).success, false);
 });
+
+test("work waiting for review is in progress, not done", async () => {
+  const { taskColumn } = await import("../packages/domain/src/agent.ts");
+  assert.equal(taskColumn("in_review"), "doing");
+  assert.equal(taskColumn("succeeded"), "done");
+});

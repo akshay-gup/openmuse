@@ -28,6 +28,7 @@ export const statusMeta: Record<TaskStatus, { label: string; dot: string }> = {
   running: { label: "RUNNING", dot: colors.success },
   waiting_approval: { label: "NEEDS REVIEW", dot: colors.warning },
   waiting_input: { label: "NEEDS YOU", dot: colors.warning },
+  in_review: { label: "IN REVIEW", dot: colors.warning },
   scheduled: { label: "SCHEDULED", dot: colors.neutral },
   paused: { label: "PAUSED", dot: colors.neutral },
   succeeded: { label: "DONE", dot: colors.success },

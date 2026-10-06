@@ -5,6 +5,8 @@ export type TaskStatus =
   | "running"
   | "waiting_approval"
   | "waiting_input"
+  /** The agent says it is finished. Only a person can mark the task done, or send it back. */
+  | "in_review"
   | "scheduled"
   | "paused"
   | "succeeded"
@@ -19,6 +21,7 @@ export function taskColumn(status: TaskStatus): TaskColumn {
     case "running":
     case "waiting_approval":
     case "waiting_input":
+    case "in_review":
       return "doing";
     case "failed":
       return "failed";
@@ -247,6 +250,7 @@ export const updateTaskSchema = z.object({
       "running",
       "waiting_approval",
       "waiting_input",
+      "in_review",
       "scheduled",
       "paused",
       "succeeded",
