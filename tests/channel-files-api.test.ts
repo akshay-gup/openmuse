@@ -340,3 +340,32 @@ test("a link left in the workspace cannot be used to read outside it", async () 
   await symlink(join(directory, "outside.txt"), join(workspace(), "tricks/ok.txt"));
   assert.equal((await open(info.url as string)).status, 404);
 });
+
+test("a page in a sandbox can load its own fonts and modules, and nothing else is opened to other origins", async () => {
+  await write("app/index.html", '<script type="module" src="main.js"></script>');
+  await write("app/main.js", "export {}");
+  const page = await json<ChannelFile>(
+    await api("/channels/general/files/info?path=app/index.html"),
+  );
+  const script = new URL("main.js", page.url as string).toString().replace(/\?.*$/, "");
+  // A sandboxed page has no origin of its own: its requests say `Origin: null`.
+  const read = await open(script, { Origin: "null" });
+  assert.equal(read.status, 200);
+  assert.equal(read.headers.get("access-control-allow-origin"), "*");
+  const known = await open(script, { Origin: "http://localhost:8081" });
+  assert.equal(known.headers.get("access-control-allow-origin"), "http://localhost:8081");
+  // Everything else still refuses a stranger.
+  for (const path of ["/api/agent/channels/general/files", "/api/health"]) {
+    const refused = await server.app.request(path, {
+      headers: { ...authorized(), Origin: "null" },
+    });
+    assert.equal(refused.status, 403, path);
+    assert.equal(refused.headers.get("access-control-allow-origin"), null, path);
+  }
+  const post = await server.app.request("/api/agent/channels/general/files", {
+    method: "POST",
+    headers: { ...authorized(), Origin: "https://evil.example" },
+    body: new FormData(),
+  });
+  assert.equal(post.status, 403);
+});

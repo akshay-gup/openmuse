@@ -74,9 +74,14 @@ export async function createApp(
   const runtime = makeRuntime(config, agent, auth, intelligence);
   const app = new Hono<{ Variables: { owner: string } }>();
   const origins = new Set([...config.allowedOrigins, new URL(config.publicUrl).origin]);
+  // A channel file's link is its own credential, and keeps its token in the path so the files a page
+  // refers to inherit it. Any page may read one: a page an agent made runs in a sandbox with no
+  // origin of its own, and still has to load its fonts and modules.
+  const fileLink = /^\/api\/agent\/channels\/[^/]+\/view\/([\w.-]+)\/./;
   app.use("*", async (c, next) => {
     const origin = c.req.header("origin");
-    if (origin && !origins.has(origin)) return c.json({ error: "Origin is not allowed" }, 403);
+    if (origin && !origins.has(origin) && !fileLink.test(c.req.path))
+      return c.json({ error: "Origin is not allowed" }, 403);
     c.header("X-Content-Type-Options", "nosniff");
     c.header("Referrer-Policy", "no-referrer");
     c.header("Cache-Control", "no-store");
@@ -85,7 +90,8 @@ export async function createApp(
   app.use(
     "*",
     cors({
-      origin: (origin) => (origins.has(origin) ? origin : undefined),
+      origin: (origin, c) =>
+        origins.has(origin) ? origin : fileLink.test(c.req.path) ? "*" : undefined,
       allowHeaders: ["Content-Type", "Authorization"],
       allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
       credentials: true,
@@ -200,8 +206,7 @@ export async function createApp(
       /^\/api\/files\/[^/]+\/content$|^\/api\/agent\/tasks\/[^/]+\/attachments\/[^/]+\/content$|^\/api\/browsers\/[^/]+\/(?:preview|console)$/.test(
         c.req.path,
       );
-    // A channel file's link keeps its token in the path, so the files a page refers to inherit it.
-    const view = /^\/api\/agent\/channels\/[^/]+\/view\/([\w.-]+)\/./.exec(c.req.path);
+    const view = fileLink.exec(c.req.path);
     const owner = view
       ? files.verifyToken(view[1]).owner
       : signedRoute && c.req.query("signature")
