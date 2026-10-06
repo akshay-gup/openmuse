@@ -254,6 +254,68 @@ describe("RunTranslator", () => {
     assert.equal(events[3].content, "file.txt");
   });
 
+  it("turns a tool call as OpenCode 1.18.33 really sends it into the four tool events", () => {
+    // Captured from a real `opencode serve`, running `echo hello-from-shell` through its shell API:
+    // the call is already running when it is first seen, and its state is updated twice more.
+    const { translator, events, isDone } = collectTranslator();
+    const sessionID = "ses_eee182be4ffe6OlokA2lfdv6CF";
+    const messageID = "msg_111e7d676001QvAYW3QIcMQhir";
+    const part = (state: Record<string, unknown>) => ({
+      id: "prt_1",
+      sessionID,
+      messageID,
+      type: "tool",
+      callID: "01M48YFNKR2B1YG324FACX4AVW",
+      tool: "bash",
+      state,
+    });
+    const input = { command: "echo hello-from-shell" };
+    for (const event of [
+      { type: "session.status", properties: { sessionID, status: { type: "busy" } } },
+      {
+        type: "message.updated",
+        properties: { sessionID, info: { id: messageID, role: "assistant", sessionID } },
+      },
+      {
+        type: "message.part.updated",
+        properties: { sessionID, part: part({ status: "running", input, time: { start: 1 } }) },
+      },
+      {
+        type: "message.part.updated",
+        properties: {
+          sessionID,
+          part: part({ status: "running", input, time: { start: 1 }, metadata: {} }),
+        },
+      },
+      {
+        type: "message.part.updated",
+        properties: {
+          sessionID,
+          part: part({
+            status: "completed",
+            input,
+            output: "hello-from-shell\n",
+            title: "",
+            metadata: {},
+            time: { start: 1, end: 2 },
+          }),
+        },
+      },
+      { type: "session.status", properties: { sessionID, status: { type: "idle" } } },
+      { type: "session.idle", properties: { sessionID } },
+    ])
+      translator.handle({ id: "e", ...event });
+    assert.deepEqual(
+      events.map((event) => event.type),
+      ["TOOL_CALL_START", "TOOL_CALL_ARGS", "TOOL_CALL_END", "TOOL_CALL_RESULT", "RUN_FINISHED"],
+    );
+    assert.equal(events[0].toolCallName, "bash");
+    assert.equal(events[0].parentMessageId, messageID);
+    assert.equal(events[1].delta, JSON.stringify(input));
+    assert.equal(events[3].content, "hello-from-shell\n");
+    assert.ok(isDone());
+  });
+
   it("emits RUN_ERROR on session.error, with the reason OpenCode gives", () => {
     const { translator, events, isDone } = collectTranslator();
     // As OpenCode sends it: a named error with its message under `data` (captured from a real server).
