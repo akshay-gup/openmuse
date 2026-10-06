@@ -165,8 +165,12 @@ export async function fakeOpencode(options: {
       await options.behave(fake);
       emit("session.idle");
     } catch (error) {
+      // The shape OpenCode sends: the message is under `data`, and the error has a name.
       emit("session.error", {
-        error: { message: error instanceof Error ? error.message : String(error) },
+        error: {
+          name: "UnknownError",
+          data: { message: error instanceof Error ? error.message : String(error) },
+        },
       });
     }
   }

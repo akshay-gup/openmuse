@@ -198,3 +198,23 @@ test("choice cards: a panel the agent shows can be picked, and the pick reaches 
   );
   assert.equal(f.opencode.prompts[1].sessionID, f.opencode.prompts[0].sessionID);
 });
+
+test("when OpenCode cannot answer, the chat is told why", async (t) => {
+  const f = await wired(t, () => {
+    throw new Error("No API key found for provider openai");
+  });
+  const chat = await f.chat("@hive hello");
+  assert.deepEqual(chat.types, ["RUN_STARTED", "RUN_ERROR"]);
+  assert.equal(chat.events[1].message, "No API key found for provider openai");
+});
+
+test("a task whose session fails records why", async (t) => {
+  const f = await wired(t, () => {
+    throw new Error("No API key found for provider openai");
+  });
+  const task = await f.agent.createTask("owner", { prompt: "Plan my week", kind: "agent" });
+  await f.agent.worker.tick();
+  const failed = await f.agent.getTask("owner", task.id);
+  assert.equal(failed.status, "failed");
+  assert.match(String(failed.error), /No API key found for provider openai/);
+});
