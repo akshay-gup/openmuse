@@ -54,6 +54,14 @@ export function assertCompatibleServerVersion(version: string): void {
   }
 }
 
+/** What went wrong, for the person reading the boot log: JSON hides the SDK's errors, so name the cause. */
+function describeFailure(error: unknown): string {
+  if (!(error instanceof Error)) return JSON.stringify(error).slice(0, 300);
+  const cause = error.cause as { code?: string; message?: string } | undefined;
+  const why = cause?.code ?? cause?.message;
+  return why ? `${error.message} (${why})` : error.message;
+}
+
 /**
  * Healthcheck + version assert against a running `opencode serve`.
  * Throws when unreachable, unhealthy, or version-incompatible: boot must fail
@@ -71,7 +79,7 @@ export async function ensureOpencodeServerReachable(
   let version: string | undefined;
   try {
     const health = await client.global.health({ signal: AbortSignal.timeout(timeoutMs) });
-    if (health.error) throw new Error(JSON.stringify(health.error).slice(0, 300));
+    if (health.error) throw new Error(describeFailure(health.error));
     version = health.data?.version;
   } catch (cause) {
     throw new Error(

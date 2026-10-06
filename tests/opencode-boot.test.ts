@@ -63,11 +63,19 @@ test("building the app reaches no server, so tests can stand in for OpenCode", a
   assert.ok(server.agent.opencodeRuntime);
 });
 
-test("starting fails loudly when OpenCode cannot be reached", async (t) => {
-  const server = await app(t, "http://127.0.0.1:1");
+test("starting fails loudly when OpenCode cannot be reached, and says why", async (t) => {
+  // A port that was just free: nothing is listening on it.
+  const probe = createServer().listen(0, "127.0.0.1");
+  await once(probe, "listening");
+  const { port } = probe.address() as { port: number };
+  probe.close();
+  await once(probe, "close");
+  const server = await app(t, `http://127.0.0.1:${port}`);
   await assert.rejects(
     server.opencode.start(),
-    /OpenCode server unreachable at http:\/\/127\.0\.0\.1:1/,
+    new RegExp(
+      `OpenCode server unreachable at http://127\\.0\\.0\\.1:${port}: fetch failed \\(ECONNREFUSED\\)`,
+    ),
   );
 });
 
