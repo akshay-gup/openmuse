@@ -6,7 +6,15 @@ import {
   createTaskSchema,
   goalInputSchema,
   monitorInputSchema,
+  ORCHESTRATOR_CHANNEL_ID,
 } from "../../../../packages/domain/src/agent.ts";
+import {
+  channelFileLimits,
+  describeFile,
+  type SentFile,
+  textKinds,
+} from "../../../../packages/domain/src/workspace-files.ts";
+import { AppError } from "../errors.ts";
 import type { JevService } from "../jev/service.ts";
 import { presentChoicesTool } from "../jev/tools.ts";
 import type { AgentService } from "./service.ts";
@@ -28,6 +36,11 @@ export function conversationTools(
   const { signal, requestKey, channelId, jev, jevMode, latestText = "" } = options;
   const key = (name: string, value: unknown) =>
     `${requestKey}:${name}:${createHash("sha256").update(JSON.stringify(value)).digest("hex")}`;
+  /** The channel whose workspace the agent is working in. A chat that is bound to none is the orchestrator's. */
+  const workspaceChannel = async () =>
+    channelId ??
+    (await service.channelOfThread(owner, input.threadId))?.channelId ??
+    ORCHESTRATOR_CHANNEL_ID;
   return [
     ...(jev
       ? [
@@ -239,6 +252,55 @@ export function conversationTools(
       description: "Delete a project. Its tasks are kept and move to 'No project'.",
       parameters: z.object({ projectId: z.string().min(1) }),
       execute: async (args) => service.deleteProject(owner, args.projectId),
+    }),
+    defineTool({
+      name: "send_file",
+      description:
+        "Share a file with the people in this chat. It appears as a card they can preview, open and download: images, PDFs, video, audio, Markdown, web pages, spreadsheets (CSV), JSON, code and text show in place, and anything else is a download. `path` is the file's place in this channel's workspace (the folder you work in), relative to its top, such as reports/q3.pdf. Send what you made as a file instead of pasting it into your reply. If you have no file tools of your own, pass `content` with the whole text of a text file and it is saved at `path` first, replacing any file there. Add a short `caption` saying what the file is.",
+      parameters: z.object({
+        path: z.string().trim().min(1).max(500),
+        content: z.string().max(channelFileLimits.writeBytes).optional(),
+        caption: z.string().trim().max(300).optional(),
+      }),
+      execute: async ({
+        path,
+        content,
+        caption,
+      }): Promise<SentFile | { sent: false; error: string }> => {
+        signal.throwIfAborted();
+        try {
+          const channel = await workspaceChannel();
+          const files = service.channelFiles;
+          const relative = await files.pathOf(owner, channel, path);
+          if (content !== undefined) {
+            const type = describeFile(relative);
+            if (!textKinds.has(type.kind) && type.mimeType !== "image/svg+xml")
+              throw new AppError(
+                "Only text files can be written with content. Make this one with your own file tools, then send it by path.",
+                422,
+              );
+          }
+          const {
+            url: _link,
+            excerpt: _start,
+            ...file
+          } = content === undefined
+            ? await files.info(owner, channel, relative)
+            : await files.write(owner, channel, relative, content);
+          return { sent: true, channelId: channel, file, ...(caption ? { caption } : {}) };
+        } catch (error) {
+          signal.throwIfAborted();
+          if (!(error instanceof AppError)) throw error;
+          return {
+            sent: false,
+            error: ["File not found", "That path is not valid", "That is not a file"].includes(
+              error.message,
+            )
+              ? `${error.message}. Use a path inside this channel's workspace, relative to its top, such as reports/q3.pdf.`
+              : error.message,
+          };
+        }
+      },
     }),
     defineTool({
       name: "agent_status",

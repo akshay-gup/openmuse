@@ -1,22 +1,26 @@
+import { z } from "zod";
+
 /**
  * Files in a channel's workspace: what the agent makes there and what people upload to it. The
  * server lists, serves and stores them; every client shows them the same way, by `kind`.
  */
 
 /** How a file is shown, and so which preview a client picks for it. */
-export type FileKind =
-  | "image"
-  | "pdf"
-  | "video"
-  | "audio"
-  | "markdown"
-  | "html"
-  | "csv"
-  | "json"
-  | "code"
-  | "text"
-  | "archive"
-  | "other";
+export const fileKinds = [
+  "image",
+  "pdf",
+  "video",
+  "audio",
+  "markdown",
+  "html",
+  "csv",
+  "json",
+  "code",
+  "text",
+  "archive",
+  "other",
+] as const;
+export type FileKind = (typeof fileKinds)[number];
 
 export interface FileType {
   mimeType: string;
@@ -189,3 +193,24 @@ export const channelFileLimits = {
 
 /** Where a person's uploads go in a channel's workspace unless they pick a folder. */
 export const uploadsFolder = "uploads";
+
+/**
+ * What the agent's `send_file` returns, and what a chat card is drawn from. It names the file but
+ * carries no link: links expire in minutes and a chat lasts, so a card asks for a fresh one.
+ */
+export const sentFileSchema = z.object({
+  sent: z.literal(true),
+  channelId: z.string(),
+  file: z.object({
+    name: z.string(),
+    path: z.string(),
+    size: z.number(),
+    modifiedAt: z.string(),
+    mimeType: z.string().optional(),
+    kind: z.enum(fileKinds).optional(),
+  }),
+  caption: z.string().optional(),
+});
+/** `send_file` could not share the file, and says why, in words the agent can act on. */
+export const unsentFileSchema = z.object({ sent: z.literal(false), error: z.string() });
+export type SentFile = z.infer<typeof sentFileSchema>;
