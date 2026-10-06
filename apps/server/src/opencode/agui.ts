@@ -562,6 +562,22 @@ async function runOpencodeTurn(ctx: RunContext): Promise<void> {
     }
   }
 
+  // Whatever else a person says retires the choices before it. The transcript already shows them
+  // stale, so the stored panel has to agree even when this turn fails, is cancelled, or the agent
+  // stays silent for want of a mention. The turn that retires a panel may still refine it.
+  const jev = deps.service.jev;
+  if (jev && !picked && messages.at(-1)?.role === "user") {
+    try {
+      const head = await jev.headSnapshot(owner, input.threadId);
+      // False means another run already replaced the panel; that newer state wins.
+      if (head) await jev.expireIfUnchanged(owner, input.threadId, head, input.runId);
+    } catch {
+      send({ type: "RUN_STARTED", threadId: input.threadId, runId: input.runId });
+      send({ type: "RUN_ERROR", message: "Could not update earlier choices. Please retry." });
+      return;
+    }
+  }
+
   if (!userText || (!picked && !mentionsAgent(userText, mention))) {
     send({ type: "RUN_STARTED", threadId: input.threadId, runId: input.runId });
     send({ type: "RUN_FINISHED", threadId: input.threadId, runId: input.runId });

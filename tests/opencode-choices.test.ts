@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { latestJevPanelId } from "../apps/mobile/src/jev-actions.ts";
 import type { JevAdapter, JevDecisionInput } from "../apps/server/src/jev/adapter.ts";
-import { encodeJevAction, jevToolResultSchema } from "../packages/domain/src/jev.ts";
+import { encodeJevAction, type JevPanel, jevToolResultSchema } from "../packages/domain/src/jev.ts";
 import { shimFixture } from "./helpers/shim.ts";
 
 const explore = { id: "explore", label: "Explore exhibits", details: [], sources: [] };
@@ -188,4 +189,135 @@ test("with the cards off, a pick is refused rather than quietly ignored", async 
   assert.equal(chat.last, "RUN_ERROR");
   assert.match(String(chat.events.at(-1)?.message), /unavailable/);
   assert.equal(f.standIn.prompts.length, 0);
+});
+
+type Fixture = Awaited<ReturnType<typeof shimFixture>>;
+
+/** Show a panel in the thread, as an agent does when asked what to do next. */
+async function panelIn(f: Fixture): Promise<JevPanel> {
+  f.whenPrompted(async ({ call, idle }) => {
+    await call("present_choices", choices([explore, other]));
+    idle();
+  });
+  const chat = await f.run("@hive What next?");
+  const panel = jevToolResultSchema.parse(chat.tools[0].result).panel;
+  assert.ok(panel);
+  return panel;
+}
+const pickOf = (panel: JevPanel, optionId = "explore") =>
+  encodeJevAction({
+    panelId: panel.id,
+    threadId: panel.threadId,
+    candidateSetVersion: panel.candidateSetVersion,
+    optionId,
+  });
+/** The panel no longer takes a pick, in the store and for a client that tries it anyway. */
+async function assertRetired(f: Fixture, panel: JevPanel) {
+  const head = await f.db.get<{ currentPanelId: string | null }>(
+    "local-user",
+    "jev_threads",
+    panel.threadId,
+  );
+  assert.equal(head?.currentPanelId, null);
+  assert.equal((await f.run(pickOf(panel))).last, "RUN_ERROR");
+}
+
+test("a later turn that mentions the agent retires the earlier choices", async (t) => {
+  const f = await shimFixture(t, { jevMode: "sample" });
+  const panel = await panelIn(f);
+  f.whenPrompted(({ say, idle }) => {
+    say("Sunny.");
+    idle();
+  });
+  const ordinary = await f.run("@hive Tell me about the weather");
+  assert.equal(ordinary.last, "RUN_FINISHED");
+  await assertRetired(f, panel);
+});
+
+test("so does a message that never reaches the agent, because the transcript shows them stale", async (t) => {
+  const f = await shimFixture(t, { jevMode: "sample" });
+  const panel = await panelIn(f);
+  const chatter = await f.run("What a nice day");
+  assert.equal(chatter.last, "RUN_FINISHED");
+  assert.equal(f.standIn.prompts.length, 1, "the agent was not asked anything");
+  const transcript = [
+    { role: "assistant", toolCalls: [{ id: "call-0", name: "present_choices" }] },
+    { role: "tool", toolCallId: "call-0", content: JSON.stringify({ panel }) },
+    { role: "user", content: "What a nice day" },
+  ];
+  assert.equal(latestJevPanelId(transcript, panel.threadId), null);
+  await assertRetired(f, panel);
+});
+
+test("a turn that fails still retires the earlier choices", async (t) => {
+  const f = await shimFixture(t, { jevMode: "sample" });
+  const panel = await panelIn(f);
+  f.whenPrompted(() => {
+    throw new Error("The model is down");
+  });
+  const failed = await f.run("@hive Tell me about the weather");
+  assert.equal(failed.last, "RUN_ERROR");
+  await assertRetired(f, panel);
+});
+
+test("cancelling a turn still retires the earlier choices", async (t) => {
+  const f = await shimFixture(t, { jevMode: "sample" });
+  const panel = await panelIn(f);
+  const stop = new AbortController();
+  f.whenPrompted(() => stop.abort());
+  const cancelled = await f.run("@hive hello", { signal: stop.signal });
+  assert.equal(cancelled.last, "RUN_ERROR");
+  await assertRetired(f, panel);
+});
+
+test("a run that does not end with a person speaking is not a new turn, and keeps the choices", async (t) => {
+  const f = await shimFixture(t, { jevMode: "sample" });
+  const panel = await panelIn(f);
+  f.whenPrompted(({ idle }) => idle());
+  await f.run([
+    { role: "user", content: "@hive What next?" },
+    { role: "assistant", content: "Pick one." },
+  ]);
+  const head = await f.db.get<{ currentPanelId: string | null }>(
+    "local-user",
+    "jev_threads",
+    panel.threadId,
+  );
+  assert.equal(head?.currentPanelId, panel.id);
+});
+
+test("only the turn that retired a panel may refine it", async (t) => {
+  const refine = (panel: JevPanel) => ({
+    message: "Refine",
+    context: "x",
+    title: "Next",
+    control: "clarification",
+    options: [],
+    refinementPanelId: panel.id,
+  });
+  // The turn that retires a panel can still refine it...
+  const f = await shimFixture(t, { jevMode: "sample" });
+  const first = await panelIn(f);
+  let refined: unknown;
+  f.whenPrompted(async ({ call, idle }) => {
+    refined = await call("present_choices", refine(first));
+    idle();
+  });
+  await f.run("@hive Something hands-on");
+  assert.ok(jevToolResultSchema.parse(refined).panel);
+
+  // ...a later one cannot.
+  const g = await shimFixture(t, { jevMode: "sample" });
+  const second = await panelIn(g);
+  g.whenPrompted(({ idle }) => idle());
+  await g.run("@hive Tell me about the weather");
+  let late: unknown;
+  g.whenPrompted(async ({ call, idle }) => {
+    late = await call("present_choices", refine(second));
+    idle();
+  });
+  await g.run("@hive Back to the trip");
+  const result = jevToolResultSchema.parse(late);
+  assert.equal(result.panel, null);
+  assert.match(result.error ?? "", /superseded/);
 });
