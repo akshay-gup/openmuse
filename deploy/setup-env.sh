@@ -37,6 +37,8 @@ PORT=8787
 OPENCODE_SERVER_URL=http://127.0.0.1:4096
 AGENT_MENTION=@hive
 # --- fill in by hand ---
+# GOOGLE_CLIENT_ID=
+# GOOGLE_CLIENT_SECRET=
 # MODEL=openai/gpt-5
 # OPENAI_API_KEY=<redacted>
 EOF
@@ -58,7 +60,7 @@ fi
 
 echo "hive.env ready at $ENV_FILE"
 echo
-echo "Still to fill in: MODEL + provider key$([ -n "$PUBLIC_URL" ] || echo ", and PUBLIC_API_URL")."
+echo "Still to fill in: MODEL + provider key, GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET$([ -n "$PUBLIC_URL" ] || echo ", and PUBLIC_API_URL")."
 
 # Restore the documented ownership so the services can read it.
 # (Skipped for non-root runs or custom paths without the hive user.)
