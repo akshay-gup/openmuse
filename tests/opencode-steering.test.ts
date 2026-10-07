@@ -128,6 +128,7 @@ async function run(
   fake: ReturnType<typeof session>,
   task: AgentTask,
   tools: { task?: () => AgentTask; outcome?: () => Partial<AgentTask> | undefined } = {},
+  context: Partial<TaskContext> = {},
 ) {
   let current = task;
   const ctx: TaskContext = {
@@ -140,6 +141,7 @@ async function run(
     event: async (kind, title, detail = "") => {
       fake.events.push({ kind, title, detail });
     },
+    ...context,
   };
   return runOpencodeTask(
     fake.runtime as never,
@@ -405,6 +407,44 @@ test("stopping the task ends the run at once, even between turns", async () => {
   const started = Date.now();
   await assert.rejects(run(fake, task), /Task interrupted/);
   assert.ok(Date.now() - started < 2_000, "did not wait for the run's timeout");
+  await sleep(20);
+});
+
+const lostLease = async () => {
+  throw new Error("Lost lease");
+};
+
+test("a run whose transcript cannot be saved fails", async () => {
+  const task = await newTask();
+  const fake = session();
+  fake.reply(() => {
+    fake.say("m1", "TASK_COMPLETE: Shortlisted two venues");
+    fake.idle();
+  });
+  await assert.rejects(run(fake, task, {}, { guard: lostLease }), /Lost lease/);
+});
+
+test("the error that ended a run is not replaced by a failure to save its transcript", async () => {
+  const task = await newTask();
+  const fake = session();
+  fake.reply(() => {
+    fake.say("m1", "Looking into it.");
+    fake.emit({
+      type: "session.error",
+      properties: { error: { name: "APIError", data: { message: "Forbidden: no API key" } } },
+    });
+  });
+  await assert.rejects(run(fake, task, {}, { guard: lostLease }), /Forbidden: no API key/);
+});
+
+test("a stopped run says it was stopped, even if its transcript cannot be saved", async () => {
+  const task = await newTask();
+  const fake = session();
+  fake.reply(() => {
+    fake.say("m1", "Working on it.");
+    setTimeout(() => fake.controller.abort(), 10);
+  });
+  await assert.rejects(run(fake, task, {}, { guard: lostLease }), /Task interrupted/);
   await sleep(20);
 });
 

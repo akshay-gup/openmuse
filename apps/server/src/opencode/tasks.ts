@@ -474,6 +474,7 @@ export async function runOpencodeTask(
     watcher = undefined;
   };
 
+  let logFailure: { error: unknown } | undefined;
   try {
     if (runtime.hiveTools)
       toolLease = await runtime.hiveTools.connect(
@@ -563,9 +564,12 @@ export async function runOpencodeTask(
     try {
       await runLog.close();
     } catch (error) {
-      if (!ctx.signal.aborted) throw error;
+      logFailure = { error };
     }
   }
+  // A transcript that cannot be saved fails the run, unless the run was stopped. This sits after the
+  // `finally` so that it never replaces the error that ended the run.
+  if (logFailure && !ctx.signal.aborted) throw logFailure.error;
 
   const mediatedOutcome = toolState?.outcome();
   if (mediatedOutcome) return mediatedOutcome;
