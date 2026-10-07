@@ -1,5 +1,3 @@
-# Not maintained. Hive's agent is OpenCode, which needs `opencode serve` on the same host as the
-# API, and this blueprint does not run one, so the API stops at boot. See docs/vm-deploy.md.
 services:
   - type: web
     name: hive-api
@@ -38,8 +36,6 @@ services:
           name: hive-web
           type: web
           envVarKey: RENDER_EXTERNAL_URL
-      - key: HIVE_ACCESS_KEY
-        generateValue: true
       - key: TOKEN_ENCRYPTION_KEY
         generateValue: true
       - key: OPENAI_API_KEY
