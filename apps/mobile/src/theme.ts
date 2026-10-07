@@ -115,8 +115,8 @@ const hazeBase = "#111214";
  */
 export const haze = {
   base: hazeBase,
-  lightest: "#1F2123",
-  css: `radial-gradient(70% 90% at 0% 0%, rgba(255,255,255,0.05), rgba(255,255,255,0) 70%), radial-gradient(75% 85% at 100% 100%, rgba(255,255,255,0.035), rgba(255,255,255,0) 70%), ${hazeBase}`,
+  lightest: "#2A2C2E",
+  css: `radial-gradient(70% 90% at 0% 0%, rgba(255,255,255,0.10), rgba(255,255,255,0) 70%), radial-gradient(75% 85% at 100% 100%, rgba(255,255,255,0.065), rgba(255,255,255,0) 70%), ${hazeBase}`,
 } as const;
 
 /**
@@ -125,15 +125,15 @@ export const haze = {
  */
 export const glass = {
   /** A panel: the sidebar, a channel, a thread. */
-  panel: "rgba(255,255,255,0.045)",
+  panel: "rgba(255,255,255,0.055)",
   /** A bar: the phone's header. */
-  bar: "rgba(255,255,255,0.07)",
+  bar: "rgba(255,255,255,0.08)",
   /** Raised off a panel: the composer and the phone's tab bar. */
   raised: "rgba(36,38,42,0.92)",
   /** A sheet over the dimmed page. */
   sheet: "rgba(26,28,31,0.95)",
-  panelSolid: "rgba(255,255,255,0.06)",
-  barSolid: "rgba(255,255,255,0.09)",
+  panelSolid: "rgba(255,255,255,0.07)",
+  barSolid: "rgba(255,255,255,0.10)",
   raisedSolid: "rgba(36,38,42,0.97)",
   sheetSolid: "rgba(26,28,31,0.98)",
   /** The blur behind a panel or a sheet (web). */
@@ -255,21 +255,21 @@ export const sp = { xs: 4, sm: 8, md: 12, lg: 16, xl: 20, xxl: 24, xxxl: 32 } as
 /** Elevation, as CSS box-shadow strings (supported by React Native 0.76+ and the web). */
 export const shadow = {
   /** Cards at rest. */
-  card: "0 1px 3px rgba(0,0,0,0.30)",
+  card: "inset 0 1px 0 rgba(255,255,255,0.05), 0 2px 8px rgba(0,0,0,0.28)",
   /** Cards under the pointer. */
-  raised: "0 4px 16px rgba(0,0,0,0.40)",
+  raised: "0 6px 18px rgba(0,0,0,0.42)",
   /** Menus and floating panels. */
   popover: "0 10px 30px rgba(0,0,0,0.45)",
-  /** A glass panel: a faint rim along its top edge, a hairline, and a soft drop. */
+  /** A glass panel: a rim that catches more light along its top and left edges, a hairline, and a soft drop. */
   panel:
-    "inset 0 1px 0 rgba(255,255,255,0.06), 0 0 0 1px rgba(255,255,255,0.07), 0 18px 44px rgba(0,0,0,0.38)",
+    "inset 1px 1px 0 rgba(255,255,255,0.10), inset -1px -1px 0 rgba(255,255,255,0.03), 0 0 0 1px rgba(255,255,255,0.06), 0 22px 54px rgba(0,0,0,0.45)",
   /** The selected row in a list on glass: a faint ring. */
-  lens: "0 0 0 1px rgba(255,255,255,0.09)",
+  lens: "inset 0 1px 0 rgba(255,255,255,0.07), 0 0 0 1px rgba(255,255,255,0.09)",
   /** The row you are on in the sidebar: a faint ring. */
   active: "inset 0 0 0 1px rgba(255,255,255,0.10)",
   /** Raised off a panel: the composer and the phone's tab bar. */
   float:
-    "inset 0 1px 0 rgba(255,255,255,0.07), 0 0 0 1px rgba(255,255,255,0.09), 0 10px 26px rgba(0,0,0,0.32)",
+    "inset 1px 1px 0 rgba(255,255,255,0.12), inset -1px -1px 0 rgba(255,255,255,0.03), 0 0 0 1px rgba(255,255,255,0.08), 0 12px 30px rgba(0,0,0,0.38)",
   /** Focus ring drawn around inputs. */
   focus: `0 0 0 2px ${colors.focusRing}`,
 } as const;
