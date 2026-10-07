@@ -23,4 +23,4 @@ An airy canvas, distinct gray and sky-blue message bubbles, large touch targets,
 
 ## Boundaries
 
-The browser worker provides persistent Chromium and documents for public web access. There is no Linux terminal or container: the agent works through chat, delegated tasks, and integrations. Live Rich Threads, model reasoning and Google accounts require credentials.
+The browser worker provides persistent Chromium and documents for public web access. Live Rich Threads, model reasoning and Google accounts require credentials.
