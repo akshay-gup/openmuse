@@ -125,7 +125,7 @@ For iOS or Android, use `pnpm --dir apps/mobile ios` or `pnpm --dir apps/mobile 
 
 Hive deploys as one self-contained process on a VM: the API serves the Expo web UI same-origin, threads and channels persist on local disk under `DATA_DIR`, and `opencode serve` runs as a systemd unit alongside it. Follow **[docs/vm-deploy.md](docs/vm-deploy.md)** — build/run, environment variables, a minimal reverse-proxy config, and the channel storage layout.
 
-`render.yaml` (three services: API, web, private browser) is left over from upstream and is no longer the direction. The API still answers `/api/health` for any platform's health check.
+The API answers `/api/health` for a platform's health check.
 
 Key variables for the VM (see the deploy doc for the full table):
 
@@ -212,7 +212,7 @@ The workspace has **one Google connection** (Gmail, Calendar, Drive), so the mai
 
 Shared thread history applies to the default local thread storage. Hosted Rich Threads (`CPK_INTELLIGENCE_API_KEY`) identifies each person to CopilotKit separately, so it keeps their threads apart.
 
-Earlier builds kept these per person and nothing migrates them, so start a workspace from an empty `DATA_DIR`. Anyone who had connected their own Google account should remove that access in their Google account settings. The kinds shared this way are listed in `SHARED_KINDS` in `apps/server/src/db.ts`, and a test fails if a new kind of record is added without placing it.
+The kinds shared this way are listed in `SHARED_KINDS` in `apps/server/src/db.ts`, and a test fails if a new kind of record is added without placing it.
 
 ### Application storage
 
