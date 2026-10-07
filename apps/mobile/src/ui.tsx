@@ -171,7 +171,12 @@ export const s = StyleSheet.create({
     borderRadius: radius.md,
   },
   primary: { backgroundColor: colors.primary },
-  secondary: { backgroundColor: colors.surfaceMuted, borderWidth: 1, borderColor: colors.line },
+  secondary: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.line,
+    boxShadow: shadow.card,
+  },
   buttonText: { fontSize: fontSize.body, fontWeight: "600" },
   chip: {
     paddingHorizontal: 8,
