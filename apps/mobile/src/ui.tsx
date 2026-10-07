@@ -32,7 +32,6 @@ import {
   fontFamily,
   fontSize,
   glass,
-  gradients,
   haze,
   mascotTints,
   radius,
@@ -51,7 +50,6 @@ export {
   fontFamily,
   fontSize,
   glass,
-  gradients,
   haze,
   layout,
   mascotTints,
@@ -310,9 +308,8 @@ export function Card({ children, style }: { children: ReactNode; style?: ViewSty
 }
 /**
  * Fill and border of a card that can be selected. Idle, it has a 1px hairline (`idleBorder`). The
- * selected card gets the teal-to-green gradient border from the web app, 2px wide (a transparent
- * border over two background layers); native draws a plain teal border. The idle card's 1px
- * margin makes up the difference, so selecting never moves the content.
+ * selected card gets a 2px teal border; the idle card's 1px margin makes up the difference, so
+ * selecting never moves the content.
  */
 export function selectedCard(
   selected: boolean,
@@ -322,20 +319,7 @@ export function selectedCard(
   if (!selected) {
     return { borderWidth: 1, borderColor: idleBorder, margin: 1, backgroundColor: fill };
   }
-  if (Platform.OS !== "web") {
-    return { borderWidth: 2, borderColor: colors.selectedLine, backgroundColor: colors.selected };
-  }
-  return {
-    borderWidth: 2,
-    borderColor: "transparent",
-    backgroundColor: colors.selected,
-    // CSS that React Native's types do not list: the fill is clipped to the padding box and the
-    // gradient shows through the transparent border. It has to be the `background` shorthand:
-    // react-native-web drops a `backgroundClip` longhand unless it is "text".
-    ...({
-      background: `linear-gradient(${colors.selected}, ${colors.selected}) padding-box, ${gradients.selected} border-box`,
-    } as unknown as ViewStyle),
-  };
+  return { borderWidth: 2, borderColor: colors.selectedLine, backgroundColor: colors.selected };
 }
 /**
  * "Create something new": a dashed amber outline round an icon and a label, like the new-note card
