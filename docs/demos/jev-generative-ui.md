@@ -4,11 +4,11 @@
 
 [![Live Jev reranks the aquarium exhibits in Hive](../../assets/demos/2026-09-23/jev-live-web.png)](../../assets/demos/2026-09-23/jev-live-web.mp4)
 
-The live recording calls TypeSafe Jev for each clarification and comparison decision, visibly labeled `Live Jev · model decisions` in the cards. A scripted agent (CopilotKit AI Mock, which is no longer in the repository) supplied the conversation steps, while Hive ran its normal mailbox, real browser worker, and `present_choices` tool. The mailbox is a fictional local Lincoln Middle School sample. The live comparison details are excerpts of the public aquarium pages read during that turn; Jev decides whether to show the agent's prepared cards and ranks those candidates. The revised hands-on preference moves Rocky Shore to first place in this recorded run.
+The live recording calls TypeSafe Jev for each clarification and comparison decision, visibly labeled `Live Jev · model decisions` in the cards. Scripted model replies (CopilotKit AI Mock) supplied the conversation steps, while Hive ran its normal mailbox, real browser worker, and `present_choices` tool. The mailbox is a fictional local Lincoln Middle School sample. The live comparison details are excerpts of the public aquarium pages read during that turn; Jev decides whether to show the agent's prepared cards and ranks those candidates. The revised hands-on preference moves Rocky Shore to first place in this recorded run.
 
 For a TypeSafe-key-free recording, [watch the 81-second scripted sample](../../assets/demos/2026-09-23/jev-web.mp4). Its cards are labeled `Sample · scripted decisions`; it does not make a live Jev call.
 
-The cards now come from Hive's agent, [OpenCode](../../README.md#configure-the-agent-and-google): `present_choices` is one of the Hive tools it is offered. The recordings show the cards and how they behave, not how a model drives them; with a real model the order of steps and the wording are the model's.
+The cards come from Hive's agent, [OpenCode](../../README.md#configure-the-agent-and-google): `present_choices` is one of the Hive tools it is offered. The recordings show the cards and how they behave, not how a model drives them; with a real model the order of steps and the wording are the model's.
 
 ## Try it
 

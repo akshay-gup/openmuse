@@ -1,6 +1,6 @@
 # Demos
 
-Updated September 16, 2026. These recordings were made with an earlier build whose agent ran inside the API, with its replies scripted by CopilotKit AI Mock. Both that agent and the mock are gone: Hive's agent is now [OpenCode](../README.md#configure-the-agent-and-google), so the recordings show the interface and the tool flow, not how the agent runs today. Both recordings feature Hive's original capybara mascot and the current composer: the send arrow changes to a stop square inside the input pill while Hive replies, then returns when the run ends. The mobile story explores websites; the desktop story starts with email and continues into related research.
+These recordings show the interface and the tool flow with scripted model replies, so they are not an evaluation of a live model; Hive's agent is [OpenCode](../README.md#configure-the-agent-and-google). Both recordings feature Hive's original capybara mascot and the composer: the send arrow changes to a stop square inside the input pill while Hive replies, then returns when the run ends. The mobile story explores websites; the desktop story starts with email and continues into related research.
 
 ## Mobile
 
@@ -8,7 +8,7 @@ Updated September 16, 2026. These recordings were made with an earlier build who
 
 **Hive 🪁 — ask it to browse, follow along in chat, and take control when you need to.** The native iPhone recording is framed in a 1920 × 1080 (16:9) canvas, with a cream, blue, and lilac background and captions for sound-off viewing.
 
-The model responses were scripted with [CopilotKit AI Mock](https://github.com/CopilotKit/aimock). The app ran its actual agent and `browse_web` tool against a real Chromium worker. The script requested a page, waited for the real tool result, and extracted headlines or overview text from that result. It did not supply browser results or invent page content.
+The model responses were scripted with [CopilotKit AI Mock](https://github.com/CopilotKit/aimock). The app ran its real `browse_web` tool against a real Chromium worker. The script requested a page, waited for the real tool result, and extracted headlines or overview text from that result. It did not supply browser results or invent page content.
 
 ### What the mobile recording shows
 
@@ -80,4 +80,4 @@ python3 -m http.server 8081 --bind 127.0.0.1 --directory apps/mobile/dist/web
 
 Use port 8081 when the development server is stopped. `--clear` ensures the export uses the requested API URL. Open the page in a clean desktop browser and record your flow, including takeover, at 1440 × 810 or larger. Describe the model setup in the accompanying recording notes. Scroll to keep the browser card and resulting text readable.
 
-The original [75-second alpha walkthrough](https://github.com/jerelvelarde/openmuse/releases/download/v0.1.0-alpha/openmuse-demo.mp4) remains available as a historical release archive. Hive's [capybara artwork and provenance](../apps/mobile/assets/README.md) are included under the repository's MIT license.
+Hive's [capybara artwork and provenance](../apps/mobile/assets/README.md) are included under the repository's MIT license.
