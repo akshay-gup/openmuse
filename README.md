@@ -135,6 +135,7 @@ Key variables for the VM (see the deploy doc for the full table):
 | `OPENCODE_SERVER_PASSWORD` | Basic-auth password for `opencode serve`, if it requires one |
 | `MODEL` | Single model for all sessions, e.g. `openai/gpt-5`, plus the matching provider key |
 | `AGENT_MENTION` | Mention token that summons the agent in chat (default `@hive`) |
+| `JEV_MODE` | Choice cards: `off` (default), `sample` (a scripted scorer; nothing leaves the server) or `live` (needs `TYPESAFE_API_KEY`; sends the latest message and the agent's context to TypeSafe, see [what it sends](docs/demos/jev-generative-ui.md#what-live-mode-sends-to-typesafe)) |
 | `DATA_DIR` | Local storage root (default `.hive`): the database, task files, and the channel workspaces under `owners/shared/channels/<id>/` |
 | `WEB_DIR` | Overrides the served web UI dir; unset/absent = headless API for native clients |
 | `CPK_INTELLIGENCE_API_KEY` | Optional: enables hosted CopilotKit Rich Threads; unset = fully local thread storage |
