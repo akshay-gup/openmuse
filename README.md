@@ -50,8 +50,8 @@ What the agent does is the team's, not one person's. Everyone who signs in sees 
 
 | Surface | What runs in this alpha |
 | --- | --- |
-| **Chat** | CopilotKit headless chat with streamed AG-UI events, mailbox search and reading, send/stop in one input pill, a visible follow-up queue, retained drafts, delegated tasks, and inline email, browser, PDF, plan, and finance cards. The agent only runs when mentioned (`@hive` by default); everything else is plain chat. |
-| **Agent** | OpenCode, the only agent: one `opencode serve` process, durable thread→session bindings, a single global event stream, and an AG-UI shim in the API so the client is untouched. Permissions default to ask with approve/deny in the thread, plus per-channel/per-thread rules. Optional choice cards (`present_choices`, Jev) are described in the [Jev walkthrough](docs/demos/jev-generative-ui.md). |
+| **Chat** | CopilotKit headless chat with streamed AG-UI events, mailbox search and reading, send/stop in one input pill, a visible follow-up queue, retained drafts, delegated tasks, and inline email, browser, PDF, plan, and finance cards. The agent only runs when mentioned (`@hive` by default); everything else is plain chat, except a pick on one of its choice cards, which answers its own question. |
+| **Agent** | OpenCode, the only agent: one `opencode serve` process, durable thread→session bindings, a single global event stream, and an AG-UI shim in the API so the client is untouched. Permissions default to ask with approve/deny in the thread, plus per-channel/per-thread rules. Hive's own tools (mail, browser, tasks, files, choice cards) are offered to OpenCode over MCP by a bridge in the API, with credentials that last for one run. Optional choice cards (`present_choices`, Jev, off unless `JEV_MODE` is set) stay with the conversation they were asked in, so a team thread's are the team's; see the [Jev walkthrough](docs/demos/jev-generative-ui.md). |
 | **Activity** | Durable task plans, progress, input requests, pause/resume/cancel/retry, approvals, and saved receipts. SQL leases recover interrupted work. Finished agent work waits **In Review** until a person marks it done or sends it back with notes; the agent never closes a task itself. See [Review and the task brief](#review-and-the-task-brief). |
 | **Files** | Every channel has a **Files** button: what its agent made and what people upload, as a list of recent changes or a folder browser, with previews (images, PDF, video and audio, Markdown, spreadsheets, JSON, code, and web pages that run in a sandbox). The agent can share any file in the chat as a card (`send_file`) and ask a person for files with an upload button and modal (`request_upload`). See [Channel files](#channel-files). |
 | **Ideas** | Suggestions with source evidence; edit, accept, or dismiss. Sent replies and completed matching work are excluded. |
@@ -59,7 +59,7 @@ What the agent does is the team's, not one person's. Everyone who signs in sees 
 | **Documents** | Email attachment → PDF → requested form values → filled copy → reviewed reply → receipt. Native/web PDF viewing, paging, zoom, supported fields, and sharing. |
 | **Finance** | Import transaction CSV to create a spending summary with categories, transactions, and a savings-goal action. |
 | **Gmail & Calendar** | Google OAuth adapters, complete mail threads, drafts/attachments, calendar discovery, and reviewed event creation/update/deletion. Live credentials required. |
-| **Personal context** | Editable name, tone, avatar, and memories. Background-update preferences and durable in-app notifications. |
+| **Personality & memory** | The agent's name, tone, and avatar, and what it remembers (editable and forgettable), the same for everyone on the team. Background-update preferences and durable in-app notifications. |
 | **Rich Threads** | Local thread persistence on disk; optional CopilotKit Intelligence sync for thread listing, rename, archive, and replay. |
 
 The [feature inventory](docs/FEATURES.md) describes implemented capabilities and planned extensions. Health/bank/social connectors, device push, voice, generated executable tools, and automatic reservations/payments are on the [roadmap](ROADMAP.md).
@@ -203,7 +203,7 @@ Channel workspace directories and thread bindings live on the API server's local
 
 ### Who sees what
 
-Hive is a team workspace. Everyone who signs in sees the same channels, threads (with the agent's replies), tasks, boards, goals, watches, reviews and receipts, files, drafts, browser sessions, and the agent's memory, personality, ideas and notifications. The only thing kept per person is the **orchestrator chat** and its threads.
+Hive is a team workspace. Everyone who signs in sees the same channels, threads (with the agent's replies), tasks, boards, goals, watches, reviews and receipts, files, drafts, browser sessions, and the agent's memory, personality, ideas and notifications. The only thing kept per person is the **orchestrator chat**, its threads and the choice cards in them. The tasks it creates are shared like any other.
 
 The workspace has **one Google connection** (Gmail, Calendar, Drive), so the mail, calendar and files that come through it are the team's. Anyone can connect it when there is none, grant it more access, or disconnect it; a different account can only be connected after the connected one is disconnected. Reviews run on that connection, so anyone can approve or decline one; `createdBy` only records who prepared it. Because every signed-in person can read that mailbox and approve what is sent from it, limit who can sign in to people you trust (for example the test users on your Google OAuth consent screen).
 
