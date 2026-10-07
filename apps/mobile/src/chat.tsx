@@ -49,6 +49,8 @@ import { confirmedJevSelection, displayJevUserMessage, latestJevPanelId } from "
 import { JevInteractionContext, JevToolCard } from "./jev-tool-card";
 import { MailToolCard } from "./mail-tool-card";
 import { PendingApprovals } from "./opencode-permissions";
+import { RunProgress } from "./progress-steps";
+import { progressItems } from "./run-progress";
 import { FileThreadCard, TaskThreadCard } from "./thread-artifacts";
 import { countThreadReplies } from "./thread-replies";
 import { resolveThreadId, type Selection, useMuseThread } from "./threads";
@@ -193,14 +195,6 @@ export function WorkspaceTools() {
     parameters: displayParameters,
     render: ({ result, status }) => (
       <ServerToolCard name="Task" result={result} loading={status !== "complete"} />
-    ),
-  });
-  useRenderTool({
-    name: "agent_status",
-    description: "Display saved agent progress",
-    parameters: displayParameters,
-    render: ({ result, status }) => (
-      <ServerToolCard name="Agent progress" result={result} loading={status !== "complete"} />
     ),
   });
   useRenderTool({
@@ -688,6 +682,7 @@ export function ChatScreen({
     clearComposer();
   }
   const messages = agent.messages || [];
+  const toolMessages = messages.filter((m): m is ToolMessage => m.role === "tool");
   const textOf = useCallback(
     (message: Message): string => {
       const user = message.role === "user";
@@ -814,6 +809,8 @@ export function ChatScreen({
               const user = message.role === "user";
               const text = textOf(message);
               const toolCalls = "toolCalls" in message ? message.toolCalls || [] : [];
+              const working =
+                (busy || agent.isRunning) && messages.indexOf(message) > latestUserIndex;
               const replies = channelId
                 ? (channelThreads ?? []).filter((t) => t.parentMessageId === message.id)
                 : [];
@@ -934,19 +931,21 @@ export function ChatScreen({
                     <BrowserRunContext
                       value={{
                         running: busy || agent.isRunning,
-                        active:
-                          (busy || agent.isRunning) && messages.indexOf(message) > latestUserIndex,
+                        active: working,
                       }}
                     >
-                      {toolCalls.map((toolCall) => {
-                        const toolMessage = messages.find(
-                          (candidate): candidate is ToolMessage =>
-                            candidate.role === "tool" && candidate.toolCallId === toolCall.id,
-                        );
-                        return (
-                          <View key={toolCall.id}>{renderToolCall({ toolCall, toolMessage })}</View>
-                        );
-                      })}
+                      {progressItems(toolCalls, toolMessages, working).map((item) =>
+                        item.kind === "card" ? (
+                          <View key={item.id}>
+                            {renderToolCall({
+                              toolCall: item.toolCall,
+                              toolMessage: item.toolMessage,
+                            })}
+                          </View>
+                        ) : (
+                          <RunProgress key={item.id} steps={item.steps} />
+                        ),
+                      )}
                     </BrowserRunContext>
                   </JevInteractionContext.Provider>
                 </View>
