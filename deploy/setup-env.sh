@@ -52,8 +52,7 @@ fi
 
 # Pin the data dir to an absolute path: the database, uploaded files, and
 # channel workspace dirs (owners/shared/channels/<id>/) all live here.
-# Set-if-absent so a hand-picked DATA_DIR is never clobbered; the server
-# adopts a legacy ./.hive on first boot after the move.
+# Set-if-absent so a hand-picked DATA_DIR is never clobbered.
 if [ -z "$(get DATA_DIR)" ]; then
   printf '%s=%s\n' "DATA_DIR" "/opt/hive/data" >> "$ENV_FILE"
 fi
