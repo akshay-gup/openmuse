@@ -1,8 +1,9 @@
 #!/bin/bash
-# Generates /etc/hive/hive.env with random internal secrets and prints the
-# sign-in key. Idempotent: existing values are never overwritten (rotating
-# TOKEN_ENCRYPTION_KEY would orphan already-encrypted credentials).
-# The only thing you fill in by hand is MODEL + its provider key.
+# Generates /etc/hive/hive.env with random internal secrets. Idempotent:
+# existing values are never overwritten (rotating TOKEN_ENCRYPTION_KEY would
+# orphan already-encrypted credentials).
+# You fill in by hand: MODEL + its provider key, and the Google OAuth client
+# (people sign in with Google; there is no shared sign-in key).
 set -euo pipefail
 
 ENV_FILE="${1:-/etc/hive/hive.env}"
@@ -48,7 +49,7 @@ elif [ -z "$(get PUBLIC_API_URL)" ]; then
 fi
 
 # Pin the data dir to an absolute path: the database, uploaded files, and
-# channel workspace dirs (channels/<id>/threads/*.json) all live here.
+# channel workspace dirs (owners/shared/channels/<id>/) all live here.
 # Set-if-absent so a hand-picked DATA_DIR is never clobbered; the server
 # adopts a legacy ./.hive on first boot after the move.
 if [ -z "$(get DATA_DIR)" ]; then
