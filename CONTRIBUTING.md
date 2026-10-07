@@ -5,8 +5,8 @@ Hive is an MIT-licensed alpha. Contributions should make delegated work reliable
 ## Local development
 
 1. Fork and clone the repository. Use Node 22 or newer and pnpm 11.19.0.
-2. Run `pnpm install --frozen-lockfile`, copy `.env.example` to `.env`, and use `npx copilotkit@latest login` then `npx copilotkit@latest project select` to set the required Intelligence key.
-3. Run `pnpm dev` and, in another terminal, `pnpm dev:web`.
+2. Run `pnpm install --frozen-lockfile`, copy `.env.example` to `.env`, and set `MODEL=provider/model-id` in it. A CopilotKit Intelligence key is optional.
+3. Start `opencode serve` (the API stops at boot if it cannot reach it), then run `pnpm dev` and, in another terminal, `pnpm dev:web`. The [README](README.md#quick-start) has the details.
 4. Use the fictional sample workspace for development and recordings. See [native setup](apps/mobile/README.md) for simulator/emulator builds.
 
 Never commit `.env`, `.hive`, browser profiles, credentials, or personal documents. Live provider testing is optional for ordinary contributions; state exactly which paths you tested.
