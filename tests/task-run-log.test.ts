@@ -14,33 +14,38 @@ test("task transcripts persist streamed text, tool states and full final message
   const log = new TaskRunLog(db, "alice", "task-1", "run-1", async () => {
     if (!active) throw new Error("Lost lease");
   });
-  const part = (id: string, type: string, extra: Record<string, unknown> = {}) => ({
-    type: "message.part.updated",
-    properties: { part: { id, messageID: "assistant-1", type, ...extra } },
+  // OpenCode gives every event an id of its own.
+  let events = 0;
+  const event = (type: string, properties: Record<string, unknown>) => ({
+    id: `event-${++events}`,
+    type,
+    properties,
   });
+  const part = (id: string, type: string, extra: Record<string, unknown> = {}) =>
+    event("message.part.updated", { part: { id, messageID: "assistant-1", type, ...extra } });
   try {
     log.handle(part("text-1", "text", { text: "Starting" }));
-    log.handle({
-      type: "message.updated",
-      properties: { info: { id: "assistant-1", role: "assistant" } },
-    });
-    log.handle({
-      type: "message.part.delta",
-      properties: { messageID: "assistant-1", partID: "text-1", field: "text", delta: " now" },
-    });
+    log.handle(event("message.updated", { info: { id: "assistant-1", role: "assistant" } }));
+    log.handle(
+      event("message.part.delta", {
+        messageID: "assistant-1",
+        partID: "text-1",
+        field: "text",
+        delta: " now",
+      }),
+    );
     await log.flush();
     let records = await db.list<RunEvent>("alice", "run-events");
     assert.equal(records[0].detail, "Starting now");
     log.handle(part("text-1", "text", { text: "Starting now" }));
     log.handle(part("thinking", "reasoning", { text: "Private reasoning" }));
     log.handle(part("synthetic", "text", { text: "Internal context", synthetic: true }));
-    log.handle({ type: "message.updated", properties: { info: { id: "user-1", role: "user" } } });
-    log.handle({
-      type: "message.part.updated",
-      properties: {
+    log.handle(event("message.updated", { info: { id: "user-1", role: "user" } }));
+    log.handle(
+      event("message.part.updated", {
         part: { id: "user-text", messageID: "user-1", type: "text", text: "User message" },
-      },
-    });
+      }),
+    );
     log.handle(
       part("tool-1", "tool", {
         tool: "hive_0123456789abcdef_create_issue",
