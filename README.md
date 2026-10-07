@@ -2,7 +2,7 @@
 
 # Hive
 
-**A personal agent with a browser, files, and work that keeps going — backed by OpenCode, summoned with a mention.**
+**A team chat with a shared agent: a browser, files, and work that keeps going — backed by OpenCode, summoned with a mention.**
 
 Ask for an outcome. Follow the plan, review actions, and come back to the result.
 Built with CopilotKit React Native for iOS, Android, and web.
@@ -43,6 +43,8 @@ The [Jev aquarium-trip demo](docs/demos/jev-generative-ui.md) walks through a fi
 Hive is a channel-based team chat with an agent in the loop. It runs its own server, task worker, and optional browser worker as one self-contained deployment. You can inspect and change the source under the MIT license.
 
 Chat threads are plain conversation until you mention `@hive` — then the agent wakes with the full thread history and attached files, works as a durable OpenCode session, and asks before risky actions. Delegated tasks run as unattended OpenCode sessions and report back to the originating thread. The agent can browse public pages through the browser worker, work with files and PDFs, and run durable delegated tasks. Graphical desktops and autonomous checkout remain future work.
+
+What the agent does is the team's, not one person's. Everyone who signs in sees the same channels, threads, tasks, files, memories and Google connection, so a note on a task, a file in a channel, or something the agent was told to remember is there for the next person instead of living in one chat. Only each person's own orchestrator chat is private ([Who sees what](#who-sees-what)), and there are no roles yet ([roadmap](#roadmap)).
 
 ## Features
 
