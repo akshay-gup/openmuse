@@ -2,10 +2,6 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { browserWorkerUrl, shadowedEnvKeys } from "../apps/server/src/config.ts";
 
-// readConfig reads the environment, and importing config.ts has just filled it from a developer's own
-// .env, which can still name a backend that no longer exists.
-delete process.env.AGENT_BACKEND;
-
 test("the Intelligence key is optional in every API mode", async () => {
   const { readConfig } = await import("../apps/server/src/config.ts");
   const old = process.env.CPK_INTELLIGENCE_API_KEY;
@@ -22,28 +18,6 @@ test("the Intelligence key is optional in every API mode", async () => {
     if (old === undefined) delete process.env.CPK_INTELLIGENCE_API_KEY;
     else process.env.CPK_INTELLIGENCE_API_KEY = old;
     delete process.env.WORKSPACE_MODE;
-  }
-});
-
-test("the agent is OpenCode: AGENT_BACKEND may be left out or name it, and nothing else boots", async () => {
-  const { readConfig } = await import("../apps/server/src/config.ts");
-  const old = process.env.AGENT_BACKEND;
-  try {
-    for (const accepted of [undefined, "", "  ", "opencode"]) {
-      if (accepted === undefined) delete process.env.AGENT_BACKEND;
-      else process.env.AGENT_BACKEND = accepted;
-      assert.doesNotThrow(() => readConfig(), `AGENT_BACKEND=${accepted}`);
-    }
-    for (const removed of ["sample", "model", "agui"]) {
-      process.env.AGENT_BACKEND = removed;
-      assert.throws(
-        () => readConfig(),
-        new RegExp(`AGENT_BACKEND=${removed} is no longer supported.*OpenCode`),
-      );
-    }
-  } finally {
-    if (old === undefined) delete process.env.AGENT_BACKEND;
-    else process.env.AGENT_BACKEND = old;
   }
 });
 

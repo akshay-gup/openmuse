@@ -104,13 +104,6 @@ export function readConfig(): Config {
   const mode = process.env.WORKSPACE_MODE ?? "sample";
   if (mode !== "sample" && mode !== "live")
     throw new Error("WORKSPACE_MODE must be sample or live");
-  // The agent is OpenCode and nothing else. The setting is only read so that a deployment that
-  // still has AGENT_BACKEND=opencode keeps booting, and one that picks another backend is told.
-  const backend = process.env.AGENT_BACKEND?.trim();
-  if (backend && backend !== "opencode")
-    throw new Error(
-      `AGENT_BACKEND=${backend} is no longer supported: Hive's agent is OpenCode. Remove AGENT_BACKEND.`,
-    );
   const jevMode = process.env.JEV_MODE ?? "off";
   if (jevMode !== "off" && jevMode !== "sample" && jevMode !== "live")
     throw new Error("JEV_MODE must be off, sample or live");
