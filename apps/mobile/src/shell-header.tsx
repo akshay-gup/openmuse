@@ -141,7 +141,7 @@ export function ShellHeader({ onMenu }: { onMenu: () => void }) {
               justifyContent: "center",
               backgroundColor: colors.primary,
               borderWidth: 2,
-              borderColor: colors.surface,
+              borderColor: colors.canvas,
             }}
           >
             <Text
