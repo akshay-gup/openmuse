@@ -26,7 +26,7 @@ Clone this template and customize it however you want.
 
 </div>
 
-> **Alpha, for self-hosting and building on.** Open-ended reasoning, live Google accounts, and CopilotKit Rich Threads require their own configuration. See [what is verified](docs/VERIFICATION.md) and the [roadmap](ROADMAP.md).
+> **Alpha, for self-hosting and building on.** Open-ended reasoning, live Google accounts, and CopilotKit Rich Threads require their own configuration. There are no roles yet: everyone who can sign in has full access ([Who sees what](#who-sees-what)). See [what is verified](docs/VERIFICATION.md) and the [roadmap](ROADMAP.md).
 
 ## Demo
 
@@ -72,13 +72,14 @@ Where this fork is headed — self-contained, agent-native team chat:
 - Permissions default to ask with approve/deny in the thread, plus per-channel/per-thread rules.
 - Delegated tasks run as OpenCode sessions in auto-mode; background permission requests surface in the originating thread.
 - Mention-only chat trigger: the agent runs only when the latest message contains `@hive` (env `AGENT_MENTION`); on trigger it receives the full conversation transcript plus attached files.
+- A shared workspace: everyone who signs in sees the same channels, threads, tasks, files, memories and Google connection, and only each person's orchestrator chat is private. See [Who sees what](#who-sees-what).
 
 **Next**
-- Live VM verification: end-to-end task loop with real inference, `opencode serve` systemd unit.
-- Shared-computer arbitration between channel workers on the one box.
-- Orchestrator queue and new-tab routing for delegated tasks.
-- Multi-tenant membership: invites and roles (decisions pending). Visibility is decided: see [Who sees what](#who-sees-what).
-- Browser access (deferred); native mobile against the same API.
+- [ ] Live VM verification: end-to-end task loop with real inference, `opencode serve` systemd unit.
+- [ ] Shared-computer arbitration between channel workers on the one box.
+- [ ] Orchestrator queue and new-tab routing for delegated tasks.
+- [ ] **Roles.** There are none yet: everyone who can sign in can do everything, including connecting Google, approving what is sent from it, and changing the agent's settings. Next are an owner and members, who can invite or remove people, and which actions are owner-only. Until then, only let in people you trust (see [Who sees what](#who-sees-what)).
+- [ ] Browser access (deferred); native mobile against the same API.
 
 Details and open questions live in [ROADMAP.md](ROADMAP.md).
 
@@ -200,6 +201,8 @@ Channel workspace directories and thread bindings live on the API server's local
 Hive is a team workspace. Everyone who signs in sees the same channels, threads (with the agent's replies), tasks, boards, goals, watches, reviews and receipts, files, drafts, browser sessions, and the agent's memory, personality, ideas and notifications. The only thing kept per person is the **orchestrator chat** and its threads.
 
 The workspace has **one Google connection** (Gmail, Calendar, Drive), so the mail, calendar and files that come through it are the team's. Anyone can connect it when there is none, grant it more access, or disconnect it; a different account can only be connected after the connected one is disconnected. Reviews run on that connection, so anyone can approve or decline one; `createdBy` only records who prepared it. Because every signed-in person can read that mailbox and approve what is sent from it, limit who can sign in to people you trust (for example the test users on your Google OAuth consent screen).
+
+**There are no roles yet.** Everyone who signs in has the same access, and Hive keeps no member list of its own: whoever your Google OAuth client lets through is a member, and nobody can be removed from inside Hive. Any member can connect or disconnect the Google account, approve or decline what is sent from it, mark tasks done, change the agent's name, tone and memories, set permission rules, and archive channels. Owner and member roles, invites and removing people are on the [roadmap](#roadmap).
 
 Shared thread history applies to the default local thread storage. Hosted Rich Threads (`CPK_INTELLIGENCE_API_KEY`) identifies each person to CopilotKit separately, so it keeps their threads apart.
 
