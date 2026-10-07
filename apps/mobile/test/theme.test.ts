@@ -51,29 +51,29 @@ test("every text and background pair in the theme stays readable (WCAG AA, 4.5:1
   }
 });
 
-test("text drawn on glass stays readable over the darkest part of the haze (4.5:1)", () => {
-  const darkest = parse(haze.darkest).rgb;
-  for (const fill of ["panel", "bar"] as const) {
-    const surface = over(glass[fill], darkest);
+test("text drawn on glass stays readable over the lightest part of the haze (4.5:1)", () => {
+  const lightest = parse(haze.lightest).rgb;
+  for (const fill of ["panel", "bar", "raised", "sheet"] as const) {
+    const surface = over(glass[fill], lightest);
     for (const role of glassTextRoles) {
       const ratio = contrast(over(colors[role], surface), surface);
       assert.ok(
         ratio >= 4.5,
-        `${role} on glass.${fill} over the darkest haze is ${ratio.toFixed(2)}:1`,
+        `${role} on glass.${fill} over the lightest haze is ${ratio.toFixed(2)}:1`,
       );
     }
   }
 });
 
-test("no part of the haze is darker than the tone text on glass is checked against", () => {
+test("no part of the haze is lighter than the tone text on glass is checked against", () => {
   const base = parse(haze.base).rgb;
-  const floor = luminance(parse(haze.darkest).rgb);
+  const ceiling = luminance(parse(haze.lightest).rgb);
   const stops = haze.css.match(/rgba\([^)]*\)/g) ?? [];
   assert.ok(stops.length > 0, "the haze has no colour stops");
   for (const stop of stops) {
     assert.ok(
-      luminance(over(stop, base)) >= floor,
-      `${stop} over the haze is darker than haze.darkest (${haze.darkest})`,
+      luminance(over(stop, base)) <= ceiling,
+      `${stop} over the haze is lighter than haze.lightest (${haze.lightest})`,
     );
   }
 });

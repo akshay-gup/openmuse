@@ -6,14 +6,12 @@
  * (test/theme.test.ts) fails if a raw colour appears anywhere else, and checks that the
  * text/background pairs below keep a readable contrast (WCAG AA).
  *
- * The values follow the web app's stylesheet (Poppins, the navy / teal / amber brand colours,
- * hairline cards with a hover lift). Dark mode: add a second object with the same keys as
- * `colors` and choose between them from a context. No component needs to change.
- *
- * Panels are glass: a translucent fill over a soft blue-grey haze, with a bright rim on the top and
- * left edges, a hairline, and a soft drop. The web blurs what is behind a panel; native has no blur
- * here, so its fills are more opaque. Hairlines and quiet fills are tints of the navy, so they sit
- * equally well on white, on glass and on the haze.
+ * The look is Graphite: dark glass. Panels are faint white over a near-black backdrop with a soft
+ * teal glow, with a bright rim along the top edge, a hairline, and a deep drop shadow. The web blurs
+ * what is behind a panel or a sheet; native has no blur here, so its fills are a little more
+ * opaque. Hairlines and quiet fills are tints of white, so they sit equally well on the backdrop, on
+ * a panel and on a card. Teal marks what is active or primary, and nothing else is coloured unless
+ * it carries a status.
  */
 
 /**
@@ -34,112 +32,115 @@ export const palette = {
 export const colors = {
   // Surfaces
   /** App and page background. */
-  canvas: "#FFFFFF",
-  /** Cards, sheets, inputs and anything raised above the canvas. */
-  surface: "#FFFFFF",
-  /** Quiet fills: secondary buttons, chips, code. A tint of the navy, so it suits any surface. */
-  surfaceMuted: "rgba(3,29,68,0.05)",
+  canvas: "#0B0F13",
+  /** Cards, inputs and anything raised off a panel: a faint white over whatever it sits on. */
+  surface: "rgba(255,255,255,0.065)",
+  /** The page behind a web page or a document shown in a frame, which assume a white page. */
+  paper: "#FFFFFF",
+  /** Quiet fills: secondary buttons, chips, code. */
+  surfaceMuted: "rgba(255,255,255,0.06)",
   /** Hover and pressed state on quiet fills and rows. */
-  surfaceHover: "rgba(3,29,68,0.09)",
+  surfaceHover: "rgba(255,255,255,0.10)",
 
   // Lines
   /** Hairlines and default borders. */
-  line: "rgba(3,29,68,0.10)",
+  line: "rgba(255,255,255,0.09)",
   /** Borders that must be seen: inputs, hovered cards. */
-  lineStrong: "rgba(3,29,68,0.22)",
+  lineStrong: "rgba(255,255,255,0.20)",
 
   // Text
-  /** Body and heading ink: the brand navy. */
-  text: palette.navy,
-  /** Secondary text. Dark enough to stay readable on glass over the darkest haze. */
-  muted: "#56626C",
-  /** Icons and decoration only. Too light for text. */
-  subtle: "#8B959B",
+  /** Body and heading ink. */
+  text: "#E8EDF2",
+  /** Secondary text. */
+  muted: "#A3B1BE",
+  /** Icons and decoration only. Too dim for text. */
+  subtle: "#6F7E8D",
   /** Text and icons on `primary` and other solid fills. */
-  onPrimary: "#FFFFFF",
+  onPrimary: "#06222B",
 
   // Brand
-  /** Main actions, active states, focus: fills, borders and icons. White text on it is AA. */
-  primary: "#298097",
+  /** Main actions, active states, focus: fills, borders and icons. Dark text on it is AA. */
+  primary: "#4DB0C8",
   /** `primary` while pressed or hovered. */
-  primaryPressed: "#216F83",
-  /** Links and other teal text. A shade darker than `primary`, so it stays AA on the tints. */
-  primaryText: "#1F6E83",
+  primaryPressed: "#7CCBDD",
+  /** Links and other teal text. */
+  primaryText: "#7CCBDD",
   /** Tint behind selected rows, info cards, icon tiles. */
-  primarySoft: "#E9F5F7",
+  primarySoft: "rgba(77,176,200,0.16)",
   /** `primarySoft` while hovered or pressed. */
-  primarySoftStrong: "#D3E9EE",
+  primarySoftStrong: "rgba(77,176,200,0.26)",
   /** Keyboard focus ring. */
-  focusRing: "rgba(41,128,151,0.28)",
-  /** Fill of a selected card or option. */
-  selected: "#D9F7F7",
+  focusRing: "rgba(77,176,200,0.40)",
+  /** Fill of a selected card or option. Opaque: the gradient border is drawn behind it. */
+  selected: "#1A3138",
   /** Border of a selected card or option (the gradient border replaces it on web). */
-  selectedLine: "#0093AB",
+  selectedLine: "#4DB0C8",
   /** Amber: the "new" accent. Dashed create tiles, never body text. */
   accent: palette.amber,
   /** Tint behind amber elements. */
-  accentSoft: "#FFF8E1",
-  /** Text and icons on amber tints: a dark amber that stays AA. */
-  accentText: "#8A5A00",
+  accentSoft: "rgba(251,191,36,0.14)",
+  /** Text and icons on amber tints. */
+  accentText: "#F6CF72",
 
   // Status
-  danger: "#A12B32",
-  dangerBg: "#FCECED",
-  dangerLine: "#F0D5D3",
-  warning: "#D97A2B",
-  warningText: "#995414",
-  warningBg: "#FFF3E3",
-  warningLine: "#EBDDB5",
-  success: "#1DA028",
-  successText: "#23705C",
-  successBg: "#EAF6F0",
+  danger: "#FF9AA2",
+  dangerBg: "rgba(255,107,120,0.12)",
+  dangerLine: "rgba(255,107,120,0.28)",
+  warning: "#F0A15A",
+  warningText: "#F6C58B",
+  warningBg: "rgba(217,122,43,0.18)",
+  warningLine: "rgba(217,122,43,0.34)",
+  success: "#3DD68C",
+  successText: "#7EE9B8",
+  successBg: "rgba(28,204,128,0.14)",
   /** Queued, paused, scheduled. */
-  neutral: "#9AA3A8",
+  neutral: "#8795A2",
 
   // Overlays
   /** Behind sheets and drawers. */
-  scrim: "rgba(3,29,68,0.32)",
-  /** Dark toast. */
-  inverse: palette.navy,
-  onInverse: "#FFFFFF",
+  scrim: "rgba(0,0,0,0.55)",
+  /** Light toast. */
+  inverse: "#E8EDF2",
+  onInverse: "#0B1620",
 } as const;
 
 export type Colors = typeof colors;
 
-const hazeBase = "#E2E8ED";
+const hazeBase = "#0B0F13";
 /**
- * The backdrop behind the glass: a soft blue-grey haze, paler at the top left and cooler at the
- * bottom right, scaled to the screen. The web draws `css`; native keeps the flat `base`. `darkest` is the deepest tone the
- * haze reaches, and text on glass is checked against it (test/theme.test.ts).
+ * The backdrop behind the glass: near-black with a soft teal glow at the top left and a cool grey
+ * one at the bottom right, scaled to the screen. The web draws `css`; native keeps the flat `base`.
+ * `lightest` is the brightest tone the haze reaches, and text on glass is checked against it
+ * (test/theme.test.ts).
  */
 export const haze = {
   base: hazeBase,
-  darkest: "#B0C2CD",
-  css: `radial-gradient(65% 70% at 0% 0%, rgba(255,255,255,0.85), rgba(255,255,255,0) 70%), radial-gradient(55% 50% at 30% 0%, rgba(203,216,224,0.4), rgba(203,216,224,0) 70%), radial-gradient(70% 85% at 100% 100%, rgba(142,168,184,0.5), rgba(142,168,184,0) 70%), ${hazeBase}`,
+  lightest: "#143440",
+  css: `radial-gradient(70% 90% at 0% 0%, rgba(42,138,163,0.22), rgba(42,138,163,0) 70%), radial-gradient(75% 85% at 100% 100%, rgba(94,115,136,0.16), rgba(94,115,136,0) 70%), ${hazeBase}`,
 } as const;
 
 /**
  * Glass fills. The web lays them over a blur of what is behind (`blur`); native has no blur here,
- * so its `*Solid` fills are more opaque and keep text readable over whatever shows through.
+ * so its `*Solid` fills are a little more opaque.
  */
 export const glass = {
   /** A panel: the sidebar, a channel, a thread. */
-  panel: "rgba(255,255,255,0.56)",
-  /** A bar over content: the phone's header and tab bar. */
-  bar: "rgba(255,255,255,0.64)",
-  /** Raised off a panel: the composer. */
-  raised: "rgba(255,255,255,0.88)",
+  panel: "rgba(255,255,255,0.055)",
+  /** A bar: the phone's header. */
+  bar: "rgba(255,255,255,0.08)",
+  /** Raised off a panel: the composer and the phone's tab bar. */
+  raised: "rgba(30,40,50,0.92)",
   /** A sheet over the dimmed page. */
-  sheet: "rgba(255,255,255,0.92)",
-  panelSolid: "rgba(255,255,255,0.9)",
-  barSolid: "rgba(255,255,255,0.92)",
-  raisedSolid: "rgba(255,255,255,0.96)",
-  sheetSolid: "rgba(255,255,255,0.98)",
+  sheet: "rgba(20,28,36,0.94)",
+  panelSolid: "rgba(255,255,255,0.07)",
+  barSolid: "rgba(255,255,255,0.10)",
+  raisedSolid: "rgba(30,40,50,0.97)",
+  sheetSolid: "rgba(20,28,36,0.98)",
   /** The blur behind a panel or a sheet (web). */
   blur: "blur(30px) saturate(130%)",
 } as const;
 
-/** Text roles drawn straight onto glass. The test checks each against a panel over the darkest haze. */
+/** Text roles drawn straight onto glass. The test checks each against a fill over the lightest haze. */
 export const glassTextRoles = ["text", "muted", "primaryText", "danger"] as const;
 
 /** Pairs that carry text. test/theme.test.ts checks each against WCAG AA (4.5:1). */
@@ -171,17 +172,21 @@ export const avatarTints = [
   colors.primarySoft,
   colors.successBg,
   colors.warningBg,
-  "#E3F4FB",
-  "#E4F7F8",
+  "rgba(94,150,230,0.20)",
+  "rgba(145,228,231,0.16)",
 ] as const;
 
 /** Background discs behind the capybara, one per avatar the person can choose. */
-export const mascotTints = { sky: "#ECF5FA", sand: "#FAF0DF", lilac: "#F1ECF9" } as const;
+export const mascotTints = {
+  sky: "rgba(110,170,215,0.28)",
+  sand: "rgba(235,195,125,0.28)",
+  lilac: "rgba(170,150,235,0.28)",
+} as const;
 
 /** Bars on the task timeline. */
 export const chart = {
   agent: colors.primary,
-  manual: palette.mediumBlue,
+  manual: "#6E8CA8",
   done: colors.success,
 } as const;
 
@@ -255,20 +260,22 @@ export const sp = { xs: 4, sm: 8, md: 12, lg: 16, xl: 20, xxl: 24, xxxl: 32 } as
 
 /** Elevation, as CSS box-shadow strings (supported by React Native 0.76+ and the web). */
 export const shadow = {
-  /** Cards at rest. */
-  card: "0 1px 4px rgba(0,0,0,0.04)",
+  /** Cards at rest: a bright top edge and a soft drop. */
+  card: "inset 0 1px 0 rgba(255,255,255,0.08), 0 8px 24px rgba(0,0,0,0.25)",
   /** Cards under the pointer. */
-  raised: "0 4px 16px rgba(0,0,0,0.14)",
+  raised: "0 4px 16px rgba(0,0,0,0.45)",
   /** Menus and floating panels. */
-  popover: "0 10px 30px rgba(0,0,0,0.12)",
-  /** A glass panel: a bright rim on its top and left edges, a hairline, and a soft drop. */
+  popover: "0 10px 30px rgba(0,0,0,0.5)",
+  /** A glass panel: a bright rim along its top edge, a hairline, and a deep drop. */
   panel:
-    "inset 0 1px 0 rgba(255,255,255,0.95), inset 1px 0 0 rgba(255,255,255,0.55), 0 0 0 1px rgba(3,29,68,0.07), 0 24px 60px rgba(30,50,70,0.14), 0 2px 8px rgba(30,50,70,0.06)",
-  /** The selected row in a list on glass: a white lens with a hairline. */
-  lens: "0 0 0 1px rgba(3,29,68,0.07), 0 3px 10px rgba(3,29,68,0.08)",
+    "inset 0 1px 0 rgba(255,255,255,0.10), 0 0 0 1px rgba(255,255,255,0.07), 0 24px 60px rgba(0,0,0,0.45)",
+  /** The selected row in a list on glass: a faint lens with a hairline. */
+  lens: "inset 0 1px 0 rgba(255,255,255,0.08), 0 0 0 1px rgba(255,255,255,0.09)",
+  /** The row you are on in the sidebar: a teal ring. */
+  active: "inset 0 0 0 1px rgba(77,176,200,0.28)",
   /** Raised off a panel: the composer and the phone's tab bar. */
   float:
-    "inset 0 1px 0 rgba(255,255,255,0.95), 0 0 0 1px rgba(3,29,68,0.08), 0 10px 28px rgba(30,50,70,0.12)",
+    "inset 0 1px 0 rgba(255,255,255,0.12), 0 0 0 1px rgba(255,255,255,0.10), 0 14px 34px rgba(0,0,0,0.4)",
   /** Focus ring drawn around inputs. */
   focus: `0 0 0 3px ${colors.focusRing}`,
 } as const;
