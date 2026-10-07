@@ -136,7 +136,10 @@ Key variables for the VM (see the deploy doc for the full table):
 | `DATA_DIR` | Local storage root (default `.hive`); database, files, and `channels/<id>/threads/*.json` |
 | `WEB_DIR` | Overrides the served web UI dir; unset/absent = headless API for native clients |
 | `CPK_INTELLIGENCE_API_KEY` | Optional: enables hosted CopilotKit Rich Threads; unset = fully local thread storage |
-| `HIVE_ACCESS_KEY` / `TOKEN_ENCRYPTION_KEY` | Sign-in key and at-rest encryption secret for live mode |
+| `WORKSPACE_MODE` | `sample` (default): fictional local data and a keyless local session, loopback only. `live`: real Google data, and people sign in with Google |
+| `PUBLIC_API_URL` | The public https URL, used for the Google OAuth callback and CORS |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | The Google OAuth client: how people sign in, and the Gmail/Calendar connection (live mode) |
+| `TOKEN_ENCRYPTION_KEY` | 32 random bytes, base64: encrypts Google credentials at rest (live mode) |
 
 ## Configure the agent and Google
 
@@ -145,8 +148,8 @@ Copy the commented settings in [.env.example](.env.example) into your private `.
 1. Set `MODEL=provider/model-id` and the matching provider key (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or `GOOGLE_API_KEY`). Provider keys stay on the server, and `opencode serve` is what reads them.
 2. Run `opencode serve` as a systemd unit (see [docs/vm-deploy.md](docs/vm-deploy.md)); point `OPENCODE_SERVER_URL` at it and set `OPENCODE_SERVER_PASSWORD` if it requires auth. The API healthchecks the server and asserts a compatible version on boot — it never spawns the server itself.
 3. Optionally set `AGENT_MENTION` (default `@hive`): only a message containing it as a standalone token summons the agent in chat.
-4. For personal mail/calendar, set `WORKSPACE_MODE=live`, a random `HIVE_ACCESS_KEY` of at least 24 characters, and `TOKEN_ENCRYPTION_KEY` containing 32 random bytes encoded as base64. Restart the API.
-5. Configure a Google OAuth web client with Gmail and Calendar APIs enabled. Set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`; register `${PUBLIC_API_URL}/api/google/callback` as its redirect URI. Configure consent/test-user access in your Google project.
+4. For real sign-in and the team's mail and calendar, set `WORKSPACE_MODE=live` and `TOKEN_ENCRYPTION_KEY` containing 32 random bytes encoded as base64 (`openssl rand -base64 32`). Restart the API. There is no shared sign-in key: in live mode people sign in with Google (next step).
+5. Configure a Google OAuth web client with Gmail and Calendar APIs enabled. Set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`; register `${PUBLIC_API_URL}/api/google/callback` as its redirect URI. This client is also the only gate on who can join: Hive has no allow-list of its own, so whoever its consent screen lets through becomes a member with full access. Keep it limited to your team (for example, list them as test users).
 6. Open **Apps → Gmail** (or **Google Calendar**), connect read access, and grant write access when needed. Every send or calendar change still requires its own stored review. Changing/disconnecting the account invalidates pending connection-bound work.
 
 OpenCode is the only agent. `WORKSPACE_MODE=sample` (the default) keeps the workspace's mail, calendar and files local and fictional, on loopback, but chat and tasks still need OpenCode. A deployment that still sets `AGENT_BACKEND=opencode` keeps working; any other value stops the API with an error saying so.
