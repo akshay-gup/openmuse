@@ -7,20 +7,17 @@ one workspace shared by the team, so what the agent is given once is there for e
 ## Shipped
 
 - **Self-contained VM deployment** — the Hono API serves the Expo web export
-  same-origin (SPA fallback, `WEB_DIR` override); channel/thread storage moved
-  from the Docker computer to local disk (`DATA_DIR/channels/<id>/threads/<id>.json`,
-  a layout that doubles as future OpenCode working directories); Docker computer,
-  terminal, and computer routes/docs/tests fully removed. See `docs/vm-deploy.md`.
-  `render.yaml` left as-is.
+  same-origin (SPA fallback, `WEB_DIR` override); channel and thread storage is on
+  local disk (`DATA_DIR/owners/<owner>/channels/<id>/`, which are also the OpenCode
+  working directories). See `docs/vm-deploy.md`.
 - **OpenCode agent** — one `opencode serve`
   process (a systemd unit on the VM; the API connects, healthchecks, and
   version-asserts, never spawns it); per-channel scoping via directory header;
   a single global SSE stream with per-thread filtering and serialized queues;
   busy/idle derived from status events only; an in-process AG-UI shim
-  (`POST /api/agent/opencode/run`) so the mobile/web client is untouched;
+  (`POST /api/agent/opencode/run`) that the mobile/web client talks to;
   thread→session bindings persisted before the first prompt; single `MODEL` env.
-  It is the only agent: the in-process model agent, the scripted sample agent
-  and the external AG-UI agent are removed, and boot fails without OpenCode.
+  Boot fails without OpenCode.
 - **Permissions** — default `ask`; `permission.asked` tracked per thread and
   surfaced as approve/deny in the thread UI; per-channel/per-thread rules stored
   under `DATA_DIR` and applied as session permission overrides (directory-level
