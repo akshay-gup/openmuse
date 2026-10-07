@@ -50,7 +50,21 @@ import { BrowserScreen, CalendarScreen, FilesScreen, MailScreen } from "./src/sc
 import { ShellHeader } from "./src/shell-header";
 import { Sidebar } from "./src/sidebar";
 import { ThreadsProvider, useMuseThread } from "./src/threads";
-import { Button, Card, colors, ErrorNotice, fontSize, Mascot, radius, s, shadow } from "./src/ui";
+import {
+  Backdrop,
+  Button,
+  Card,
+  colors,
+  ErrorNotice,
+  fontSize,
+  glassSurface,
+  haze,
+  layout,
+  Mascot,
+  panelStyle,
+  radius,
+  s,
+} from "./src/ui";
 import { type Detail, useWorkspace, WorkspaceContext } from "./src/workspace";
 
 const nav: { id: Section; label: string; icon: LucideIcon }[] = [
@@ -184,12 +198,13 @@ export default function App() {
         <SafeAreaView
           style={{
             flex: 1,
-            backgroundColor: colors.canvas,
+            backgroundColor: haze.base,
             justifyContent: "center",
             alignItems: "center",
             padding: 24,
           }}
         >
+          <Backdrop />
           <View style={{ width: "100%", maxWidth: 420, gap: 22, alignItems: "center" }}>
             <Mascot size={72} />
             <Text
@@ -266,13 +281,14 @@ function WorkspaceApp({ token, logout }: { token: string; logout: () => Promise<
       <SafeAreaView
         style={{
           flex: 1,
-          backgroundColor: colors.canvas,
+          backgroundColor: haze.base,
           alignItems: "center",
           justifyContent: "center",
           padding: 24,
           gap: 18,
         }}
       >
+        <Backdrop />
         <Mascot size={56} />
         {error ? (
           <>
@@ -367,70 +383,96 @@ function WorkspaceShell({
   return (
     <>
       <WorkspaceTools />
-      <SafeAreaView style={{ flex: 1, backgroundColor: colors.canvas }} edges={["top", "bottom"]}>
-        <View style={{ flex: 1, flexDirection: desktop ? "row" : "column" }}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: haze.base }} edges={["top", "bottom"]}>
+        <Backdrop />
+        <View
+          style={{
+            flex: 1,
+            flexDirection: desktop ? "row" : "column",
+            ...(desktop ? { padding: layout.gap, gap: layout.gap } : null),
+          }}
+        >
           {desktop && <Sidebar />}
-          <View style={{ flex: 1, minWidth: 0, alignItems: "center" }}>
-            <View style={{ flex: 1, width: "100%", maxWidth: "100%" }}>
-              <ShellHeader onMenu={() => setThreadsOpen(true)} />
-              <View style={{ flex: 1, minHeight: 0 }}>
-                {section !== "chat" && (
-                  <ScrollView
-                    key={section}
-                    showsVerticalScrollIndicator={false}
-                    contentContainerStyle={{
-                      paddingHorizontal: desktop ? 32 : 22,
-                      paddingTop: 20,
-                      paddingBottom: 28,
-                      width: "100%",
-                      maxWidth: 1040,
-                      alignSelf: "center",
-                    }}
-                    keyboardShouldPersistTaps="handled"
-                  >
-                    {utility && (
-                      <Button
-                        small
-                        style={{ alignSelf: "flex-start", marginBottom: 18 }}
-                        onPress={() => navigate("apps")}
-                      >
-                        Back to Apps
-                      </Button>
-                    )}
-                    <ErrorNotice error={error} />
-                    <Screen />
-                  </ScrollView>
-                )}
-                <View
-                  style={{
-                    display: section === "chat" ? "flex" : "none",
-                    flex: 1,
+          <View style={[{ flex: 1, minWidth: 0 }, desktop && panelStyle]}>
+            <ShellHeader onMenu={() => setThreadsOpen(true)} />
+            <View style={{ flex: 1, minHeight: 0 }}>
+              {section !== "chat" && (
+                <ScrollView
+                  key={section}
+                  showsVerticalScrollIndicator={false}
+                  contentContainerStyle={{
+                    paddingHorizontal: desktop ? 32 : 22,
+                    paddingTop: 20,
+                    paddingBottom: 28,
                     width: "100%",
-                    maxWidth: channelChat ? undefined : 820,
+                    maxWidth: 1040,
                     alignSelf: "center",
-                    paddingHorizontal: channelChat ? 0 : desktop ? 32 : 17,
-                    paddingTop: channelChat ? 0 : 8,
-                    paddingBottom: desktop ? 12 : 0,
                   }}
+                  keyboardShouldPersistTaps="handled"
                 >
-                  {!channelChat && <AgentStatus />}
-                  {richThreads ? (
-                    <>
-                      <ErrorNotice error={threadsError} />
-                      {threadsError ? (
-                        <Button onPress={retryThreads}>Retry main chat</Button>
-                      ) : threadsLoading ? (
-                        <ActivityIndicator color={colors.primary} />
-                      ) : null}
-                      {!threadsLoading && selection.id !== mainId && (
-                        <Text style={[s.small, { textAlign: "center", marginBottom: 8 }]}>
-                          Side chat
-                        </Text>
-                      )}
-                      {visited.map((thread) => (
+                  {utility && (
+                    <Button
+                      small
+                      style={{ alignSelf: "flex-start", marginBottom: 18 }}
+                      onPress={() => navigate("apps")}
+                    >
+                      Back to Apps
+                    </Button>
+                  )}
+                  <ErrorNotice error={error} />
+                  <Screen />
+                </ScrollView>
+              )}
+              <View
+                style={{
+                  display: section === "chat" ? "flex" : "none",
+                  flex: 1,
+                  width: "100%",
+                  maxWidth: channelChat ? undefined : 820,
+                  alignSelf: "center",
+                  paddingHorizontal: channelChat ? 0 : desktop ? 32 : 17,
+                  paddingTop: channelChat ? 0 : 8,
+                  paddingBottom: desktop ? 12 : 0,
+                }}
+              >
+                {!channelChat && <AgentStatus />}
+                {richThreads ? (
+                  <>
+                    <ErrorNotice error={threadsError} />
+                    {threadsError ? (
+                      <Button onPress={retryThreads}>Retry main chat</Button>
+                    ) : threadsLoading ? (
+                      <ActivityIndicator color={colors.primary} />
+                    ) : null}
+                    {!threadsLoading && selection.id !== mainId && (
+                      <Text style={[s.small, { textAlign: "center", marginBottom: 8 }]}>
+                        Side chat
+                      </Text>
+                    )}
+                    {visited.map((thread) => (
+                      <View
+                        key={thread.id}
+                        style={{ display: selection.id === thread.id ? "flex" : "none", flex: 1 }}
+                      >
+                        <ChatScreen
+                          thread={thread}
+                          active={section === "chat" && selection.id === thread.id}
+                          prompt={selection.id === thread.id ? prompt : undefined}
+                        />
+                      </View>
+                    ))}
+                  </>
+                ) : (
+                  <>
+                    {visited
+                      .filter((thread) => thread.id !== "local")
+                      .map((thread) => (
                         <View
                           key={thread.id}
-                          style={{ display: selection.id === thread.id ? "flex" : "none", flex: 1 }}
+                          style={{
+                            display: selection.id === thread.id ? "flex" : "none",
+                            flex: 1,
+                          }}
                         >
                           <ChatScreen
                             thread={thread}
@@ -439,103 +481,79 @@ function WorkspaceShell({
                           />
                         </View>
                       ))}
-                    </>
-                  ) : (
-                    <>
-                      {visited
-                        .filter((thread) => thread.id !== "local")
-                        .map((thread) => (
-                          <View
-                            key={thread.id}
-                            style={{
-                              display: selection.id === thread.id ? "flex" : "none",
-                              flex: 1,
-                            }}
-                          >
-                            <ChatScreen
-                              thread={thread}
-                              active={section === "chat" && selection.id === thread.id}
-                              prompt={selection.id === thread.id ? prompt : undefined}
-                            />
-                          </View>
-                        ))}
-                      <View
-                        style={{
-                          display: selection.id === "local" ? "flex" : "none",
-                          flex: 1,
-                        }}
-                      >
-                        <ChatScreen
-                          prompt={selection.id === "local" ? prompt : undefined}
-                          active={section === "chat" && selection.id === "local"}
-                        />
-                      </View>
-                    </>
-                  )}
-                </View>
+                    <View
+                      style={{
+                        display: selection.id === "local" ? "flex" : "none",
+                        flex: 1,
+                      }}
+                    >
+                      <ChatScreen
+                        prompt={selection.id === "local" ? prompt : undefined}
+                        active={section === "chat" && selection.id === "local"}
+                      />
+                    </View>
+                  </>
+                )}
               </View>
+            </View>
+            <View
+              style={{
+                display: desktop ? "none" : "flex",
+                paddingHorizontal: 22,
+                paddingTop: 6,
+                paddingBottom: desktop ? 22 : 7,
+                alignItems: "center",
+              }}
+            >
               <View
+                accessibilityRole="tablist"
                 style={{
-                  display: desktop ? "none" : "flex",
-                  paddingHorizontal: 22,
-                  paddingTop: 6,
-                  paddingBottom: desktop ? 22 : 7,
-                  alignItems: "center",
+                  flexDirection: "row",
+                  width: "100%",
+                  maxWidth: 370,
+                  padding: 5,
+                  borderRadius: radius.pill,
+                  ...glassSurface("bar"),
                 }}
               >
-                <View
-                  accessibilityRole="tablist"
-                  style={{
-                    flexDirection: "row",
-                    width: "100%",
-                    maxWidth: 370,
-                    padding: 5,
-                    backgroundColor: colors.surface,
-                    borderRadius: radius.pill,
-                    boxShadow: shadow.raised,
-                    borderWidth: 1,
-                    borderColor: colors.line,
-                  }}
-                >
-                  {nav.map((item) => {
-                    const active = section === item.id || (item.id === "apps" && utility);
-                    return (
-                      <Pressable
-                        key={item.id}
-                        accessibilityRole="tab"
-                        accessibilityLabel={item.label}
-                        accessibilityState={{ selected: active }}
-                        onPress={() => navigate(item.id)}
+                {nav.map((item) => {
+                  const active = section === item.id || (item.id === "apps" && utility);
+                  return (
+                    <Pressable
+                      key={item.id}
+                      accessibilityRole="tab"
+                      accessibilityLabel={item.label}
+                      accessibilityState={{ selected: active }}
+                      onPress={() => navigate(item.id)}
+                      style={{
+                        flex: 1,
+                        height: 54,
+                        gap: 3,
+                        alignItems: "center",
+                        justifyContent: "center",
+                        backgroundColor: active ? colors.primarySoft : "transparent",
+                        borderRadius: radius.pill,
+                      }}
+                    >
+                      <item.icon
+                        size={21}
+                        strokeWidth={active ? 2 : 1.8}
+                        color={active ? colors.primary : colors.muted}
+                      />
+                      <Text
+                        numberOfLines={1}
                         style={{
-                          flex: 1,
-                          height: 54,
-                          gap: 3,
-                          alignItems: "center",
-                          justifyContent: "center",
-                          backgroundColor: active ? colors.primarySoft : "transparent",
-                          borderRadius: radius.pill,
+                          fontSize: fontSize.micro,
+                          lineHeight: 12,
+                          fontWeight: active ? "700" : "500",
+                          color: active ? colors.text : colors.muted,
                         }}
                       >
-                        <item.icon
-                          size={21}
-                          strokeWidth={active ? 2 : 1.8}
-                          color={active ? colors.primary : colors.muted}
-                        />
-                        <Text
-                          numberOfLines={1}
-                          style={{
-                            fontSize: fontSize.micro,
-                            lineHeight: 12,
-                            fontWeight: active ? "700" : "500",
-                            color: active ? colors.text : colors.muted,
-                          }}
-                        >
-                          {item.label}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
+                        {item.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
               </View>
             </View>
           </View>
@@ -587,9 +605,7 @@ function WorkspaceShell({
           onRequestClose={() => setThreadsOpen(false)}
         >
           <View style={{ flex: 1, flexDirection: "row", backgroundColor: colors.scrim }}>
-            <SafeAreaView
-              style={{ width: 310, maxWidth: "86%", backgroundColor: colors.surfaceMuted }}
-            >
+            <SafeAreaView style={{ width: 310, maxWidth: "86%", ...glassSurface("sheet") }}>
               <Sidebar compact onNavigate={() => setThreadsOpen(false)} />
             </SafeAreaView>
             <Pressable

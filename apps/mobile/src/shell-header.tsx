@@ -6,7 +6,7 @@ import { useAgentWorkspace } from "./agent-workspace";
 import { ChannelChatBanner } from "./chat";
 import { ComputerEntry } from "./computer";
 import { useMuseThread } from "./threads";
-import { colors, fontSize, IconButton, layout, Mascot, s } from "./ui";
+import { colors, fontSize, glassSurface, IconButton, layout, Mascot, radius, s } from "./ui";
 import { useWorkspace } from "./workspace";
 
 const titles: Partial<Record<Section, { title: string; subtitle: string }>> = {
@@ -68,9 +68,16 @@ export function ShellHeader({ onMenu }: { onMenu: () => void }) {
         flexDirection: "row",
         alignItems: "center",
         gap: 12,
-        paddingHorizontal: desktop ? 20 : 12,
-        borderBottomWidth: 1,
-        borderBottomColor: colors.line,
+        ...(desktop
+          ? { paddingHorizontal: 20, borderBottomWidth: 1, borderBottomColor: colors.line }
+          : {
+              paddingHorizontal: 8,
+              marginHorizontal: layout.gap,
+              marginTop: 10,
+              marginBottom: 4,
+              borderRadius: radius.xl,
+              ...glassSurface("bar"),
+            }),
       }}
     >
       {!desktop && <IconButton icon={Menu} label="Open workspace navigation" onPress={onMenu} />}
