@@ -63,15 +63,11 @@ function SidebarRow({
         paddingVertical: dense ? 7 : 12,
         paddingHorizontal: 12,
         borderRadius: dense ? 8 : 12,
-        backgroundColor: active
-          ? colors.primarySoft
-          : hovered || pressed
-            ? colors.surfaceHover
-            : "transparent",
+        backgroundColor: active || hovered || pressed ? colors.surfaceHover : "transparent",
         ...(active ? { boxShadow: shadow.active } : null),
       })}
     >
-      <Icon size={dense ? 16 : 17} color={active ? colors.primary : colors.muted} />
+      <Icon size={dense ? 16 : 17} color={active ? colors.primaryText : colors.muted} />
       <Text
         style={[
           s.text,
