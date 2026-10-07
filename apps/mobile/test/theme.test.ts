@@ -2,27 +2,87 @@ import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
-import { colors, textPairs } from "../src/theme.ts";
+import { colors, glass, glassTextRoles, haze, textPairs } from "../src/theme.ts";
 
-function luminance(hex: string): number {
-  const n = Number.parseInt(hex.slice(1), 16);
-  const channel = (shift: number) => {
-    const c = ((n >> shift) & 255) / 255;
+type Rgb = [number, number, number];
+
+/** A hex or rgb()/rgba() colour as red, green, blue and alpha. */
+function parse(color: string): { rgb: Rgb; alpha: number } {
+  if (color.startsWith("#")) {
+    const n = Number.parseInt(color.slice(1), 16);
+    return { rgb: [(n >> 16) & 255, (n >> 8) & 255, n & 255], alpha: 1 };
+  }
+  const match = color.match(
+    /^rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)\s*(?:,\s*([\d.]+)\s*)?\)$/,
+  );
+  if (!match) throw new Error(`Unreadable colour: ${color}`);
+  return {
+    rgb: [Number(match[1]), Number(match[2]), Number(match[3])],
+    alpha: match[4] === undefined ? 1 : Number(match[4]),
+  };
+}
+/** What `top` looks like laid over an opaque `bottom`. */
+function over(top: string, bottom: Rgb): Rgb {
+  const { rgb, alpha } = parse(top);
+  return [0, 1, 2].map((i) => rgb[i] * alpha + bottom[i] * (1 - alpha)) as Rgb;
+}
+function luminance(rgb: Rgb): number {
+  const channel = (value: number) => {
+    const c = value / 255;
     return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
   };
-  return 0.2126 * channel(16) + 0.7152 * channel(8) + 0.0722 * channel(0);
+  return 0.2126 * channel(rgb[0]) + 0.7152 * channel(rgb[1]) + 0.0722 * channel(rgb[2]);
 }
-function contrast(a: string, b: string): number {
+function contrast(a: Rgb, b: Rgb): number {
   const [lighter, darker] = [luminance(a), luminance(b)].sort((x, y) => y - x);
   return (lighter + 0.05) / (darker + 0.05);
 }
 
+const canvas = parse(colors.canvas).rgb;
+
 test("every text and background pair in the theme stays readable (WCAG AA, 4.5:1)", () => {
   for (const [foreground, background] of textPairs) {
-    const ratio = contrast(colors[foreground], colors[background]);
+    const behind = over(colors[background], canvas);
+    const ratio = contrast(over(colors[foreground], behind), behind);
     assert.ok(
       ratio >= 4.5,
       `${foreground} on ${background} is ${ratio.toFixed(2)}:1 (${colors[foreground]} on ${colors[background]})`,
+    );
+  }
+});
+
+test("text drawn on glass stays readable over the darkest part of the haze (4.5:1)", () => {
+  const darkest = parse(haze.darkest).rgb;
+  for (const fill of ["panel", "bar"] as const) {
+    const surface = over(glass[fill], darkest);
+    for (const role of glassTextRoles) {
+      const ratio = contrast(over(colors[role], surface), surface);
+      assert.ok(
+        ratio >= 4.5,
+        `${role} on glass.${fill} over the darkest haze is ${ratio.toFixed(2)}:1`,
+      );
+    }
+  }
+});
+
+test("no part of the haze is darker than the tone text on glass is checked against", () => {
+  const base = parse(haze.base).rgb;
+  const floor = luminance(parse(haze.darkest).rgb);
+  const stops = haze.css.match(/rgba\([^)]*\)/g) ?? [];
+  assert.ok(stops.length > 0, "the haze has no colour stops");
+  for (const stop of stops) {
+    assert.ok(
+      luminance(over(stop, base)) >= floor,
+      `${stop} over the haze is darker than haze.darkest (${haze.darkest})`,
+    );
+  }
+});
+
+test("the fills used where nothing is blurred are more opaque than the blurred ones", () => {
+  for (const kind of ["panel", "bar", "raised", "sheet"] as const) {
+    assert.ok(
+      parse(glass[`${kind}Solid`]).alpha > parse(glass[kind]).alpha,
+      `glass.${kind}Solid is not more opaque than glass.${kind}`,
     );
   }
 });

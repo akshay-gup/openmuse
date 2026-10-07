@@ -9,6 +9,11 @@
  * The values follow the web app's stylesheet (Poppins, the navy / teal / amber brand colours,
  * hairline cards with a hover lift). Dark mode: add a second object with the same keys as
  * `colors` and choose between them from a context. No component needs to change.
+ *
+ * Panels are glass: a translucent fill over a soft blue-grey haze, with a bright rim on the top and
+ * left edges, a hairline, and a soft drop. The web blurs what is behind a panel; native has no blur
+ * here, so its fills are more opaque. Hairlines and quiet fills are tints of the navy, so they sit
+ * equally well on white, on glass and on the haze.
  */
 
 /**
@@ -32,22 +37,22 @@ export const colors = {
   canvas: "#FFFFFF",
   /** Cards, sheets, inputs and anything raised above the canvas. */
   surface: "#FFFFFF",
-  /** Quiet fills: sidebar, secondary buttons, chips, code. */
-  surfaceMuted: palette.lightGray,
+  /** Quiet fills: secondary buttons, chips, code. A tint of the navy, so it suits any surface. */
+  surfaceMuted: "rgba(3,29,68,0.05)",
   /** Hover and pressed state on quiet fills and rows. */
-  surfaceHover: "#E2E9EE",
+  surfaceHover: "rgba(3,29,68,0.09)",
 
   // Lines
   /** Hairlines and default borders. */
-  line: "#E0E0E0",
+  line: "rgba(3,29,68,0.10)",
   /** Borders that must be seen: inputs, hovered cards. */
-  lineStrong: "#BDBDBD",
+  lineStrong: "rgba(3,29,68,0.22)",
 
   // Text
   /** Body and heading ink: the brand navy. */
   text: palette.navy,
-  /** Secondary text. */
-  muted: "#5D6870",
+  /** Secondary text. Dark enough to stay readable on glass over the darkest haze. */
+  muted: "#56626C",
   /** Icons and decoration only. Too light for text. */
   subtle: "#8B959B",
   /** Text and icons on `primary` and other solid fills. */
@@ -100,6 +105,43 @@ export const colors = {
 } as const;
 
 export type Colors = typeof colors;
+
+const hazeBase = "#E2E8ED";
+/**
+ * The backdrop behind the glass: a soft blue-grey haze, paler at the top left and cooler at the
+ * bottom right. The web draws `css`; native keeps the flat `base`. `darkest` is the deepest tone the
+ * haze reaches, and text on glass is checked against it (test/theme.test.ts).
+ */
+export const haze = {
+  base: hazeBase,
+  darkest: "#B0C2CD",
+  css: `radial-gradient(900px 700px at 0% 0%, rgba(255,255,255,0.85), rgba(255,255,255,0) 70%), radial-gradient(760px 520px at 30% 0%, rgba(203,216,224,0.4), rgba(203,216,224,0) 70%), radial-gradient(1000px 800px at 100% 100%, rgba(142,168,184,0.5), rgba(142,168,184,0) 70%), ${hazeBase}`,
+} as const;
+
+/**
+ * Glass fills. The web lays them over a blur of what is behind (`blur`); native has no blur here,
+ * so its `*Solid` fills are more opaque and keep text readable over whatever shows through.
+ */
+export const glass = {
+  /** A panel: the sidebar, a channel, a thread. */
+  panel: "rgba(255,255,255,0.56)",
+  /** A bar over content: the phone's header and tab bar. */
+  bar: "rgba(255,255,255,0.64)",
+  /** Raised off a panel: the composer. */
+  raised: "rgba(255,255,255,0.88)",
+  /** A sheet over the dimmed page. */
+  sheet: "rgba(255,255,255,0.92)",
+  panelSolid: "rgba(255,255,255,0.9)",
+  barSolid: "rgba(255,255,255,0.92)",
+  raisedSolid: "rgba(255,255,255,0.96)",
+  sheetSolid: "rgba(255,255,255,0.98)",
+  /** The blur behind a panel, and behind things raised off one (web). */
+  blur: "blur(30px) saturate(130%)",
+  blurSoft: "blur(24px) saturate(130%)",
+} as const;
+
+/** Text roles drawn straight onto glass. The test checks each against a panel over the darkest haze. */
+export const glassTextRoles = ["text", "muted", "primaryText", "danger"] as const;
 
 /** Pairs that carry text. test/theme.test.ts checks each against WCAG AA (4.5:1). */
 export const textPairs: readonly (readonly [keyof Colors, keyof Colors])[] = [
@@ -207,7 +249,7 @@ export const type = {
 } as const;
 
 /** Corner radii. Circles use half their size and are not in this scale. */
-export const radius = { sm: 6, md: 10, lg: 12, xl: 20, xxl: 25, pill: 999 } as const;
+export const radius = { sm: 6, md: 10, lg: 12, xl: 20, xxl: 25, panel: 22, pill: 999 } as const;
 
 /** Spacing scale: multiples of 4. */
 export const sp = { xs: 4, sm: 8, md: 12, lg: 16, xl: 20, xxl: 24, xxxl: 32 } as const;
@@ -220,6 +262,12 @@ export const shadow = {
   raised: "0 4px 16px rgba(0,0,0,0.14)",
   /** Menus and floating panels. */
   popover: "0 10px 30px rgba(0,0,0,0.12)",
+  /** A glass panel: a bright rim on its top and left edges, a hairline, and a soft drop. */
+  panel:
+    "inset 0 1px 0 rgba(255,255,255,0.95), inset 1px 0 0 rgba(255,255,255,0.55), 0 0 0 1px rgba(3,29,68,0.07), 0 24px 60px rgba(30,50,70,0.14), 0 2px 8px rgba(30,50,70,0.06)",
+  /** Raised off a panel: the composer and the phone's tab bar. */
+  float:
+    "inset 0 1px 0 rgba(255,255,255,0.95), 0 0 0 1px rgba(3,29,68,0.08), 0 10px 28px rgba(30,50,70,0.12)",
   /** Focus ring drawn around inputs. */
   focus: `0 0 0 3px ${colors.focusRing}`,
 } as const;
@@ -236,5 +284,8 @@ export const fontFamily = {
   monoAndroid: "monospace",
 } as const;
 
-/** Shared chrome sizes, so the sidebar header and the main header always line up. */
-export const layout = { headerHeight: 56 } as const;
+/**
+ * Shared chrome sizes, so the sidebar header and the main header always line up. `gap` is the room
+ * between panels and the margin round them.
+ */
+export const layout = { headerHeight: 56, gap: 12 } as const;
