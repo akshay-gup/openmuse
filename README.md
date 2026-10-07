@@ -9,12 +9,9 @@ Built with CopilotKit React Native for iOS, Android, and web.
 
 [Quick start](#quick-start) · [Demo](#demo) · [Features](#features) · [Architecture](#architecture) · [Docs](docs/README.md) · [Contributing](CONTRIBUTING.md)
 
-[![CI](https://github.com/CopilotKit/OpenMuse/actions/workflows/ci.yml/badge.svg)](https://github.com/CopilotKit/OpenMuse/actions/workflows/ci.yml)
 [![MIT license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 Clone this template and customize it however you want.
-
-**[Building on Hive? Meet with the CopilotKit team →](https://www.copilotkit.ai/openmuse)**
 
 [![Hive 🪁 — Ask it to browse. Watch the 38-second mobile demo.](assets/demos/2026-09-16/mobile.png)](assets/demos/2026-09-16/mobile.mp4)
 
@@ -90,7 +87,7 @@ Details and open questions live in [ROADMAP.md](ROADMAP.md).
 **Requirements:** Node 22 or newer, pnpm 11.19.0, and [OpenCode](https://opencode.ai) running as `opencode serve`: the API checks for it when it starts and stops if it cannot reach it, and the agent runs on the model you name in `MODEL`. The local sample workspace needs no Google account, and a CopilotKit Intelligence project key is optional.
 
 ```sh
-git clone https://github.com/CopilotKit/OpenMuse.git hive
+git clone https://github.com/akshay-gup/openmuse.git hive
 cd hive
 pnpm install --frozen-lockfile
 cp .env.example .env   # then set MODEL=provider/model-id in it
