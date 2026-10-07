@@ -26,7 +26,7 @@ Clone this template and customize it however you want.
 
 </div>
 
-> **Alpha, for self-hosting and building on.** Open-ended reasoning, live Google accounts, and CopilotKit Rich Threads require their own configuration. There are no roles yet: everyone who can sign in has full access ([Who sees what](#who-sees-what)). See [what is verified](docs/VERIFICATION.md) and the [roadmap](ROADMAP.md).
+> **Alpha, for self-hosting and building on.** The agent needs a running `opencode serve` and a model, and live Google accounts and CopilotKit Rich Threads require their own configuration. There are no roles yet: everyone who can sign in has full access ([Who sees what](#who-sees-what)). See [what is verified](docs/VERIFICATION.md) and the [roadmap](ROADMAP.md).
 
 ## Demo
 
