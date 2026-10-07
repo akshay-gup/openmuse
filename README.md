@@ -235,9 +235,11 @@ flowchart TD
   API --> Shim[In-process AG-UI shim]
   Shim -->|mention-only trigger| OpenCode[opencode serve — systemd unit, never spawned by the API]
   OpenCode --> Sessions[Thread → OpenCode session bindings]
+  OpenCode -->|Hive tools, over MCP| API
   API --> Tasks[Durable task worker]
   Tasks --> OpenCode
-  API --> Threads[CopilotKit Intelligence required in every mode]
+  API --> Threads[Thread storage on local disk under DATA_DIR]
+  API -. optional .-> Intelligence[CopilotKit Intelligence for Rich Threads]
   API --> Store[(PGlite or PostgreSQL)]
   Tasks --> Store
   Tasks --> Review[Stored action review]
