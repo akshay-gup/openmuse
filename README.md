@@ -44,7 +44,7 @@ Hive is a channel-based team chat with an agent in the loop. It runs its own ser
 
 Chat threads are plain conversation until you mention `@hive` — then the agent wakes with the full thread history and attached files, works as a durable OpenCode session, and asks before risky actions. Delegated tasks run as unattended OpenCode sessions and report back to the originating thread. The agent can browse public pages through the browser worker, work with files and PDFs, and run durable delegated tasks. Graphical desktops and autonomous checkout remain future work.
 
-What the agent does is the team's, not one person's. Everyone who signs in sees the same channels, threads, tasks, files, memories and Google connection, so a note on a task, a file in a channel, or something the agent was told to remember is there for the next person instead of living in one chat. Only each person's own orchestrator chat is private ([Who sees what](#who-sees-what)), and there are no roles yet ([roadmap](#roadmap)).
+What the agent does is the team's, not one person's. Everyone who signs in sees the same channels, threads, tasks, files, memories and Google connection, so a note on a task, a file in a channel, or something the agent was told to remember is there for the next person instead of living in one chat. Only each person's own orchestrator chat, their private tab for talking to the agent outside any channel, is private ([Who sees what](#who-sees-what)), and there are no roles yet ([roadmap](#roadmap)).
 
 ## Features
 
@@ -263,7 +263,7 @@ flowchart TD
 
 ### OpenBot compatibility
 
-Hive's native client and personal-agent workflows are independent of OpenBot. The disabled OpenBot adapter is pinned and contract-tested against upstream interfaces. Live user/session bridging and routine mapping remain future work. OpenBot's Intelligence runtime is not a raw AG-UI endpoint. [Integration contract](docs/OPENBOT-INTEGRATION.md).
+Hive's native client and agent workflows are independent of OpenBot. The disabled OpenBot adapter is pinned and contract-tested against upstream interfaces. Live user/session bridging and routine mapping remain future work. OpenBot's Intelligence runtime is not a raw AG-UI endpoint. [Integration contract](docs/OPENBOT-INTEGRATION.md).
 
 ## Development
 
