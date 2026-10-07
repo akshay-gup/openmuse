@@ -51,7 +51,7 @@ What the agent does is the team's, not one person's. Everyone who signs in sees 
 | Surface | What runs in this alpha |
 | --- | --- |
 | **Chat** | CopilotKit headless chat with streamed AG-UI events, mailbox search and reading, send/stop in one input pill, a visible follow-up queue, retained drafts, delegated tasks, and inline email, browser, PDF, plan, and finance cards. The agent only runs when mentioned (`@hive` by default); everything else is plain chat, except a pick on one of its choice cards, which answers its own question. |
-| **Agent** | OpenCode, the only agent: one `opencode serve` process, durable thread→session bindings, a single global event stream, and an AG-UI shim in the API so the client is untouched. Permissions default to ask with approve/deny in the thread, plus per-channel/per-thread rules. Hive's own tools (mail, browser, tasks, files, choice cards) are offered to OpenCode over MCP by a bridge in the API, with credentials that last for one run. Optional choice cards (`present_choices`, Jev, off unless `JEV_MODE` is set) stay with the conversation they were asked in, so a team thread's are the team's; see the [Jev walkthrough](docs/demos/jev-generative-ui.md). |
+| **Agent** | OpenCode: one `opencode serve` process, durable thread→session bindings, a single global event stream, and an AG-UI shim in the API that the chat client talks to. Permissions default to ask with approve/deny in the thread, plus per-channel/per-thread rules. Hive's own tools (mail, browser, tasks, files, choice cards) are offered to OpenCode over MCP by a bridge in the API, with credentials that last for one run. Optional choice cards (`present_choices`, Jev, off unless `JEV_MODE` is set) stay with the conversation they were asked in, so a team thread's are the team's; see the [Jev walkthrough](docs/demos/jev-generative-ui.md). |
 | **Activity** | Durable task plans, progress, input requests, pause/resume/cancel/retry, approvals, and saved receipts. SQL leases recover interrupted work. Finished agent work waits **In Review** until a person marks it done or sends it back with notes; the agent never closes a task itself. See [Review and the task brief](#review-and-the-task-brief). |
 | **Files** | Every channel has a **Files** button: what its agent made and what people upload, as a list of recent changes or a folder browser, with previews (images, PDF, video and audio, Markdown, spreadsheets, JSON, code, and web pages that run in a sandbox). The agent can share any file in the chat as a card (`send_file`) and ask a person for files with an upload button and modal (`request_upload`). See [Channel files](#channel-files). |
 | **Ideas** | Suggestions with source evidence; edit, accept, or dismiss. Sent replies and completed matching work are excluded. |
@@ -66,11 +66,11 @@ The [feature inventory](docs/FEATURES.md) describes implemented capabilities and
 
 ## Roadmap
 
-Where this fork is headed — self-contained, agent-native team chat:
+Where Hive is headed: a self-contained, agent-native team chat.
 
 **Shipped**
-- Single-process VM deployment: the API serves the web UI same-origin, threads/channels persist on local disk (`DATA_DIR`), Docker computer removed. See [docs/vm-deploy.md](docs/vm-deploy.md).
-- OpenCode as the agent: one `opencode serve` (systemd unit on the VM; the API connects, never spawns), durable thread→session bindings, a single global event stream, and an AG-UI shim so the client is untouched. It is the only agent: the in-process model agent, the scripted sample agent and the external AG-UI agent are gone, and the API does not start without OpenCode.
+- Single-process VM deployment: the API serves the web UI same-origin, threads/channels persist on local disk (`DATA_DIR`). See [docs/vm-deploy.md](docs/vm-deploy.md).
+- OpenCode as the agent: one `opencode serve` (systemd unit on the VM; the API connects, never spawns), durable thread→session bindings, a single global event stream, and an AG-UI shim in the API. The API does not start without OpenCode.
 - Permissions default to ask with approve/deny in the thread, plus per-channel/per-thread rules.
 - Delegated tasks run as OpenCode sessions in auto-mode; background permission requests surface in the originating thread.
 - Mention-only chat trigger: the agent runs only when the latest message contains `@hive` (env `AGENT_MENTION`); on trigger it receives the full conversation transcript plus attached files.
@@ -123,7 +123,7 @@ For iOS or Android, use `pnpm --dir apps/mobile ios` or `pnpm --dir apps/mobile 
 
 ## Deployment
 
-This branch deploys as one self-contained process on a VM: the API serves the Expo web UI same-origin, threads and channels persist on local disk under `DATA_DIR`, and `opencode serve` runs as a systemd unit alongside it. Follow **[docs/vm-deploy.md](docs/vm-deploy.md)** — build/run, environment variables, a minimal reverse-proxy config, and the channel storage layout.
+Hive deploys as one self-contained process on a VM: the API serves the Expo web UI same-origin, threads and channels persist on local disk under `DATA_DIR`, and `opencode serve` runs as a systemd unit alongside it. Follow **[docs/vm-deploy.md](docs/vm-deploy.md)** — build/run, environment variables, a minimal reverse-proxy config, and the channel storage layout.
 
 `render.yaml` (three services: API, web, private browser) is left over from upstream and is no longer the direction. The API still answers `/api/health` for any platform's health check.
 
@@ -155,7 +155,7 @@ Copy the commented settings in [.env.example](.env.example) into your private `.
 5. Configure a Google OAuth web client with Gmail and Calendar APIs enabled. Set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`; register `${PUBLIC_API_URL}/api/google/callback` as its redirect URI. This client is also the only gate on who can join: Hive has no allow-list of its own, so whoever its consent screen lets through becomes a member with full access. Keep it limited to your team (for example, list them as test users).
 6. Open **Apps → Gmail** (or **Google Calendar**), connect read access, and grant write access when needed. Every send or calendar change still requires its own stored review. Changing/disconnecting the account invalidates pending connection-bound work.
 
-OpenCode is the only agent. `WORKSPACE_MODE=sample` (the default) keeps the workspace's mail, calendar and files local and fictional, on loopback, but chat and tasks still need OpenCode. A deployment that still sets `AGENT_BACKEND=opencode` keeps working; any other value stops the API with an error saying so.
+`WORKSPACE_MODE=sample` (the default) keeps the workspace's mail, calendar and files local and fictional, on loopback, but chat and tasks still need OpenCode.
 
 Google credentials are encrypted at rest. File URLs and browser consoles use short-lived signatures. Everyone who can sign in is a member of one team that shares the workspace's Google connection (see [Who sees what](#who-sees-what)); this is not a multi-tenant system with separate accounts per customer. Use HTTPS and restricted network access for a remote host. Keep the default local-data mode on loopback.
 
