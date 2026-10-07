@@ -71,10 +71,10 @@ const glassShadow: Record<GlassKind, string> = {
   sheet: shadow.popover,
 };
 /**
- * The fill, blur and shadow of a glass surface. On the web the fill is translucent and the surface
- * blurs what is behind it. Native has no blur here, so it gets a more opaque fill and keeps the
- * shadow. Blur a panel or a bar, never something inside one: a blur inside a blur sees only its
- * parent, and costs a layer.
+ * The fill and shadow of a glass surface. On the web the fill is translucent, and a panel or a
+ * sheet also blurs what is behind it. Native has no blur here, so it gets a more opaque fill and
+ * keeps the shadow. Bars and the composer sit on a panel or the haze, so a blur would only cost
+ * them a layer.
  */
 export function glassSurface(kind: GlassKind): ViewStyle {
   return {
@@ -82,10 +82,8 @@ export function glassSurface(kind: GlassKind): ViewStyle {
     boxShadow: glassShadow[kind],
     // CSS that React Native's types do not list; react-native-web passes it through (and adds the
     // -webkit- prefix for Safari).
-    ...(onWeb
-      ? ({
-          backdropFilter: kind === "raised" ? glass.blurSoft : glass.blur,
-        } as unknown as ViewStyle)
+    ...(onWeb && (kind === "panel" || kind === "sheet")
+      ? ({ backdropFilter: glass.blur } as unknown as ViewStyle)
       : null),
   };
 }

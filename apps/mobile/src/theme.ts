@@ -135,9 +135,8 @@ export const glass = {
   barSolid: "rgba(255,255,255,0.92)",
   raisedSolid: "rgba(255,255,255,0.96)",
   sheetSolid: "rgba(255,255,255,0.98)",
-  /** The blur behind a panel, and behind things raised off one (web). */
+  /** The blur behind a panel or a sheet (web). */
   blur: "blur(30px) saturate(130%)",
-  blurSoft: "blur(24px) saturate(130%)",
 } as const;
 
 /** Text roles drawn straight onto glass. The test checks each against a panel over the darkest haze. */
