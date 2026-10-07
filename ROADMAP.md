@@ -1,7 +1,8 @@
 # Hive roadmap (`collab` branch)
 
 Direction: a self-contained, agent-native team chat. One box, one process serving
-API + web UI, OpenCode as the agent backend, threads as durable agent sessions.
+API + web UI, OpenCode as the agent backend, threads as durable agent sessions, and
+one workspace shared by the team, so what the agent is given once is there for everyone.
 
 ## Shipped
 
@@ -37,8 +38,8 @@ API + web UI, OpenCode as the agent backend, threads as durable agent sessions.
   auto-mode (default-ask would stall unattended runs); `TASK_COMPLETE:` /
   `TASK_BLOCKED:` markers parsed from final text; background permission requests
   surface in the originating thread.
-- **Review before done** — agent work (the OpenCode `TASK_COMPLETE:` marker and
-  the model backend's `finish_task`) goes to an `in_review` state; only a person
+- **Review before done** — agent work (the `TASK_COMPLETE:` marker or the
+  `finish_task` tool) goes to an `in_review` state; only a person
   marks it done (`POST /tasks/:id/accept`) or sends it back with a note. The
   agent's `update_task` cannot set `succeeded`.
 - **Task notes and files** — append-only notes and attached files (PDF, images,
