@@ -69,6 +69,7 @@ import {
   Field,
   financeArt,
   fontSize,
+  HaloDot,
   LinkRow,
   Mascot,
   radius,
@@ -1265,16 +1266,7 @@ export function GoalsScreen() {
       <View style={{ gap: 12 }}>
         <View style={[s.between, { marginBottom: 4 }]}>
           <View style={[s.row, { gap: 10 }]}>
-            <View
-              style={{
-                width: 16,
-                height: 16,
-                borderRadius: 8,
-                borderWidth: 5,
-                borderColor: colors.successBg,
-                backgroundColor: colors.success,
-              }}
-            />
+            <HaloDot color={colors.success} halo={colors.successBg} />
             <Text style={s.heading}>Tracking</Text>
           </View>
           <Button small icon={Plus} onPress={() => setAdding("Tracking")}>
@@ -1348,16 +1340,7 @@ export function GoalsScreen() {
       <View style={{ height: 1, backgroundColor: colors.line }} />
       <View style={{ gap: 12 }}>
         <View style={[s.row, { gap: 10, marginBottom: 4 }]}>
-          <View
-            style={{
-              width: 16,
-              height: 16,
-              borderRadius: 8,
-              borderWidth: 5,
-              borderColor: colors.primarySoftStrong,
-              backgroundColor: colors.primary,
-            }}
-          />
+          <HaloDot color={colors.primary} halo={colors.primarySoftStrong} />
           <Text style={s.heading}>Goals</Text>
         </View>
         {data?.goals.map((item) => {

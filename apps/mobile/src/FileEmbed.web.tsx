@@ -16,7 +16,7 @@ export function HtmlFrame({ url, height }: { url: string; height: number }) {
         width: "100%",
         border: 0,
         borderRadius: radius.lg,
-        background: colors.surface,
+        background: colors.paper,
       }}
     />
   );

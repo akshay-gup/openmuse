@@ -140,11 +140,7 @@ export function TaskBoardCard({
         style={({ pressed, hovered }: WebPressState) => ({
           padding: 14,
           gap: 10,
-          backgroundColor: pressed
-            ? colors.surfaceMuted
-            : hovered
-              ? colors.surfaceMuted
-              : colors.surface,
+          backgroundColor: pressed || hovered ? colors.surfaceMuted : "transparent",
         })}
       >
         <View style={[s.row, { gap: 8 }]}>

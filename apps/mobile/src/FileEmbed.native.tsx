@@ -15,7 +15,7 @@ export function HtmlFrame({ url, height }: { url: string; height: number }) {
       originWhitelist={["http://*", "https://*"]}
       setSupportMultipleWindows={false}
       allowFileAccess={false}
-      style={{ height, borderRadius: radius.lg, backgroundColor: colors.surface }}
+      style={{ height, borderRadius: radius.lg, backgroundColor: colors.paper }}
     />
   );
 }

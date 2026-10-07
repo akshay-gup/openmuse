@@ -777,6 +777,23 @@ export function LinkRow({
     </Pressable>
   );
 }
+/** A dot with a soft ring round it: the marker in front of a status heading. */
+export function HaloDot({ color, halo }: { color: string; halo: string }) {
+  return (
+    <View
+      style={{
+        width: 16,
+        height: 16,
+        borderRadius: 8,
+        backgroundColor: halo,
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: color }} />
+    </View>
+  );
+}
 /** Hive's original capybara, shared by every assistant surface. */
 export function Mascot({
   size = 42,

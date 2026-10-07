@@ -9,7 +9,7 @@ export default function BrowserConsole({ url }: { url: string }) {
         width: "100%",
         border: 0,
         borderRadius: radius.lg,
-        background: colors.surface,
+        background: colors.paper,
       }}
     />
   );
