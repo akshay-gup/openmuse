@@ -133,7 +133,7 @@ Key variables for the VM (see the deploy doc for the full table):
 | `OPENCODE_SERVER_PASSWORD` | Basic-auth password for `opencode serve`, if it requires one |
 | `MODEL` | Single model for all sessions, e.g. `openai/gpt-5`, plus the matching provider key |
 | `AGENT_MENTION` | Mention token that summons the agent in chat (default `@hive`) |
-| `DATA_DIR` | Local storage root (default `.hive`); database, files, and `channels/<id>/threads/*.json` |
+| `DATA_DIR` | Local storage root (default `.hive`): the database, task files, and the channel workspaces under `owners/shared/channels/<id>/` |
 | `WEB_DIR` | Overrides the served web UI dir; unset/absent = headless API for native clients |
 | `CPK_INTELLIGENCE_API_KEY` | Optional: enables hosted CopilotKit Rich Threads; unset = fully local thread storage |
 | `WORKSPACE_MODE` | `sample` (default): fictional local data and a keyless local session, loopback only. `live`: real Google data, and people sign in with Google |
@@ -180,7 +180,7 @@ Or use `docker compose --env-file .env -f infra/compose.yaml up --build -d`. The
 
 ## Channel files
 
-A channel's **workspace** is the folder its agent works in (`DATA_DIR/owners/<owner>/channels/<channel>/`, the OpenCode session's working directory), so what the agent makes ends up there, and a shared channel has one workspace for everyone. Each person's orchestrator has a private one. The **Files** button in a channel's header (and in a thread's banner) opens it:
+A channel's **workspace** is the folder its agent works in (`DATA_DIR/owners/shared/channels/<channel>/`, the OpenCode session's working directory), so what the agent makes ends up there, and a channel has one workspace for everyone. Each person's orchestrator has a private one, under their own folder in `owners/`. The **Files** button in a channel's header (and in a thread's banner) opens it:
 
 - *Recent* lists the latest changes anywhere in the workspace, which answers "what did the agent just make"; *Browse* walks the folders. Opening a file shows a preview that fits it, with **Open**, **Download** and **Copy path** (the path is how to point the agent at the file). **Upload** adds files to the folder you are in, or to `uploads/` from the recent list.
 - Hive's own folders (`threads/` and the staged `attachments/`), hidden files (anything starting with a dot) and `node_modules` are not listed or served. Links inside the workspace are never followed, so a link the agent leaves pointing elsewhere (another channel, `/etc`, the thread bindings) shows nothing and can be neither read nor written through.
@@ -197,7 +197,7 @@ The agent reads what is uploaded from `uploads/` with its own file tools.
 
 ## Persistence and operation
 
-Channel workspace directories and thread bindings live on the API server's local disk under `DATA_DIR` (`channels/<channelId>/threads/<threadId>.json`), alongside the database. The files in a workspace are the agent's working files and people's uploads; back them up with the rest of `DATA_DIR`.
+Channel workspace directories and thread bindings live on the API server's local disk under `DATA_DIR`, alongside the database: `owners/shared/channels/<channelId>/` for a team channel, with each thread's binding at `threads/<threadId>.json`, and `owners/<person>/channels/orchestrator/` for a person's orchestrator. The files in a workspace are the agent's working files and people's uploads; back them up with the rest of `DATA_DIR`.
 
 ### Who sees what
 
