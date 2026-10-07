@@ -87,7 +87,7 @@ Details and open questions live in [ROADMAP.md](ROADMAP.md).
 
 ## Quick start
 
-**Requirements:** Node 24 LTS, pnpm 11.19.0, and [OpenCode](https://opencode.ai) running as `opencode serve`: the API checks for it when it starts and stops if it cannot reach it, and the agent runs on the model you name in `MODEL`. The local sample workspace needs no Google account, and a CopilotKit Intelligence project key is optional.
+**Requirements:** Node 22 or newer, pnpm 11.19.0, and [OpenCode](https://opencode.ai) running as `opencode serve`: the API checks for it when it starts and stops if it cannot reach it, and the agent runs on the model you name in `MODEL`. The local sample workspace needs no Google account, and a CopilotKit Intelligence project key is optional.
 
 ```sh
 git clone https://github.com/CopilotKit/OpenMuse.git hive
