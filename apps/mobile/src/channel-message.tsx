@@ -10,6 +10,7 @@ import {
   Mascot,
   radius,
   s,
+  shadow,
   useDense,
   type WebPressState,
 } from "./ui";
@@ -132,11 +133,8 @@ export function ChannelMessage({
         paddingHorizontal: 12,
         paddingVertical: grouped ? 1 : 6,
         borderRadius: radius.lg,
-        backgroundColor: selected
-          ? colors.primarySoft
-          : hovered
-            ? colors.surfaceMuted
-            : "transparent",
+        backgroundColor: selected ? colors.surface : hovered ? colors.surfaceMuted : "transparent",
+        ...(selected ? { boxShadow: shadow.lens } : null),
       }}
     >
       <View style={{ flexDirection: "row", gap: 10 }}>

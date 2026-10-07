@@ -1,9 +1,9 @@
 import { useRef, useState } from "react";
 import { PANEL_STEP, type PanelResizerProps } from "./panel-width";
-import { colors } from "./ui";
+import { colors, layout } from "./ui";
 
 /**
- * The thread panel's left edge, as a handle to drag. A pointer moves it, the arrow keys move it by a
+ * The gap in front of the thread panel, as a handle to drag. A pointer moves it, the arrow keys move it by a
  * step (Home and End go to the smallest and largest), and a double click puts it back.
  */
 export default function PanelResizer({
@@ -21,6 +21,7 @@ export default function PanelResizer({
   const within = (value: number) => Math.min(max, Math.max(min, Math.round(value)));
   const lit = hovered || focused || dragging;
   const line = dragging ? colors.primary : colors.lineStrong;
+  const mid = layout.gap / 2;
 
   function finish() {
     const started = drag.current;
@@ -82,18 +83,18 @@ export default function PanelResizer({
       }}
       style={{
         position: "absolute",
-        left: -6,
+        left: -layout.gap,
         top: 0,
         bottom: 0,
-        width: 12,
+        width: layout.gap,
         height: "auto",
         margin: 0,
         padding: 0,
         border: 0,
         zIndex: 10,
-        // The line shows while the edge is hovered, focused or dragged; the 12px around it is the grip.
+        // The line shows while the gap is hovered, focused or dragged; the whole gap is the grip.
         background: lit
-          ? `linear-gradient(to right, transparent 4.5px, ${line} 4.5px, ${line} 7.5px, transparent 7.5px)`
+          ? `linear-gradient(to right, transparent ${mid - 1.5}px, ${line} ${mid - 1.5}px, ${line} ${mid + 1.5}px, transparent ${mid + 1.5}px)`
           : "transparent",
         cursor: "col-resize",
         touchAction: "none",

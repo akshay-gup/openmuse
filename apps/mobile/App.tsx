@@ -363,6 +363,9 @@ function WorkspaceShell({
   const { width } = useWindowDimensions();
   const desktop = width >= 900;
   const channelChat = section === "chat" && selection.id.startsWith("channel:");
+  // On a wide window a channel draws its own panels, with the header inside the first.
+  const ownPanels = desktop && channelChat;
+  const channelHeader = desktop ? <ShellHeader onMenu={() => setThreadsOpen(true)} /> : undefined;
   const Screen =
     section === "mail"
       ? MailScreen
@@ -393,8 +396,8 @@ function WorkspaceShell({
           }}
         >
           {desktop && <Sidebar />}
-          <View style={[{ flex: 1, minWidth: 0 }, desktop && panelStyle]}>
-            <ShellHeader onMenu={() => setThreadsOpen(true)} />
+          <View style={[{ flex: 1, minWidth: 0 }, desktop && !ownPanels && panelStyle]}>
+            {!ownPanels && <ShellHeader onMenu={() => setThreadsOpen(true)} />}
             <View style={{ flex: 1, minHeight: 0 }}>
               {section !== "chat" && (
                 <ScrollView
@@ -432,7 +435,7 @@ function WorkspaceShell({
                   alignSelf: "center",
                   paddingHorizontal: channelChat ? 0 : desktop ? 32 : 17,
                   paddingTop: channelChat ? 0 : 8,
-                  paddingBottom: desktop ? 12 : 0,
+                  paddingBottom: desktop && !ownPanels ? 12 : 0,
                 }}
               >
                 {!channelChat && <AgentStatus />}
@@ -458,6 +461,7 @@ function WorkspaceShell({
                           thread={thread}
                           active={section === "chat" && selection.id === thread.id}
                           prompt={selection.id === thread.id ? prompt : undefined}
+                          header={thread.id.startsWith("channel:") ? channelHeader : undefined}
                         />
                       </View>
                     ))}
@@ -478,6 +482,7 @@ function WorkspaceShell({
                             thread={thread}
                             active={section === "chat" && selection.id === thread.id}
                             prompt={selection.id === thread.id ? prompt : undefined}
+                            header={thread.id.startsWith("channel:") ? channelHeader : undefined}
                           />
                         </View>
                       ))}

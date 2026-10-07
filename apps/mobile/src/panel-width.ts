@@ -1,3 +1,5 @@
+import { layout } from "./theme";
+
 /**
  * The thread panel beside a channel on a wide window: how wide it may be, how a person makes it
  * wider or narrower, and how that choice is remembered.
@@ -7,6 +9,8 @@ export const PANEL_DEFAULT = 390;
 export const PANEL_MIN = 340;
 /** The room the channel keeps beside the panel. */
 export const CHANNEL_MIN = 420;
+/** The space between the channel and the panel. */
+export const PANEL_GAP = layout.gap;
 /** How far an arrow key moves the edge. */
 export const PANEL_STEP = 24;
 
@@ -14,7 +18,7 @@ const STORAGE_KEY = "hive.threadPanelWidth";
 
 /** The widest the panel may be: what leaves the channel its room, but never less than the minimum. */
 export function largestPanelWidth(container: number): number {
-  return Math.max(PANEL_MIN, container - CHANNEL_MIN);
+  return Math.max(PANEL_MIN, container - CHANNEL_MIN - PANEL_GAP);
 }
 
 /** The panel's width kept between its smallest size and its largest. */
