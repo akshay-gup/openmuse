@@ -10,7 +10,7 @@ Hive keeps conversation, ongoing work, and user control together in a shared nat
 - Open chats and their drafts remain mounted while navigating. Queued messages are held in the open app, not a server inbox; keep the app open until they are sent. Delegated tasks are durable server work.
 - Reading older messages should not force a scroll to the latest reply. A latest-message control returns to the live conversation.
 - While the agent works in a thread, a quiet line says what it is doing now (“Working · Fetching techcrunch.com”). Afterwards it reads “Worked through 3 steps · 1 didn't work” and opens into the steps, with the reason for any that failed. Tools that have a card of their own (mail, the browser, files, choices) keep it, and work saved as a task has its own card and page.
-- On a wide window a channel thread opens beside the channel. Drag its edge, use the arrow keys, or press the expand button to make it wider, and double-click the edge to put it back. The width is kept on the device. Narrow windows and phones open the thread over the channel.
+- On a wide window a channel thread opens beside the channel, as a panel of its own. Drag the gap between them, use the arrow keys, or press the expand button to make it wider, and double-click the gap to put it back. The width is kept on the device. Narrow windows and phones open the thread over the channel.
 
 ## Transparency and control
 
@@ -21,7 +21,7 @@ Hive keeps conversation, ongoing work, and user control together in a shared nat
 
 ## Visual language
 
-An airy canvas, distinct gray and sky-blue message bubbles, large touch targets, rounded input and navigation pills, and restrained artifact frames keep attention on the work. Email, browser and PDF previews show actual tool results. Hive uses an original warm tan capybara, bundled locally; sky, sand and lilac backgrounds preserve the avatar color preference. See [artwork provenance](../apps/mobile/assets/README.md).
+The look is Graphite: dark glass. Panels are faint white over a near-black backdrop with a soft teal glow, each with a bright rim along its top edge, a hairline and a deep shadow. On a wide window the sidebar, the main area and a channel's thread are separate panels with room between them; on a phone the header and tab bar float over the backdrop. The web blurs what is behind a panel or a sheet; native draws a slightly more opaque fill instead. The row you are on in the sidebar is a teal lens, the composer is a floating pill, and teal marks what is active or primary; amber, green and red appear only for what they mean. In the agent chat the person's messages sit in a teal-tinted bubble and the agent's are plain text. Large touch targets, rounded input and navigation pills, and restrained artifact frames keep attention on the work. Email, browser and PDF previews show actual tool results, and a web page or document shown in a frame keeps a white page. Hive uses an original warm tan capybara, bundled locally; sky, sand and lilac backgrounds preserve the avatar color preference. See [artwork provenance](../apps/mobile/assets/README.md).
 
 ## Boundaries
 

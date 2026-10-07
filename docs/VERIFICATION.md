@@ -4,7 +4,7 @@ What the automated checks cover, how to run them, and what has not been verified
 
 ## Automated checks
 
-- **`pnpm test`** runs 545 tests across the API, task engine, OpenCode integration, tools, integrations, conversation queue, browser address handling, domain, and date handling.
+- **`pnpm test`** runs 548 tests across the API, task engine, OpenCode integration, tools, integrations, conversation queue, browser address handling, domain, and date handling.
 - **`pnpm test:browser`** runs the real Chromium lifecycle test: public page navigation and read, failed profile cleanup, reopening the same session, text truncation, and localStorage and profile persistence after a restart.
 - **The platform exports** build the web, iOS Hermes and Android Hermes bundles. They do not produce signed native binaries.
 - **CI** (`.github/workflows/ci.yml`) runs lint, types, the tests, the server build, the three exports, the Chromium lifecycle test and a browser-container suite, on Node 22.
@@ -39,7 +39,7 @@ A real `opencode serve` was also run without a model, to check the protocol thes
 | Agent personality and memory | Edit, persist, and forget paths are tested through the authenticated API. | One record for the whole team; any member can change it. |
 | Rich Threads | Tests through the real CopilotKit runtime cover authenticated owner scoping, main-thread provisioning/recovery, pagination, rename, archive, rich tool history, provider failures, and server-only key handling; the app also starts and keeps threads on disk without a key. A real CopilotKit Core failure verifies that queued messages pause when the SDK emits an error but resolves its promise. | Intelligence boundary is mocked in tests. Live WebSocket persistence/replay and cross-device acceptance need a project key. |
 | OpenBot | Disabled adapter has protocol and identity contract tests against a pinned public revision, including computer gateway, takeover, refusal, and uncertain outcomes. | No live identity, routine, or computer backend bridge yet. |
-| Native / web UI | The UI's logic is covered by node tests (the follow-up queue, browser address handling, dates and times, file formatting, thread ids and replies, choice-card actions, assistant Markdown, tool results, the agent's steps in a thread, the thread panel's width, theme and fonts), and the web, iOS and Android bundles export. | The UI is not driven by an automated browser test, and no native binary is built or run. Android is not installed on a device or emulator. |
+| Native / web UI | The UI's logic is covered by node tests (the follow-up queue, browser address handling, dates and times, file formatting, thread ids and replies, choice-card actions, assistant Markdown, tool results, the agent's steps in a thread, the thread panel's width, the theme with the contrast of text on glass, and fonts), and the web, iOS and Android bundles export. | The UI is not driven by an automated browser test, and no native binary is built or run. The glass blur is a web feature; native draws slightly more opaque fills, and neither has been seen on a device. Android is not installed on a device or emulator. |
 
 ## Not covered
 

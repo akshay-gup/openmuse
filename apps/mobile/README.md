@@ -20,7 +20,7 @@ pnpm --dir apps/mobile ios
 pnpm --dir apps/mobile android
 ```
 
-The default API is `http://localhost:8787`, or `http://10.0.2.2:8787` on the Android emulator. Set `EXPO_PUBLIC_API_URL` to your reachable server URL for a physical device or deployment. Live mode asks for the server access key; local mode opens the fictional workspace automatically. Tokens stay in memory.
+The default API is `http://localhost:8787`, or `http://10.0.2.2:8787` on the Android emulator. Set `EXPO_PUBLIC_API_URL` to your reachable server URL for a physical device or deployment. Live mode signs in with Google; local mode opens the fictional workspace automatically. The web build keeps the session token in `localStorage`.
 
 PDFs use `react-native-pdf` and `react-native-blob-util` in an Expo **development build**. Expo Go does not include these native modules. The config plugins in `app.json` configure the native projects. Web uses the browser’s real PDF reader, with page/zoom controls and download/print access. PDF form fields save a new server artifact.
 
@@ -38,12 +38,13 @@ The `build:ios` and `build:android` commands validate and export platform JavaSc
 
 ## Design tokens
 
-Every colour, text size, corner radius and shadow lives in `src/theme.ts`. Components ask for a role (`colors.primary`, `fontSize.ui`, `radius.lg`, `shadow.card`), never a value, so applying a style guide means editing that one file. `test/theme.test.ts` fails if a raw colour appears anywhere else, or if a text and background pair in the theme drops below WCAG AA contrast (4.5:1). Dark mode would be a second object with the same keys as `colors`, chosen from a context.
+Every colour, text size, corner radius and shadow lives in `src/theme.ts`. Components ask for a role (`colors.primary`, `fontSize.ui`, `radius.lg`, `shadow.card`), never a value, so applying a style guide means editing that one file. `test/theme.test.ts` fails if a raw colour appears anywhere else, or if a text and background pair in the theme drops below WCAG AA contrast (4.5:1). The app is dark only; a light theme would be a second object with the same keys as `colors`, chosen from a context.
 
 The values follow the web app's stylesheet:
 
-- **Colour.** `palette` holds the brand swatches (navy, blue, teal, amber) and `colors` gives each a role. Navy is the ink and the dark surface, and teal is `primary` for fills and icons. Links and other teal text use `primaryText`, a darker teal that stays AA on the tinted surfaces. Amber marks creation: `CreateTile` is the dashed "create something new" outline. A selected card or pill has a teal-to-green gradient border on web (`selectedCard`) and a plain teal border on native.
+- **Colour.** `palette` holds the brand swatches (navy, blue, teal, amber) for art, and `colors` gives the app its roles in Graphite: a near-black `canvas`, faint white surfaces and hairlines, light ink, and a bright teal `primary` with dark text on it (`onPrimary`). Links and other teal text use `primaryText`. A web page or document shown in a frame sits on `paper`, since those assume white. Amber marks creation: `CreateTile` is the dashed "create something new" outline. A selected card or pill has a teal-to-green gradient border on web (`selectedCard`) and a plain teal border on native.
 - **Shape.** Cards use 12px corners and hairline borders; task cards and file cards also lift on hover. Larger cards (files, the finance summary, the Today banner) use `radius.xxl`, 25px.
+- **Glass.** Panels are faint white (`glass`) over a near-black backdrop with a soft teal glow (`haze`). On a wide window the sidebar, the main area and a channel's thread are separate panels with `layout.gap` between them (`panelStyle`); on a phone the header and tab bar float. The web blurs what is behind a panel or a sheet with `backdropFilter`, which react-native-web passes through. Native has no blur here, so it takes the slightly more opaque `*Solid` fills. Hairlines and quiet fills (`line`, `surfaceMuted`) are tints of white, so they suit the backdrop, a panel and a card alike. The theme test checks text on every glass fill over the lightest part of the backdrop.
 - **Poppins.** The web build uses Poppins, self-hosted in `public/fonts` with its SIL Open Font License (four weights, Latin and Latin-extended). `src/fonts.ts` registers it and makes it the font of every `Text`. react-native-web does not inherit fonts, so the rule matches the `dir="auto"` elements it renders; code opts out with `{...monoProps}`. iOS and Android keep the system font: Poppins there needs one font family per weight loaded with `expo-font`, which is not wired up yet.
 
 ## Behavior
