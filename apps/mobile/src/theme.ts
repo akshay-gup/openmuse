@@ -109,13 +109,13 @@ export type Colors = typeof colors;
 const hazeBase = "#E2E8ED";
 /**
  * The backdrop behind the glass: a soft blue-grey haze, paler at the top left and cooler at the
- * bottom right. The web draws `css`; native keeps the flat `base`. `darkest` is the deepest tone the
+ * bottom right, scaled to the screen. The web draws `css`; native keeps the flat `base`. `darkest` is the deepest tone the
  * haze reaches, and text on glass is checked against it (test/theme.test.ts).
  */
 export const haze = {
   base: hazeBase,
   darkest: "#B0C2CD",
-  css: `radial-gradient(900px 700px at 0% 0%, rgba(255,255,255,0.85), rgba(255,255,255,0) 70%), radial-gradient(760px 520px at 30% 0%, rgba(203,216,224,0.4), rgba(203,216,224,0) 70%), radial-gradient(1000px 800px at 100% 100%, rgba(142,168,184,0.5), rgba(142,168,184,0) 70%), ${hazeBase}`,
+  css: `radial-gradient(65% 70% at 0% 0%, rgba(255,255,255,0.85), rgba(255,255,255,0) 70%), radial-gradient(55% 50% at 30% 0%, rgba(203,216,224,0.4), rgba(203,216,224,0) 70%), radial-gradient(70% 85% at 100% 100%, rgba(142,168,184,0.5), rgba(142,168,184,0) 70%), ${hazeBase}`,
 } as const;
 
 /**

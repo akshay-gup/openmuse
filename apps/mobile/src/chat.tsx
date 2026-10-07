@@ -75,6 +75,7 @@ import { FileThreadCard, TaskThreadCard } from "./thread-artifacts";
 import { countThreadReplies } from "./thread-replies";
 import { resolveThreadId, type Selection, useMuseThread } from "./threads";
 import {
+  Backdrop,
   Button,
   Card,
   CheckRow,
@@ -83,6 +84,7 @@ import {
   ErrorNotice,
   fontSize,
   glassSurface,
+  haze,
   IconButton,
   layout,
   panelStyle,
@@ -1368,7 +1370,8 @@ export function ChatScreen({
           </View>
         ) : (
           <Modal visible={panelOpen && active} animationType="slide" onRequestClose={closeReplies}>
-            <SafeAreaView style={{ flex: 1, padding: 18, backgroundColor: colors.canvas }}>
+            <SafeAreaView style={{ flex: 1, padding: 18, backgroundColor: haze.base }}>
+              <Backdrop />
               {renderReplyPanel(false)}
             </SafeAreaView>
           </Modal>
