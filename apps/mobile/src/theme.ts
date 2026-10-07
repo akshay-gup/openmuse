@@ -265,6 +265,8 @@ export const shadow = {
   /** A glass panel: a bright rim on its top and left edges, a hairline, and a soft drop. */
   panel:
     "inset 0 1px 0 rgba(255,255,255,0.95), inset 1px 0 0 rgba(255,255,255,0.55), 0 0 0 1px rgba(3,29,68,0.07), 0 24px 60px rgba(30,50,70,0.14), 0 2px 8px rgba(30,50,70,0.06)",
+  /** The selected row in a list on glass: a white lens with a hairline. */
+  lens: "0 0 0 1px rgba(3,29,68,0.07), 0 3px 10px rgba(3,29,68,0.08)",
   /** Raised off a panel: the composer and the phone's tab bar. */
   float:
     "inset 0 1px 0 rgba(255,255,255,0.95), 0 0 0 1px rgba(3,29,68,0.08), 0 10px 28px rgba(30,50,70,0.12)",

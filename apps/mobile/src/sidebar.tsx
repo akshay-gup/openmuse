@@ -28,8 +28,10 @@ import {
   IconButton,
   layout,
   Mascot,
+  panelStyle,
   radius,
   s,
+  shadow,
   type WebPressState,
 } from "./ui";
 import { useWorkspace } from "./workspace";
@@ -62,10 +64,11 @@ function SidebarRow({
         paddingHorizontal: 12,
         borderRadius: dense ? 8 : 12,
         backgroundColor: active
-          ? colors.selected
+          ? colors.surface
           : hovered || pressed
             ? colors.surfaceHover
             : "transparent",
+        ...(active ? { boxShadow: shadow.lens } : null),
       })}
     >
       <Icon size={dense ? 16 : 17} color={active ? colors.primary : colors.muted} />
@@ -194,15 +197,7 @@ export function Sidebar({
     .sort((a, b) => a.name.localeCompare(b.name));
 
   return (
-    <View
-      style={{
-        width: compact ? "100%" : 260,
-        flex: compact ? 1 : undefined,
-        borderRightWidth: 1,
-        borderRightColor: colors.line,
-        backgroundColor: colors.surfaceMuted,
-      }}
-    >
+    <View style={compact ? { flex: 1, width: "100%" } : [{ width: 260 }, panelStyle]}>
       <View
         style={[
           s.row,
