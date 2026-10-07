@@ -12,6 +12,8 @@ import {
   ArrowUp,
   FileText,
   FolderOpen,
+  Maximize2,
+  Minimize2,
   Plus,
   RotateCcw,
   Square,
@@ -49,6 +51,17 @@ import { confirmedJevSelection, displayJevUserMessage, latestJevPanelId } from "
 import { JevInteractionContext, JevToolCard } from "./jev-tool-card";
 import { MailToolCard } from "./mail-tool-card";
 import { PendingApprovals } from "./opencode-permissions";
+import PanelResizer from "./PanelResizer";
+import {
+  clampPanelWidth,
+  expandedPanelWidth,
+  isExpandedPanel,
+  largestPanelWidth,
+  PANEL_DEFAULT,
+  PANEL_MIN,
+  readPanelWidth,
+  writePanelWidth,
+} from "./panel-width";
 import { RunProgress } from "./progress-steps";
 import { progressItems } from "./run-progress";
 import { FileThreadCard, TaskThreadCard } from "./thread-artifacts";
@@ -314,6 +327,26 @@ export function ChatScreen({
     prompt?: { id: number; text: string; messageId?: string };
   } | null>(null);
   const [panelOpen, setPanelOpen] = useState(false);
+  // How wide the thread panel is on a wide window. The width is kept on this device.
+  const [rowWidth, setRowWidth] = useState(0);
+  const [panelPref, setPanelPref] = useState(PANEL_DEFAULT);
+  const widthBeforeExpanding = useRef(PANEL_DEFAULT);
+  useEffect(() => {
+    if (Platform.OS !== "web") return;
+    const kept = readPanelWidth();
+    if (kept) setPanelPref(kept);
+  }, []);
+  const room = rowWidth || width;
+  const panelWidth = clampPanelWidth(panelPref, room);
+  const panelExpanded = isExpandedPanel(panelWidth, room);
+  function keepPanelWidth(next: number) {
+    setPanelPref(clampPanelWidth(next, room));
+    writePanelWidth(clampPanelWidth(next, room));
+  }
+  function togglePanelExpanded() {
+    if (!panelExpanded) widthBeforeExpanding.current = panelWidth;
+    keepPanelWidth(panelExpanded ? widthBeforeExpanding.current : expandedPanelWidth(room));
+  }
   useEffect(() => {
     if (Platform.OS !== "web" || !active || !panelOpen) return;
     const dismiss = (event: KeyboardEvent) => {
@@ -710,7 +743,10 @@ export function ChatScreen({
   const replying = busy || agent.isRunning;
   const agentName = agentWorkspace?.identity.name || "Hive";
   return (
-    <View style={{ flex: 1, flexDirection: "row", minHeight: 0 }}>
+    <View
+      style={{ flex: 1, flexDirection: "row", minHeight: 0 }}
+      onLayout={(event) => setRowWidth(event.nativeEvent.layout.width)}
+    >
       <View
         style={{
           flex: 1,
@@ -1297,25 +1333,33 @@ export function ChatScreen({
           <View
             style={{
               display: panelOpen ? "flex" : "none",
-              width: 390,
+              width: panelWidth,
               borderLeftWidth: 1,
               borderLeftColor: colors.line,
               paddingHorizontal: 20,
               paddingBottom: 16,
             }}
           >
-            {renderReplyPanel()}
+            <PanelResizer
+              width={panelWidth}
+              min={PANEL_MIN}
+              max={largestPanelWidth(room)}
+              onChange={(next) => setPanelPref(clampPanelWidth(next, room))}
+              onCommit={keepPanelWidth}
+              onReset={() => keepPanelWidth(PANEL_DEFAULT)}
+            />
+            {renderReplyPanel(true)}
           </View>
         ) : (
           <Modal visible={panelOpen && active} animationType="slide" onRequestClose={closeReplies}>
             <SafeAreaView style={{ flex: 1, padding: 18, backgroundColor: colors.canvas }}>
-              {renderReplyPanel()}
+              {renderReplyPanel(false)}
             </SafeAreaView>
           </Modal>
         ))}
     </View>
   );
-  function renderReplyPanel() {
+  function renderReplyPanel(wide: boolean) {
     if (!replyPanel) return null;
     const panel = replyPanel;
     const draftKey = panel.binding?.threadId ?? `draft:${panel.parent.id}`;
@@ -1343,7 +1387,16 @@ export function ChatScreen({
             <Text style={s.heading}>{panel.binding ? "Thread" : "Reply"}</Text>
             <Text style={s.small}>Replying to a channel message</Text>
           </View>
-          <IconButton icon={X} label="Close thread" onPress={closeReplies} />
+          <View style={[s.row, { gap: 4 }]}>
+            {wide && (
+              <IconButton
+                icon={panelExpanded ? Minimize2 : Maximize2}
+                label={panelExpanded ? "Make thread narrower" : "Make thread wider"}
+                onPress={togglePanelExpanded}
+              />
+            )}
+            <IconButton icon={X} label="Close thread" onPress={closeReplies} />
+          </View>
         </View>
         <ScrollView
           style={{ maxHeight: 180, flexGrow: 0 }}
