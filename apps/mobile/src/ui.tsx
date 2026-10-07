@@ -31,7 +31,9 @@ import {
   colors,
   fontFamily,
   fontSize,
+  glass,
   gradients,
+  haze,
   mascotTints,
   radius,
   shadow,
@@ -48,7 +50,9 @@ export {
   financeArt,
   fontFamily,
   fontSize,
+  glass,
   gradients,
+  haze,
   layout,
   mascotTints,
   radius,
@@ -56,6 +60,59 @@ export {
   sp,
   type,
 } from "./theme";
+
+const onWeb = Platform.OS === "web";
+
+export type GlassKind = "panel" | "bar" | "raised" | "sheet";
+const glassShadow: Record<GlassKind, string> = {
+  panel: shadow.panel,
+  bar: shadow.float,
+  raised: shadow.float,
+  sheet: shadow.popover,
+};
+/**
+ * The fill, blur and shadow of a glass surface. On the web the fill is translucent and the surface
+ * blurs what is behind it. Native has no blur here, so it gets a more opaque fill and keeps the
+ * shadow. Blur a panel or a bar, never something inside one: a blur inside a blur sees only its
+ * parent, and costs a layer.
+ */
+export function glassSurface(kind: GlassKind): ViewStyle {
+  return {
+    backgroundColor: onWeb ? glass[kind] : glass[`${kind}Solid`],
+    boxShadow: glassShadow[kind],
+    // CSS that React Native's types do not list; react-native-web passes it through (and adds the
+    // -webkit- prefix for Safari).
+    ...(onWeb
+      ? ({
+          backdropFilter: kind === "raised" ? glass.blurSoft : glass.blur,
+        } as unknown as ViewStyle)
+      : null),
+  };
+}
+/** A floating panel: the sidebar, a channel, a thread, the main area. */
+export const panelStyle: ViewStyle = {
+  ...glassSurface("panel"),
+  borderRadius: radius.panel,
+  overflow: "hidden",
+};
+/**
+ * The haze behind the panels. The web draws it as layered gradients; native shows the flat base
+ * colour of the screen it sits on. Put it first inside a screen-sized view.
+ */
+export function Backdrop() {
+  if (!onWeb) return null;
+  return (
+    <View
+      pointerEvents="none"
+      style={[
+        StyleSheet.absoluteFill,
+        { backgroundColor: haze.base },
+        // The `background` shorthand: the gradients and the base colour in one.
+        { background: haze.css } as unknown as ViewStyle,
+      ]}
+    />
+  );
+}
 
 /** The code font for this platform. Courier, the default on web, is thin and hard to read. */
 export const monoFont = Platform.select({
@@ -149,7 +206,7 @@ export const s = StyleSheet.create({
     padding: sp.xl,
   },
   sheet: {
-    backgroundColor: colors.canvas,
+    ...glassSurface("sheet"),
     borderRadius: radius.lg,
     width: "100%",
     maxWidth: 790,
@@ -157,7 +214,6 @@ export const s = StyleSheet.create({
     overflow: "hidden",
     borderWidth: 1,
     borderColor: colors.line,
-    boxShadow: shadow.popover,
   },
 });
 export function Button({
@@ -238,7 +294,7 @@ export function IconButton({
           alignItems: "center",
           justifyContent: "center",
           borderRadius: 22,
-          backgroundColor: pressed || hovered ? colors.surfaceHover : colors.surface,
+          backgroundColor: pressed || hovered ? colors.surfaceHover : "transparent",
         },
       ]}
     >
