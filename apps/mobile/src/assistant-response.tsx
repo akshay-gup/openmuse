@@ -9,6 +9,18 @@ const style: Partial<MarkdownStyles> = {
   text: textStyle,
   paragraph: { marginTop: 0, marginBottom: 6 },
   list: { marginBottom: 6 },
+  // The renderer's default bullets, rules and borders are black or light grey; these follow the theme.
+  listUnorderedItemIcon: { marginLeft: 10, marginRight: 10, lineHeight: 24, color: colors.text },
+  listOrderedItemIcon: { marginLeft: 10, marginRight: 10, lineHeight: 24, color: colors.text },
+  hr: { backgroundColor: colors.line, height: 1, marginTop: 12, marginBottom: 12 },
+  blockquote: {
+    borderLeftWidth: 4,
+    borderLeftColor: colors.lineStrong,
+    paddingHorizontal: 12,
+    marginBottom: 8,
+  },
+  heading1Container: { paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: colors.line },
+  heading2Container: { paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: colors.line },
   headingContainer: { marginTop: 8, marginBottom: 2 },
   heading1: { fontSize: fontSize.title, lineHeight: 24, fontWeight: "700" },
   heading2: { fontSize: fontSize.heading, lineHeight: 23, fontWeight: "700" },
