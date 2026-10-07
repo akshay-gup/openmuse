@@ -186,7 +186,7 @@ export default function App() {
   }, [finishGoogleSignIn]);
   return (
     <SafeAreaProvider>
-      <StatusBar style="dark" />
+      <StatusBar style="light" />
       {token ? (
         <CopilotKitProvider
           runtimeUrl={`${API_URL}/api/copilotkit`}
