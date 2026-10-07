@@ -138,11 +138,11 @@ Key variables for the VM (see the deploy doc for the full table):
 | `JEV_MODE` | Choice cards: `off` (default), `sample` (a scripted scorer; nothing leaves the server) or `live` (needs `TYPESAFE_API_KEY`; sends the latest message and the agent's context to TypeSafe, see [what it sends](docs/demos/jev-generative-ui.md#what-live-mode-sends-to-typesafe)) |
 | `DATA_DIR` | Local storage root (default `.hive`): the database, task files, and the channel workspaces under `owners/shared/channels/<id>/` |
 | `WEB_DIR` | Overrides the served web UI dir; unset/absent = headless API for native clients |
-| `CPK_INTELLIGENCE_API_KEY` | Optional: enables hosted CopilotKit Rich Threads; unset = fully local thread storage |
 | `WORKSPACE_MODE` | `sample` (default): fictional local data and a keyless local session, loopback only. `live`: real Google data, and people sign in with Google |
 | `PUBLIC_API_URL` | The public https URL, used for the Google OAuth callback and CORS |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | The Google OAuth client: how people sign in, and the Gmail/Calendar connection (live mode) |
 | `TOKEN_ENCRYPTION_KEY` | 32 random bytes, base64: encrypts Google credentials at rest (live mode) |
+| `CPK_INTELLIGENCE_API_KEY` | Optional: enables hosted CopilotKit Rich Threads; unset = fully local thread storage |
 
 ## Configure the agent and Google
 
