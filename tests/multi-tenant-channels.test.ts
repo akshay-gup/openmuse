@@ -195,10 +195,11 @@ test("writers with identical names keep distinct authorship in the database", as
       ["n2", "Alex"],
     ],
   );
-  const sidecar = (await db.get<{ authors?: Record<string, string> }>(
-    "shared",
-    "conversation-authors",
-    "channel:names",
-  )) ?? {};
+  const sidecar =
+    (await db.get<{ authors?: Record<string, string> }>(
+      "shared",
+      "conversation-authors",
+      "channel:names",
+    )) ?? {};
   assert.deepEqual(sidecar.authors, { n1: "google:aaa", n2: "google:bbb" });
 });
