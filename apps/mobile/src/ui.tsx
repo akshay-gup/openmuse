@@ -24,6 +24,7 @@ import {
   type TextStyle,
   useWindowDimensions,
   View,
+  type ViewProps,
   type ViewStyle,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -60,6 +61,26 @@ export {
 } from "./theme";
 
 const onWeb = Platform.OS === "web";
+/**
+ * The native glass look is opt-in at build time (EXPO_PUBLIC_LIQUID_GLASS=1) and only on iOS: the
+ * haze as React Native's own gradient style, and Apple's Liquid Glass on the floating bars. The web
+ * has neither (it has `backdropFilter`), and Android is left as it is.
+ */
+const nativeGlass = Platform.OS === "ios" && process.env.EXPO_PUBLIC_LIQUID_GLASS === "1";
+/**
+ * Apple's Liquid Glass (`expo-glass-effect`), when the build opts in and the phone is on iOS 26 or
+ * later. It is required here, not imported at the top: a native module missing from a binary
+ * throws as soon as it loads, and a build that has not opted in must not even look for it.
+ */
+const liquidGlass: typeof import("expo-glass-effect") | null = (() => {
+  if (!nativeGlass) return null;
+  try {
+    const glassEffect = require("expo-glass-effect") as typeof import("expo-glass-effect");
+    return glassEffect.isLiquidGlassAvailable() ? glassEffect : null;
+  } catch {
+    return null;
+  }
+})();
 
 export type GlassKind = "panel" | "bar" | "raised" | "sheet";
 const glassShadow: Record<GlassKind, string> = {
@@ -97,11 +118,56 @@ export const panelStyle: ViewStyle = {
   overflow: "hidden",
 };
 /**
- * The haze behind the panels. The web draws it as layered gradients under a faint grain; native
+ * A floating bar or pill: the phone's header and tab bar, and the composer. On iOS 26 or later, in
+ * a build that opts in, it is Apple's Liquid Glass; everywhere else it is the fill and shadow from
+ * `glassSurface`. `glass={false}` draws neither, for a bar that only floats on some layouts. The
+ * shape (`borderRadius`) and the border come from `style`, as for a View.
+ */
+export function GlassBar({
+  kind,
+  glass: floating = true,
+  style,
+  children,
+  ...rest
+}: ViewProps & { kind: "bar" | "raised"; glass?: boolean }) {
+  if (!floating)
+    return (
+      <View style={style} {...rest}>
+        {children}
+      </View>
+    );
+  if (liquidGlass) {
+    const { GlassView } = liquidGlass;
+    return (
+      <GlassView glassEffectStyle="regular" style={style} {...rest}>
+        {children}
+      </GlassView>
+    );
+  }
+  return (
+    <View style={[glassSurface(kind), style]} {...rest}>
+      {children}
+    </View>
+  );
+}
+/**
+ * The haze behind the panels. The web draws it as layered gradients under a faint grain. On iOS, in
+ * a build that opts in, it is the same gradients through React Native's own style; otherwise native
  * shows the flat base colour of the screen it sits on. Put it first inside a screen-sized view.
  */
 export function Backdrop() {
-  if (!onWeb) return null;
+  if (!onWeb) {
+    if (!nativeGlass) return null;
+    return (
+      <View
+        pointerEvents="none"
+        style={[
+          StyleSheet.absoluteFill,
+          { backgroundColor: haze.base, experimental_backgroundImage: haze.layers },
+        ]}
+      />
+    );
+  }
   return (
     <View
       pointerEvents="none"
