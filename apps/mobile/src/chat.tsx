@@ -83,7 +83,7 @@ import {
   composingText,
   ErrorNotice,
   fontSize,
-  glassSurface,
+  GlassBar,
   haze,
   IconButton,
   layout,
@@ -1189,9 +1189,9 @@ export function ChatScreen({
                 </Button>
               </Card>
             )}
-            <View
+            <GlassBar
+              kind="raised"
               style={{
-                ...glassSurface("raised"),
                 borderRadius: radius.xxl,
                 borderWidth: 1,
                 borderColor: focused ? colors.primary : "transparent",
@@ -1342,7 +1342,7 @@ export function ChatScreen({
                   )}
                 </Pressable>
               </View>
-            </View>
+            </GlassBar>
             {(channelId || threadParent) && (focused || !!draft) && (
               <Text style={[s.small, { paddingTop: 6, paddingHorizontal: 8 }]}>
                 Mention @hive for an agent reply

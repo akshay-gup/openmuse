@@ -6,7 +6,7 @@ import { useAgentWorkspace } from "./agent-workspace";
 import { ChannelChatBanner } from "./chat";
 import { ComputerEntry } from "./computer";
 import { useMuseThread } from "./threads";
-import { colors, fontSize, glassSurface, IconButton, layout, Mascot, radius, s } from "./ui";
+import { colors, fontSize, GlassBar, IconButton, layout, Mascot, radius, s } from "./ui";
 import { useWorkspace } from "./workspace";
 
 const titles: Partial<Record<Section, { title: string; subtitle: string }>> = {
@@ -62,7 +62,9 @@ export function ShellHeader({ onMenu }: { onMenu: () => void }) {
       : "Here when you need me";
   const title = titles[section] || titles.apps;
   return (
-    <View
+    <GlassBar
+      kind="bar"
+      glass={!desktop}
       style={{
         height: layout.headerHeight,
         flexDirection: "row",
@@ -76,7 +78,6 @@ export function ShellHeader({ onMenu }: { onMenu: () => void }) {
               marginTop: 10,
               marginBottom: 4,
               borderRadius: radius.xl,
-              ...glassSurface("bar"),
             }),
       }}
     >
@@ -157,6 +158,6 @@ export function ShellHeader({ onMenu }: { onMenu: () => void }) {
           </View>
         )}
       </View>
-    </View>
+    </GlassBar>
   );
 }

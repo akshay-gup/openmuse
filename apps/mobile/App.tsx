@@ -57,6 +57,7 @@ import {
   colors,
   ErrorNotice,
   fontSize,
+  GlassBar,
   glassSurface,
   haze,
   layout,
@@ -510,7 +511,8 @@ function WorkspaceShell({
                 alignItems: "center",
               }}
             >
-              <View
+              <GlassBar
+                kind="bar"
                 accessibilityRole="tablist"
                 style={{
                   flexDirection: "row",
@@ -518,7 +520,6 @@ function WorkspaceShell({
                   maxWidth: 370,
                   padding: 5,
                   borderRadius: radius.pill,
-                  ...glassSurface("bar"),
                 }}
               >
                 {nav.map((item) => {
@@ -559,7 +560,7 @@ function WorkspaceShell({
                     </Pressable>
                   );
                 })}
-              </View>
+              </GlassBar>
             </View>
           </View>
         </View>
