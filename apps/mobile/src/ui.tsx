@@ -83,6 +83,11 @@ export function glassSurface(kind: GlassKind): ViewStyle {
     ...(onWeb && (kind === "panel" || kind === "sheet")
       ? ({ backdropFilter: glass.blur } as unknown as ViewStyle)
       : null),
+    // The blur smooths away the grain in the backdrop beneath a panel, and with it the dither, so
+    // the panel carries its own grain on top.
+    ...(onWeb && kind === "panel"
+      ? ({ backgroundImage: haze.grain } as unknown as ViewStyle)
+      : null),
   };
 }
 /** A floating panel: the sidebar, a channel, a thread, the main area. */
@@ -92,8 +97,8 @@ export const panelStyle: ViewStyle = {
   overflow: "hidden",
 };
 /**
- * The haze behind the panels. The web draws it as layered gradients; native shows the flat base
- * colour of the screen it sits on. Put it first inside a screen-sized view.
+ * The haze behind the panels. The web draws it as layered gradients under a faint grain; native
+ * shows the flat base colour of the screen it sits on. Put it first inside a screen-sized view.
  */
 export function Backdrop() {
   if (!onWeb) return null;
@@ -103,8 +108,8 @@ export function Backdrop() {
       style={[
         StyleSheet.absoluteFill,
         { backgroundColor: haze.base },
-        // The `background` shorthand: the gradients and the base colour in one.
-        { background: haze.css } as unknown as ViewStyle,
+        // The `background` shorthand: the grain, the gradients and the base colour in one.
+        { background: `${haze.grain}, ${haze.css}` } as unknown as ViewStyle,
       ]}
     />
   );

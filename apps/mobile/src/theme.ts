@@ -108,15 +108,24 @@ export type Colors = typeof colors;
 
 const hazeBase = "#111214";
 /**
+ * A faint grain tile for the web. A gradient this slow and this dark has far fewer steps than it has
+ * pixels, and browsers draw each step flat, so it shows as rings. Grain of about two levels breaks
+ * the rings up. The specks are greys near the backdrop's own tone at a low alpha, so they add
+ * texture and barely move the tone.
+ */
+const grainSvg =
+  "<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='g' x='0' y='0' width='100%' height='100%' color-interpolation-filters='sRGB'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' seed='7' stitchTiles='stitch'/><feColorMatrix values='0.45 0 0 0 -0.092  0.45 0 0 0 -0.092  0.45 0 0 0 -0.092  0 0 0 0 0.13'/></filter><rect width='100%' height='100%' filter='url(#g)'/></svg>";
+/**
  * The backdrop behind the glass: near-black charcoal, a shade lighter at the top left and at the
- * bottom right, scaled to the screen. It has no hue and nothing glows. The web draws `css`; native
- * keeps the flat `base`. `lightest` is the brightest tone the backdrop reaches, and text on glass
- * is checked against it (test/theme.test.ts).
+ * bottom right, scaled to the screen. It has no hue and nothing glows. The web draws `css` under
+ * `grain`; native keeps the flat `base`. `lightest` is the brightest tone the backdrop reaches, and
+ * text on glass is checked against it (test/theme.test.ts).
  */
 export const haze = {
   base: hazeBase,
   lightest: "#2A2C2E",
   css: `radial-gradient(70% 90% at 0% 0%, rgba(255,255,255,0.10), rgba(255,255,255,0) 70%), radial-gradient(75% 85% at 100% 100%, rgba(255,255,255,0.065), rgba(255,255,255,0) 70%), ${hazeBase}`,
+  grain: `url("data:image/svg+xml,${encodeURIComponent(grainSvg)}")`,
 } as const;
 
 /**
