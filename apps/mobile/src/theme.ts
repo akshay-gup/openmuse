@@ -118,13 +118,17 @@ const grainSvg =
 /**
  * The backdrop behind the glass: near-black charcoal, a shade lighter at the top left and at the
  * bottom right, scaled to the screen. It has no hue and nothing glows. The web draws `css` under
- * `grain`; native keeps the flat `base`. `lightest` is the brightest tone the backdrop reaches, and
- * text on glass is checked against it (test/theme.test.ts).
+ * `grain`. Native draws `layers` as React Native's own gradient style when the build opts in to
+ * the native glass look, and otherwise keeps the flat `base`. `lightest` is the brightest tone the
+ * backdrop reaches, and text on glass is checked against it (test/theme.test.ts).
  */
+const hazeLayers =
+  "radial-gradient(70% 90% at 0% 0%, rgba(255,255,255,0.10), rgba(255,255,255,0) 70%), radial-gradient(75% 85% at 100% 100%, rgba(255,255,255,0.065), rgba(255,255,255,0) 70%)";
 export const haze = {
   base: hazeBase,
   lightest: "#2A2C2E",
-  css: `radial-gradient(70% 90% at 0% 0%, rgba(255,255,255,0.10), rgba(255,255,255,0) 70%), radial-gradient(75% 85% at 100% 100%, rgba(255,255,255,0.065), rgba(255,255,255,0) 70%), ${hazeBase}`,
+  layers: hazeLayers,
+  css: `${hazeLayers}, ${hazeBase}`,
   grain: `url("data:image/svg+xml,${encodeURIComponent(grainSvg)}")`,
 } as const;
 
