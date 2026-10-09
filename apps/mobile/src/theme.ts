@@ -110,7 +110,7 @@ const hazeBase = "#111214";
 /**
  * The two light pools in the backdrop. Each sits at `at` and reaches `size`, both as fractions of the
  * screen's width and height. It is white at `alpha` in the middle and fades to nothing at `fade` of
- * its reach. The web draws them on a canvas (src/haze-dither.ts), where they can be rounded without
+ * its reach. The web draws them as a picture (src/haze-dither.ts), where they can be rounded without
  * steps; native and the CSS fallback draw them as radial gradients.
  */
 const hazePools = [
@@ -126,8 +126,8 @@ const hazeLayers = hazePools
   .join(", ");
 /**
  * The backdrop behind the glass: near-black charcoal, a shade lighter at the top left and at the
- * bottom right, scaled to the screen. It has no hue and nothing glows. The web draws the `pools` on
- * a canvas with the steps dithered away (src/haze-dither.ts), over `css` until that is ready. Native
+ * bottom right, scaled to the screen. It has no hue and nothing glows. The web draws the `pools` as
+ * a picture with the steps dithered away (src/haze-dither.ts), over `css` until that is ready. Native
  * draws `layers` as React Native's own gradient style when the build opts in to the native glass
  * look, and otherwise keeps the flat `base`. `lightest` is the brightest tone the backdrop reaches,
  * and text on glass is checked against it (test/theme.test.ts).

@@ -28,7 +28,7 @@ import {
   type ViewStyle,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { HazeCanvas } from "./HazeCanvas";
+import { HazeImage } from "./HazeImage";
 import {
   colors,
   fontFamily,
@@ -92,7 +92,7 @@ const glassShadow: Record<GlassKind, string> = {
 };
 /**
  * The fill and shadow of a glass surface. On the web the fill is translucent, and a sheet also
- * blurs the page behind it. A panel has only the haze behind it, which is dithered (`HazeCanvas`),
+ * blurs the page behind it. A panel has only the haze behind it, which is dithered (`HazeImage`),
  * and a blur would average that back into steps, so it does not blur. Native has no blur here, so
  * it gets a more opaque fill and keeps the shadow. Bars and the composer sit on a panel or the
  * haze, so a blur would only cost them a layer.
@@ -148,8 +148,8 @@ export function GlassBar({
   );
 }
 /**
- * The haze behind the panels. The web draws it on a canvas with its steps dithered away
- * (`HazeCanvas`), over the same pools as CSS gradients for the moment before that is ready. On iOS,
+ * The haze behind the panels. The web shows it as a picture with its steps dithered away
+ * (`HazeImage`), over the same pools as CSS gradients for the moment before that is ready. On iOS,
  * in a build that opts in, it is the gradients through React Native's own style; otherwise native
  * shows the flat base colour of the screen it sits on. Put it first inside a screen-sized view.
  */
@@ -177,7 +177,7 @@ export function Backdrop() {
         { background: haze.css } as unknown as ViewStyle,
       ]}
     >
-      <HazeCanvas />
+      <HazeImage />
     </View>
   );
 }
