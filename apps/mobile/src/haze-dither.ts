@@ -30,6 +30,7 @@ export function hazePixels(
     scaleY: 1 / (pool.size[1] * height),
     alpha: pool.alpha,
     fade: pool.fade,
+    fadeSquared: pool.fade * pool.fade,
   }));
   const pixels = new Uint8ClampedArray(width * height * 4);
   const rowOffset = new Float64Array(pools.length);
@@ -45,18 +46,22 @@ export function hazePixels(
       let red = baseRed;
       let green = baseGreen;
       let blue = baseBlue;
+      let lit = false;
       for (let p = 0; p < pools.length; p++) {
         const pool = pools[p];
         if (!pool) continue;
         const dx = (x + 0.5 - pool.x) * pool.scaleX;
-        const reach = Math.sqrt(dx * dx + (rowOffset[p] ?? 0)) / pool.fade;
-        if (reach >= 1) continue;
-        const lift = pool.alpha * (1 - reach);
+        const reachSquared = dx * dx + (rowOffset[p] ?? 0);
+        if (reachSquared >= pool.fadeSquared) continue;
+        lit = true;
+        const lift = pool.alpha * (1 - Math.sqrt(reachSquared) / pool.fade);
         red += lift * (255 - red);
         green += lift * (255 - green);
         blue += lift * (255 - blue);
       }
-      const noise = random() - 0.5;
+      // Noise cannot move a flat colour (half a level of it still rounds back), so it is only
+      // drawn where a pool has lifted the colour off its level.
+      const noise = lit ? random() - 0.5 : 0;
       // A Uint8ClampedArray rounds to the nearest level when it stores a number.
       pixels[at] = red + noise;
       pixels[at + 1] = green + noise;
