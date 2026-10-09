@@ -78,29 +78,7 @@ test("no part of the haze is lighter than the tone text on glass is checked agai
   }
 });
 
-test("the grain over the haze is faint and draws from nothing outside the page", () => {
-  const svg = decodeURIComponent(
-    haze.grain.replace(/^url\("data:image\/svg\+xml,/, "").slice(0, -2),
-  );
-  assert.ok(svg.includes("feTurbulence"), "the grain is not generated noise");
-  assert.ok(
-    !/href=|<image|<use|@import/i.test(svg),
-    "the grain refers to something outside itself",
-  );
-  const matrix = svg
-    .match(/<feColorMatrix values='([^']+)'/)?.[1]
-    .trim()
-    .split(/\s+/)
-    .map(Number);
-  assert.equal(matrix?.length, 20, "the grain's colour matrix is not 4 x 5");
-  const alpha = matrix?.[19] ?? 1;
-  assert.ok(
-    alpha > 0 && alpha <= 0.2,
-    `the grain's alpha is ${alpha}; above 0.2 it reads as texture`,
-  );
-});
-
-test("the fills used where nothing is blurred are more opaque than the blurred ones", () => {
+test("the fills native uses are more opaque than the web's", () => {
   for (const kind of ["panel", "bar", "raised", "sheet"] as const) {
     assert.ok(
       parse(glass[`${kind}Solid`]).alpha > parse(glass[kind]).alpha,

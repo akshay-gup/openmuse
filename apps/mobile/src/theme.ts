@@ -108,14 +108,6 @@ export type Colors = typeof colors;
 
 const hazeBase = "#111214";
 /**
- * A faint grain tile for the web. A gradient this slow and this dark has far fewer steps than it has
- * pixels, and browsers draw each step flat, so it shows as rings. Grain of about two levels breaks
- * the rings up. The specks are greys near the backdrop's own tone at a low alpha, so they add
- * texture and barely move the tone.
- */
-const grainSvg =
-  "<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='g' x='0' y='0' width='100%' height='100%' color-interpolation-filters='sRGB'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' seed='7' stitchTiles='stitch'/><feColorMatrix values='0.45 0 0 0 -0.092  0.45 0 0 0 -0.092  0.45 0 0 0 -0.092  0 0 0 0 0.13'/></filter><rect width='100%' height='100%' filter='url(#g)'/></svg>";
-/**
  * The two light pools in the backdrop. Each sits at `at` and reaches `size`, both as fractions of the
  * screen's width and height. It is white at `alpha` in the middle and fades to nothing at `fade` of
  * its reach. The web draws them on a canvas (src/haze-dither.ts), where they can be rounded without
@@ -134,10 +126,11 @@ const hazeLayers = hazePools
   .join(", ");
 /**
  * The backdrop behind the glass: near-black charcoal, a shade lighter at the top left and at the
- * bottom right, scaled to the screen. It has no hue and nothing glows. The web draws `css` under
- * `grain`. Native draws `layers` as React Native's own gradient style when the build opts in to
- * the native glass look, and otherwise keeps the flat `base`. `lightest` is the brightest tone the
- * backdrop reaches, and text on glass is checked against it (test/theme.test.ts).
+ * bottom right, scaled to the screen. It has no hue and nothing glows. The web draws the `pools` on
+ * a canvas with the steps dithered away (src/haze-dither.ts), over `css` until that is ready. Native
+ * draws `layers` as React Native's own gradient style when the build opts in to the native glass
+ * look, and otherwise keeps the flat `base`. `lightest` is the brightest tone the backdrop reaches,
+ * and text on glass is checked against it (test/theme.test.ts).
  */
 export const haze = {
   base: hazeBase,
@@ -145,12 +138,12 @@ export const haze = {
   pools: hazePools,
   layers: hazeLayers,
   css: `${hazeLayers}, ${hazeBase}`,
-  grain: `url("data:image/svg+xml,${encodeURIComponent(grainSvg)}")`,
 } as const;
 
 /**
- * Glass fills. The web lays them over a blur of what is behind (`blur`); native has no blur here,
- * so its `*Solid` fills are a little more opaque.
+ * Glass fills. The web lays them over what is behind; native has no blur here, so its `*Solid`
+ * fills are a little more opaque. Only a sheet blurs (`blur`): a panel has nothing but the haze
+ * behind it, and a blur would average the haze's dither back into steps.
  */
 export const glass = {
   /** A panel: the sidebar, a channel, a thread. */
@@ -165,7 +158,7 @@ export const glass = {
   barSolid: "rgba(255,255,255,0.10)",
   raisedSolid: "rgba(36,38,42,0.97)",
   sheetSolid: "rgba(26,28,31,0.98)",
-  /** The blur behind a panel or a sheet (web). */
+  /** The blur behind a sheet (web). */
   blur: "blur(30px) saturate(110%)",
 } as const;
 
