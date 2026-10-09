@@ -23,13 +23,13 @@ export class Auth {
       throw new AppError("Sign in with Google to open your workspace.", 401);
     return this.sessionForOwner("local-user");
   }
-  /** Create a session for any owner (used by Google sign-in). */
-  async sessionForOwner(owner: string) {
+  /** Create a session for any owner (used by Google sign-in), good for a day unless `ttlMs` says otherwise. */
+  async sessionForOwner(owner: string, ttlMs = 24 * 60 * 60 * 1000) {
     const token = randomBytes(32).toString("base64url");
     await this.db.put("system", "sessions", {
       id: digest(token).toString("hex"),
       owner,
-      expiresAt: Date.now() + 24 * 60 * 60 * 1000,
+      expiresAt: Date.now() + ttlMs,
     });
     return { token, mode: this.config.mode };
   }

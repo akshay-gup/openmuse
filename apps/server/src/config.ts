@@ -1,6 +1,7 @@
 import { existsSync, readdirSync, readFileSync, renameSync } from "node:fs";
 import { resolve } from "node:path";
 import { parseEnv } from "node:util";
+import { parseWorkspacePublicKey } from "../../../packages/integrations/src/workspace-token.ts";
 import { normalizeMention } from "./opencode/agui.ts";
 
 /** .env keys whose file value loses to a different value already set in the environment. */
@@ -48,6 +49,17 @@ function adoptLegacyDataDir(dataDir: string) {
   }
 }
 
+/**
+ * A workspace run by the Hive control plane. People do not sign in here: the control plane signs
+ * them in and vouches for them with a token for this workspace (`workspaceId`), which it signs
+ * with the key `controlPublicKey` verifies.
+ */
+export interface ManagedWorkspace {
+  workspaceId: string;
+  /** Base64url DER (SPKI) of the control plane's Ed25519 public key. */
+  controlPublicKey: string;
+}
+
 export interface Config {
   mode: "sample" | "live";
   port: number;
@@ -83,6 +95,8 @@ export interface Config {
   /** Idle minutes after which an unused channel worker is reaped. */
   channelWorkerIdleMinutes?: number;
   allowedOrigins: string[];
+  /** Set when the Hive control plane runs this workspace (WORKSPACE_ID, CONTROL_PLANE_PUBLIC_KEY). */
+  managed?: ManagedWorkspace;
 }
 
 /** Pinned so live rankings do not shift when TypeSafe moves the `jev-latest` alias. */
@@ -144,6 +158,15 @@ export function readConfig(): Config {
       process.env.ALLOWED_ORIGINS ?? "http://localhost:8081,http://127.0.0.1:8081"
     ).split(","),
   };
+  const workspaceId = process.env.WORKSPACE_ID?.trim();
+  const controlPublicKey = process.env.CONTROL_PLANE_PUBLIC_KEY?.trim();
+  if (workspaceId || controlPublicKey) {
+    if (!workspaceId || !controlPublicKey)
+      throw new Error("A managed workspace needs both WORKSPACE_ID and CONTROL_PLANE_PUBLIC_KEY");
+    if (mode !== "live") throw new Error("A managed workspace runs in live mode");
+    parseWorkspacePublicKey(controlPublicKey);
+    config.managed = { workspaceId, controlPublicKey };
+  }
   if (mode === "live" && !config.encryptionKey)
     throw new Error("Live mode requires TOKEN_ENCRYPTION_KEY (32-byte base64)");
   if (mode === "sample" && !["127.0.0.1", "localhost", "::1"].includes(config.host))

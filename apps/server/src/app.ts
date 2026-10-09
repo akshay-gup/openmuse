@@ -28,6 +28,7 @@ import { Files } from "./files.ts";
 import { GoogleAuth } from "./google-auth.ts";
 import type { JevAdapter } from "./jev/adapter.ts";
 import { createJevService } from "./jev/service.ts";
+import { ManagedSignIn } from "./managed.ts";
 import { HiveToolBridge } from "./opencode/hive-tools.ts";
 import {
   connectionFromConfig,
@@ -132,17 +133,23 @@ export async function createApp(
       ok: true,
       mode: config.mode,
       browserConfigured: Boolean(config.workerUrl && config.workerToken),
+      // A managed workspace says which one it is, so the control plane and the app can tell they
+      // reached the right one.
+      ...(config.managed ? { managed: true, workspace: config.managed.workspaceId } : {}),
     }),
   );
   let loginWindow = 0,
     loginAttempts = 0;
-  app.post("/api/session", async (c) => {
+  const limitSignIns = () => {
     if (Date.now() - loginWindow > 60000) {
       loginWindow = Date.now();
       loginAttempts = 0;
     }
     if (++loginAttempts > 30)
       throw new AppError("Too many sign-in attempts. Try again in a minute.", 429);
+  };
+  app.post("/api/session", async (c) => {
+    limitSignIns();
     const session = await auth.session();
     await workspace.ensureSample("local-user", actions);
     await agent.ensure("local-user");
@@ -156,6 +163,7 @@ export async function createApp(
       code = c.req.query("code");
     if (!state || !code) throw new AppError("Google callback is incomplete");
     if ((await google.callbackPurpose(state)) === "login") {
+      if (config.managed) throw new AppError("Sign in through your Hive account", 404);
       const profile = await google.loginCallback(state, code);
       const owner = `google:${profile.sub}`;
       const now = new Date().toISOString();
@@ -193,8 +201,22 @@ export async function createApp(
   });
   /** Public: start Google sign-in, returns the OAuth URL to open. */
   app.get("/api/auth/google/url", async (c) => {
+    if (config.managed) throw new AppError("Sign in through your Hive account", 404);
     const origin = c.req.query("origin");
     return c.json(await google.loginUrl(origin || undefined));
+  });
+  /**
+   * Public: sign in with a token the Hive control plane signed for this workspace. Only a managed
+   * workspace has this; anywhere else people sign in with Google.
+   */
+  const managed = config.managed
+    ? new ManagedSignIn(db, auth, config.managed, (owner) => agent.ensure(owner))
+    : undefined;
+  app.post("/api/auth/managed", async (c) => {
+    if (!managed) throw new AppError("This workspace signs in with Google", 404);
+    limitSignIns();
+    const body = z.object({ token: z.string().min(1).max(4096) }).parse(await c.req.json());
+    return c.json(await managed.signIn(body.token));
   });
   /** Public: exchange a single-use login code for the session token. */
   app.post("/api/auth/exchange", async (c) => {
