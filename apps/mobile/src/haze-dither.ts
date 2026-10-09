@@ -71,3 +71,40 @@ export function hazePixels(
   }
   return pixels;
 }
+
+/**
+ * The haze as a 24-bit BMP file, `width` by `height`. A browser decodes a BMP into a plain picture
+ * that the page can show as a background, with no canvas to composite around on every frame, and
+ * nothing has to be read back from a canvas, which some privacy settings blank out.
+ */
+export function hazeBmp(
+  width: number,
+  height: number,
+  random: () => number = Math.random,
+): Uint8Array<ArrayBuffer> {
+  const pixels = hazePixels(width, height, random);
+  // Each row is padded to a multiple of four bytes, and the rows run from the bottom up.
+  const rowBytes = (width * 3 + 3) & ~3;
+  const file = new Uint8Array(54 + rowBytes * height);
+  const view = new DataView(file.buffer);
+  file[0] = 0x42; // "BM"
+  file[1] = 0x4d;
+  view.setUint32(2, file.length, true);
+  view.setUint32(10, 54, true); // where the pixels start
+  view.setUint32(14, 40, true); // the size of the header that follows
+  view.setInt32(18, width, true);
+  view.setInt32(22, height, true);
+  view.setUint16(26, 1, true); // colour planes
+  view.setUint16(28, 24, true); // bits per pixel
+  view.setUint32(34, rowBytes * height, true);
+  // The compression, the pixels per metre and the palette sizes stay 0.
+  for (let y = 0; y < height; y++) {
+    let to = 54 + (height - 1 - y) * rowBytes;
+    for (let from = y * width * 4, end = from + width * 4; from < end; from += 4) {
+      file[to++] = pixels[from + 2] ?? 0; // blue, green, red
+      file[to++] = pixels[from + 1] ?? 0;
+      file[to++] = pixels[from] ?? 0;
+    }
+  }
+  return file;
+}

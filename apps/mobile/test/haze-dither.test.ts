@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { hazePixels } from "../src/haze-dither.ts";
+import { hazeBmp, hazePixels } from "../src/haze-dither.ts";
 import { haze } from "../src/theme.ts";
 
 // A laptop window. The haze is 70% of the window across, so a smaller picture has steps too narrow
@@ -129,6 +129,42 @@ test("where the haze has not reached, every pixel is exactly the base colour", (
   }
   assert.ok(flat > (W * H) / 10, "the pools cover the whole window, so this proves little");
   assert.equal(wrong, 0, "the dither moved a flat part of the backdrop off its colour");
+});
+
+test("the BMP of the haze is a 24-bit picture of the same pixels", () => {
+  // 37 pixels are 111 bytes, so every row carries a byte of padding.
+  const w = 37;
+  const h = 23;
+  const rowBytes = 112;
+  const pixels = hazePixels(w, h, seeded(5));
+  const bmp = hazeBmp(w, h, seeded(5));
+  const view = new DataView(bmp.buffer);
+  assert.equal(String.fromCharCode(bmp[0] ?? 0, bmp[1] ?? 0), "BM");
+  assert.equal(bmp.length, 54 + rowBytes * h);
+  assert.equal(view.getUint32(2, true), bmp.length, "the file size is wrong");
+  assert.equal(view.getUint32(10, true), 54, "the pixels do not start after the headers");
+  assert.equal(view.getInt32(18, true), w);
+  assert.equal(view.getInt32(22, true), h);
+  assert.equal(view.getUint16(28, true), 24);
+  assert.equal(view.getUint32(30, true), 0, "the pixels are compressed");
+  let wrong = 0;
+  let unpadded = 0;
+  for (let y = 0; y < h; y++) {
+    // The rows are stored bottom to top, in blue, green, red order.
+    const row = 54 + (h - 1 - y) * rowBytes;
+    for (let x = 0; x < w; x++) {
+      const px = (y * w + x) * 4;
+      if (
+        bmp[row + x * 3] !== pixels[px + 2] ||
+        bmp[row + x * 3 + 1] !== pixels[px + 1] ||
+        bmp[row + x * 3 + 2] !== pixels[px]
+      )
+        wrong++;
+    }
+    if (bmp[row + w * 3] !== 0) unpadded++;
+  }
+  assert.equal(wrong, 0, "some pixels are not the haze's");
+  assert.equal(unpadded, 0, "a row's padding is not zero");
 });
 
 test("the CSS gradients the web falls back to and native draws describe the same pools", () => {
