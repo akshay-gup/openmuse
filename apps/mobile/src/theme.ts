@@ -7,8 +7,8 @@
  * text/background pairs below keep a readable contrast (WCAG AA).
  *
  * The look is Graphite: quiet dark glass. Panels are faint white over a neutral charcoal backdrop,
- * with a hairline and a soft shadow, and nothing glows. The web blurs what is behind a panel or a
- * sheet; native has no blur here, so its fills are a little more opaque. Hairlines and quiet fills
+ * with a hairline and a soft shadow, and nothing glows. The web blurs what is behind a sheet; native
+ * has no blur here, so its fills are a little more opaque. Hairlines and quiet fills
  * are tints of white, so they sit equally well on the backdrop, on a panel and on a card. The brand
  * teal is calm, used for actions and for the row you are on; amber, green and red keep to what
  * they mean.
