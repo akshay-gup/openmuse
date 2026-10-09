@@ -28,6 +28,7 @@ import {
   type ViewStyle,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { HazeCanvas } from "./HazeCanvas";
 import {
   colors,
   fontFamily,
@@ -151,8 +152,9 @@ export function GlassBar({
   );
 }
 /**
- * The haze behind the panels. The web draws it as layered gradients under a faint grain. On iOS, in
- * a build that opts in, it is the same gradients through React Native's own style; otherwise native
+ * The haze behind the panels. The web draws it on a canvas with its steps dithered away
+ * (`HazeCanvas`), over the same pools as CSS gradients for the moment before that is ready. On iOS,
+ * in a build that opts in, it is the gradients through React Native's own style; otherwise native
  * shows the flat base colour of the screen it sits on. Put it first inside a screen-sized view.
  */
 export function Backdrop() {
@@ -171,13 +173,16 @@ export function Backdrop() {
   return (
     <View
       pointerEvents="none"
+      aria-hidden
       style={[
         StyleSheet.absoluteFill,
         { backgroundColor: haze.base },
-        // The `background` shorthand: the grain, the gradients and the base colour in one.
-        { background: `${haze.grain}, ${haze.css}` } as unknown as ViewStyle,
+        // The `background` shorthand: the gradients and the base colour in one.
+        { background: haze.css } as unknown as ViewStyle,
       ]}
-    />
+    >
+      <HazeCanvas />
+    </View>
   );
 }
 

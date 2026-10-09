@@ -21,7 +21,7 @@ export function hazePixels(
   width: number,
   height: number,
   random: () => number = Math.random,
-): Uint8ClampedArray {
+): Uint8ClampedArray<ArrayBuffer> {
   const [baseRed, baseGreen, baseBlue] = levelsOf(haze.base);
   const pools = haze.pools.map((pool) => ({
     x: pool.at[0] * width,
