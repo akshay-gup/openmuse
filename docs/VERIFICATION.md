@@ -4,7 +4,7 @@ What the automated checks cover, how to run them, and what has not been verified
 
 ## Automated checks
 
-- **`pnpm test`** runs 553 tests across the API, task engine, OpenCode integration, tools, integrations, conversation queue, browser address handling, domain, and date handling.
+- **`pnpm test`** runs 554 tests across the API, task engine, OpenCode integration, tools, integrations, conversation queue, browser address handling, domain, and date handling.
 - **`pnpm test:browser`** runs the real Chromium lifecycle test: public page navigation and read, failed profile cleanup, reopening the same session, text truncation, and localStorage and profile persistence after a restart.
 - **The platform exports** build the web, iOS Hermes and Android Hermes bundles. They do not produce signed native binaries.
 - **CI** (`.github/workflows/ci.yml`) runs lint, types, the tests, the server build, the three exports, the Chromium lifecycle test and a browser-container suite, on Node 22.
