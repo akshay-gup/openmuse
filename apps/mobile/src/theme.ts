@@ -116,17 +116,33 @@ const hazeBase = "#111214";
 const grainSvg =
   "<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='g' x='0' y='0' width='100%' height='100%' color-interpolation-filters='sRGB'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' seed='7' stitchTiles='stitch'/><feColorMatrix values='0.45 0 0 0 -0.092  0.45 0 0 0 -0.092  0.45 0 0 0 -0.092  0 0 0 0 0.13'/></filter><rect width='100%' height='100%' filter='url(#g)'/></svg>";
 /**
+ * The two light pools in the backdrop. Each sits at `at` and reaches `size`, both as fractions of the
+ * screen's width and height. It is white at `alpha` in the middle and fades to nothing at `fade` of
+ * its reach. The web draws them on a canvas (src/haze-dither.ts), where they can be rounded without
+ * steps; native and the CSS fallback draw them as radial gradients.
+ */
+const hazePools = [
+  { at: [0, 0], size: [0.7, 0.9], alpha: 0.1, fade: 0.7 },
+  { at: [1, 1], size: [0.75, 0.85], alpha: 0.065, fade: 0.7 },
+] as const;
+const percent = (fraction: number) => `${Math.round(fraction * 1000) / 10}%`;
+const hazeLayers = hazePools
+  .map(
+    ({ at, size, alpha, fade }) =>
+      `radial-gradient(${percent(size[0])} ${percent(size[1])} at ${percent(at[0])} ${percent(at[1])}, rgba(255,255,255,${alpha}), rgba(255,255,255,0) ${percent(fade)})`,
+  )
+  .join(", ");
+/**
  * The backdrop behind the glass: near-black charcoal, a shade lighter at the top left and at the
  * bottom right, scaled to the screen. It has no hue and nothing glows. The web draws `css` under
  * `grain`. Native draws `layers` as React Native's own gradient style when the build opts in to
  * the native glass look, and otherwise keeps the flat `base`. `lightest` is the brightest tone the
  * backdrop reaches, and text on glass is checked against it (test/theme.test.ts).
  */
-const hazeLayers =
-  "radial-gradient(70% 90% at 0% 0%, rgba(255,255,255,0.10), rgba(255,255,255,0) 70%), radial-gradient(75% 85% at 100% 100%, rgba(255,255,255,0.065), rgba(255,255,255,0) 70%)";
 export const haze = {
   base: hazeBase,
   lightest: "#2A2C2E",
+  pools: hazePools,
   layers: hazeLayers,
   css: `${hazeLayers}, ${hazeBase}`,
   grain: `url("data:image/svg+xml,${encodeURIComponent(grainSvg)}")`,
