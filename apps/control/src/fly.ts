@@ -21,7 +21,6 @@ export interface FlyConfig {
   /** Environment given to every workspace, beyond what Hive sets (MODEL, provider keys, …). */
   workspaceEnv: Record<string, string>;
   apiUrl: string;
-  graphqlUrl: string;
   /** Where a workspace answers once it runs; `{app}` stands for its app name. */
   publicUrlTemplate: string;
   /** How long to wait for a new or waking workspace to answer before giving up. */
@@ -64,7 +63,6 @@ export function flyConfigFromEnv(env: Env = process.env): FlyConfig {
     appPrefix: env.FLY_APP_PREFIX?.trim() || "hive",
     workspaceEnv,
     apiUrl: (env.FLY_API_URL?.trim() || "https://api.machines.dev/v1").replace(/\/+$/, ""),
-    graphqlUrl: env.FLY_GRAPHQL_URL?.trim() || "https://api.fly.io/graphql",
     publicUrlTemplate: env.FLY_PUBLIC_URL_TEMPLATE?.trim() || "https://{app}.fly.dev",
     waitSeconds: Number(env.FLY_WAIT_SECONDS ?? 180),
   };
@@ -78,6 +76,30 @@ interface FlyMachine {
 interface FlyVolume {
   id: string;
   name: string;
+  state?: string;
+}
+interface FlyAddress {
+  ip: string;
+  shared?: boolean;
+  egress?: boolean;
+}
+
+/** Volumes Fly is on its way to removing: they are listed for a while, and are not ones to use. */
+const REMOVED_VOLUME_STATES = [
+  "scheduling_destroy",
+  "fork_cleanup",
+  "waiting_for_detach",
+  "pending_destroy",
+  "destroying",
+];
+const stillThere = (volume: FlyVolume) => !REMOVED_VOLUME_STATES.includes(volume.state ?? "");
+
+/** Which kind of address Fly has given: the same way its own client tells them apart. */
+function addressType(address: FlyAddress): string {
+  if (address.egress) return "egress";
+  if (address.ip.startsWith("fdaa:")) return "private_v6";
+  if (address.shared) return "shared_v4";
+  return address.ip.includes(":") ? "v6" : "v4";
 }
 
 /** The port the workspace server listens on inside its machine. */
@@ -164,10 +186,15 @@ export class FlyProvisioner implements Provisioner {
     const machines = await this.fly<FlyMachine[]>("GET", `/apps/${app}/machines`, undefined, [404]);
     if (!machines) return;
     for (const machine of machines)
-      await this.fly("DELETE", `/apps/${app}/machines/${machine.id}?force=true`, undefined, [404]);
+      await this.fly(
+        "DELETE",
+        `/apps/${app}/machines/${machine.id}?force=true&kill=true`,
+        undefined,
+        [404],
+      );
     const volumes =
       (await this.fly<FlyVolume[]>("GET", `/apps/${app}/volumes`, undefined, [404])) ?? [];
-    for (const volume of volumes)
+    for (const volume of volumes.filter(stillThere))
       await this.fly("DELETE", `/apps/${app}/volumes/${volume.id}`, undefined, [404]);
     await this.fly("DELETE", `/apps/${app}`, undefined, [404]);
   }
@@ -179,33 +206,25 @@ export class FlyProvisioner implements Provisioner {
     if (existing) return;
     await this.fly(
       "POST",
-      "/apps",
-      // The network is the app's own: apps on separate networks cannot reach each other.
-      { app_name: app, org_slug: this.config.org, network: app },
+      "/apps?wait=true",
+      // The network is the app's own: apps on separate networks cannot reach each other. The name
+      // goes under both keys the API has been documented and used with.
+      { app_name: app, name: app, org_slug: this.config.org, network: app },
       [422],
     );
   }
 
-  /** A public address for the app, or its `fly.dev` name has nothing to point at. */
+  /** A public address for the app, or its `fly.dev` name has nothing to point at: a dedicated IPv6 and a shared IPv4. */
   private async ensureAddresses(app: string) {
-    const answer = await this.graphql<{
-      app: { ipAddresses: { nodes: { type: string }[] } } | null;
-    }>("query($name: String!) { app(name: $name) { ipAddresses { nodes { type } } } }", {
-      name: app,
-    });
-    const have = new Set(answer.app?.ipAddresses.nodes.map((node) => node.type));
-    for (const type of ["v6", "shared_v4"]) {
-      if (have.has(type)) continue;
-      await this.graphql(
-        "mutation($input: AllocateIPAddressInput!) { allocateIpAddress(input: $input) { ipAddress { address } } }",
-        { input: { appId: app, type } },
-      );
-    }
+    const listed = await this.fly<{ ips?: FlyAddress[] }>("GET", `/apps/${app}/ip_assignments`);
+    const have = new Set((listed?.ips ?? []).map(addressType));
+    for (const type of ["v6", "shared_v4"])
+      if (!have.has(type)) await this.fly("POST", `/apps/${app}/ip_assignments`, { type });
   }
 
   private async ensureVolume(app: string, spec: WorkspaceSpec): Promise<FlyVolume> {
     const volumes = (await this.fly<FlyVolume[]>("GET", `/apps/${app}/volumes`)) ?? [];
-    const existing = volumes.find((volume) => volume.name === VOLUME_NAME);
+    const existing = volumes.find((volume) => volume.name === VOLUME_NAME && stillThere(volume));
     if (existing) return existing;
     return (await this.fly<FlyVolume>("POST", `/apps/${app}/volumes`, {
       name: VOLUME_NAME,
@@ -284,6 +303,8 @@ export class FlyProvisioner implements Provisioner {
         },
       ],
       restart: { policy: "on-failure", max_retries: 5 },
+      // Time to end its runs and close its database before Fly kills it.
+      stop_config: { signal: "SIGTERM", timeout: "30s" },
       metadata: { hive_workspace: spec.workspaceId },
     };
   }
@@ -370,27 +391,6 @@ export class FlyProvisioner implements Provisioner {
     } catch {
       return {} as T;
     }
-  }
-
-  private async graphql<T = unknown>(
-    query: string,
-    variables: Record<string, unknown>,
-  ): Promise<T> {
-    const response = await this.request(this.config.graphqlUrl, {
-      method: "POST",
-      headers: this.headers(true),
-      body: JSON.stringify({ query, variables }),
-    });
-    const text = await response.text();
-    if (!response.ok)
-      throw new FlyError(
-        `GraphQL answered ${response.status}: ${text.slice(0, 300)}`,
-        response.status,
-      );
-    const payload = JSON.parse(text) as { data?: T; errors?: { message: string }[] };
-    if (payload.errors?.length)
-      throw new FlyError(`GraphQL: ${payload.errors.map((e) => e.message).join("; ")}`, 422);
-    return payload.data as T;
   }
 
   private headers(json: boolean): Record<string, string> {

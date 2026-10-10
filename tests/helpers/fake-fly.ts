@@ -22,16 +22,26 @@ interface FakeMachine {
 interface FakeVolume {
   id: string;
   name: string;
+  /** `created` unless a test says Fly is removing it. */
+  state: string;
   region: string;
   size_gb: number;
   encrypted: boolean;
   snapshot_retention: number;
 }
+interface FakeAddress {
+  ip: string;
+  region: string;
+  service_name: string;
+  shared: boolean;
+  egress: boolean;
+  network: null;
+}
 interface FakeApp {
   name: string;
   org: string;
   network: string;
-  ips: Set<string>;
+  addresses: FakeAddress[];
   machines: Map<string, FakeMachine>;
   volumes: Map<string, FakeVolume>;
 }
@@ -42,10 +52,10 @@ export interface FlyCall {
 }
 
 /**
- * A stand-in for the parts of Fly the provisioner talks to: the Machines API, the GraphQL API
- * that gives an app its addresses, and the workspace's public health check. It keeps apps,
- * volumes and machines in memory, refuses requests that are not what Fly documents, and fails or
- * lags when told to, so the provisioner can be tested without an account.
+ * A stand-in for the parts of Fly the provisioner talks to: the Machines API (apps, addresses,
+ * volumes and machines) and the workspace's public health check. It keeps them in memory,
+ * refuses requests that are not what Fly's own client sends, and fails or lags when told to, so
+ * the provisioner can be tested without an account.
  */
 export async function fakeFly(options: { token?: string; startDelayMs?: number } = {}) {
   const token = options.token ?? "fly-test-token";
@@ -113,27 +123,8 @@ export async function fakeFly(options: { token?: string; startDelayMs?: number }
       return send(res, failure.status, { error: "injected" }, failure.headers);
     }
 
-    if (path === "/graphql") {
-      const { query, variables } = body as { query: string; variables: Record<string, unknown> };
-      if (query.includes("allocateIpAddress")) {
-        const input = variables.input as { appId: string; type: string };
-        const app = apps.get(input.appId);
-        if (!app) return send(res, 200, { errors: [{ message: "Could not find App" }] });
-        app.ips.add(input.type);
-        return send(res, 200, {
-          data: { allocateIpAddress: { ipAddress: { address: "fdaa::1" } } },
-        });
-      }
-      const app = apps.get(String(variables.name));
-      return send(res, 200, {
-        data: {
-          app: app ? { ipAddresses: { nodes: [...app.ips].map((type) => ({ type })) } } : null,
-        },
-      });
-    }
-
     const m =
-      /^\/v1\/apps(?:\/([\w-]+))?(?:\/(machines|volumes)(?:\/([\w-]+))?(?:\/(wait|start|stop))?)?$/.exec(
+      /^\/v1\/apps(?:\/([\w-]+))?(?:\/(machines|volumes|ip_assignments)(?:\/([\w.:-]+))?(?:\/(wait|start|stop))?)?$/.exec(
         path,
       );
     if (!m) return send(res, 404, { error: `no route ${path}` });
@@ -142,19 +133,26 @@ export async function fakeFly(options: { token?: string; startDelayMs?: number }
 
     if (!appName) {
       if (method !== "POST") return send(res, 405, { error: "method" });
-      const input = body as { app_name?: string; org_slug?: string; network?: string };
-      if (!input.app_name || !input.org_slug)
-        return send(res, 422, { error: "app_name and org_slug are required" });
-      if (apps.has(input.app_name)) return send(res, 422, { error: "Name has already been taken" });
-      apps.set(input.app_name, {
-        name: input.app_name,
+      const input = body as {
+        app_name?: string;
+        name?: string;
+        org_slug?: string;
+        network?: string;
+      };
+      // Fly's own client names the app `name`; its documentation says `app_name`. Either is taken.
+      const name = input.app_name ?? input.name;
+      if (!name || !input.org_slug)
+        return send(res, 422, { error: "a name and org_slug are required" });
+      if (apps.has(name)) return send(res, 422, { error: "Name has already been taken" });
+      apps.set(name, {
+        name,
         org: input.org_slug,
         network: input.network ?? "",
-        ips: new Set(),
+        addresses: [],
         machines: new Map(),
         volumes: new Map(),
       });
-      return send(res, 201, { name: input.app_name });
+      return send(res, 201, { name });
     }
     const app = apps.get(appName);
     if (!app) return send(res, 404, { error: "app not found" });
@@ -167,6 +165,25 @@ export async function fakeFly(options: { token?: string; startDelayMs?: number }
       return send(res, 405, { error: "method" });
     }
 
+    if (collection === "ip_assignments") {
+      if (!itemId && method === "GET") return send(res, 200, { ips: app.addresses });
+      if (!itemId && method === "POST") {
+        const type = (body as { type?: string }).type;
+        if (type !== "v6" && type !== "shared_v4" && type !== "v4")
+          return send(res, 422, { error: `cannot assign a ${type} address here` });
+        const address: FakeAddress = {
+          ip: type === "v6" ? `2a09:8280:1::${++ids}:0` : `66.241.124.${++ids}`,
+          region: "",
+          service_name: "",
+          shared: type === "shared_v4",
+          egress: false,
+          network: null,
+        };
+        app.addresses.push(address);
+        return send(res, 200, { ...address, created_at: new Date().toISOString() });
+      }
+    }
+
     if (collection === "volumes") {
       if (!itemId && method === "GET") return send(res, 200, [...app.volumes.values()]);
       if (!itemId && method === "POST") {
@@ -175,6 +192,7 @@ export async function fakeFly(options: { token?: string; startDelayMs?: number }
           return send(res, 422, { error: "invalid volume" });
         const volume: FakeVolume = {
           id: `vol_${++ids}`,
+          state: "created",
           name: input.name,
           region: input.region,
           size_gb: input.size_gb,
@@ -204,6 +222,22 @@ export async function fakeFly(options: { token?: string; startDelayMs?: number }
             return send(res, 422, { error: `volume ${mount.volume} does not exist` });
         if (!config.services?.some((s) => s.internal_port === 8787))
           return send(res, 422, { error: "no service for port 8787" });
+        const stop = config.stop_config as { signal?: string; timeout?: string } | undefined;
+        if (stop) {
+          const signals = [
+            "SIGHUP",
+            "SIGINT",
+            "SIGQUIT",
+            "SIGKILL",
+            "SIGUSR1",
+            "SIGUSR2",
+            "SIGTERM",
+          ];
+          if (stop.signal && !signals.includes(stop.signal))
+            return send(res, 422, { error: `stop_config.signal ${stop.signal} is not a signal` });
+          if (stop.timeout !== undefined && !/^\d+(ms|s|m|h)$/.test(stop.timeout))
+            return send(res, 422, { error: "stop_config.timeout is not a duration" });
+        }
         const machine: FakeMachine = {
           id: `m${++ids}`,
           state: "starting",
@@ -250,7 +284,6 @@ export async function fakeFly(options: { token?: string; startDelayMs?: number }
   return {
     token,
     apiUrl: `${origin}/v1`,
-    graphqlUrl: `${origin}/graphql`,
     publicUrlTemplate: `${origin}/public/{app}`,
     apps,
     calls,

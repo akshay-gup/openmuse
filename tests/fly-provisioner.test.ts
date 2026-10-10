@@ -26,7 +26,6 @@ const provisioner = (over: Partial<FlyConfig> = {}) =>
     appPrefix: "hive",
     workspaceEnv: { MODEL: "anthropic/test-model" },
     apiUrl: fly.apiUrl,
-    graphqlUrl: fly.graphqlUrl,
     publicUrlTemplate: fly.publicUrlTemplate,
     waitSeconds: 5,
     pollMs: 20,
@@ -52,7 +51,18 @@ test("a workspace gets an app of its own, an address, a volume and a machine, an
   assert.equal(app.org, "hive-test");
   // Its own private network, named for it, so no other workspace's machine can reach this one.
   assert.equal(app.network, "hive-w4k9t2mx7a");
-  assert.deepEqual([...app.ips].sort(), ["shared_v4", "v6"]);
+  // A public address of each kind, or the app's fly.dev name has nothing to point at.
+  assert.equal(app.addresses.length, 2);
+  assert.equal(app.addresses.filter((a) => a.shared && !a.ip.includes(":")).length, 1);
+  assert.equal(app.addresses.filter((a) => !a.shared && a.ip.includes(":")).length, 1);
+  // The app is asked for under the name Fly's own client uses and the one its documentation does.
+  const [made] = flyCalls("POST", /^\/v1\/apps\?wait=true$/);
+  assert.deepEqual(made?.body, {
+    app_name: "hive-w4k9t2mx7a",
+    name: "hive-w4k9t2mx7a",
+    org_slug: "hive-test",
+    network: "hive-w4k9t2mx7a",
+  });
 
   const [volume] = [...app.volumes.values()];
   assert.equal(volume?.name, "data");
@@ -120,10 +130,36 @@ test("creating a workspace that exists finishes it rather than making a second",
   assert.equal(app?.volumes.size, 1);
   assert.equal(app?.machines.size, 1);
   // The second pass only looked: it made nothing.
-  const made = fly.calls
-    .slice(before)
-    .filter((c) => c.method === "POST" && !c.path.startsWith("/graphql"));
-  assert.deepEqual(made, []);
+  assert.deepEqual(
+    fly.calls.slice(before).filter((c) => c.method === "POST"),
+    [],
+  );
+});
+
+test("the machine is given time to end its runs and close its database when it is stopped", async () => {
+  await provisioner().create(spec());
+  assert.deepEqual(fly.machineOf("hive-w4k9t2mx7a")?.config.stop_config, {
+    signal: "SIGTERM",
+    timeout: "30s",
+  });
+});
+
+test("a volume Fly is already removing is not the one the workspace gets", async () => {
+  const p = provisioner();
+  await p.create(spec());
+  const app = fly.apps.get("hive-w4k9t2mx7a");
+  const [old] = [...(app?.volumes.values() ?? [])];
+  assert.ok(old);
+  // The machine and the volume were destroyed, and Fly still lists the volume for a while.
+  app?.machines.clear();
+  old.state = "pending_destroy";
+  await p.create(spec());
+  const volumes = [...(app?.volumes.values() ?? [])];
+  assert.equal(volumes.length, 2);
+  const [fresh] = volumes.filter((volume) => volume.state === "created");
+  assert.deepEqual(fly.machineOf("hive-w4k9t2mx7a")?.config.mounts, [
+    { volume: fresh?.id, path: "/data" },
+  ]);
 });
 
 test("a creation that stopped half way is picked up where it was", async () => {
@@ -179,7 +215,7 @@ test("Fly being busy or having a bad moment is tried again", async () => {
   // A request that is refused for good is not tried again.
   fly.failNext(/POST \/v1\/apps$/, 403, 5);
   await assert.rejects(provisioner().create(spec({ workspaceId: "wother0001" })), /answered 403/);
-  assert.equal(flyCalls("POST", /^\/v1\/apps$/).length, 4);
+  assert.equal(flyCalls("POST", /^\/v1\/apps(\?|$)/).length, 4);
 });
 
 test("the error from Fly names the call and its answer but never the token", async () => {
@@ -230,6 +266,8 @@ test("destroying removes the machine, the volume and the app, and can be done ag
   await p.create(spec());
   await p.destroy("w4k9t2mx7a");
   assert.equal(fly.apps.has("hive-w4k9t2mx7a"), false);
+  // A machine is killed rather than waited for.
+  assert.match(flyCalls("DELETE", /\/machines\//)[0]?.path ?? "", /\?force=true&kill=true$/);
   // Gone is gone: asking again, or for something that never was, is not an error.
   await p.destroy("w4k9t2mx7a");
   await p.destroy("wnever00001");
