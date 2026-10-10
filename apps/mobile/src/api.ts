@@ -15,14 +15,7 @@ export const API_URL = (
   (Platform.OS === "android" ? "http://10.0.2.2:8787" : "http://localhost:8787")
 ).replace(/\/$/, "");
 
-export class ApiError extends Error {
-  constructor(
-    message: string,
-    readonly status: number,
-  ) {
-    super(message);
-  }
-}
+export { ApiError, MuseApi } from "./api-client";
 
 const sessionKey = `hive:session:${API_URL}`;
 export function savedSession(): string {
@@ -32,32 +25,6 @@ export function saveSession(token: string) {
   if (typeof window === "undefined") return;
   if (token) window.localStorage.setItem(sessionKey, token);
   else window.localStorage.removeItem(sessionKey);
-}
-
-export class MuseApi {
-  constructor(readonly token: string) {}
-  async request<T>(path: string, body?: unknown, method?: string): Promise<T> {
-    const response = await fetch(`${API_URL}${path}`, {
-      method: method ?? (body === undefined ? "GET" : "POST"),
-      headers: {
-        Authorization: `Bearer ${this.token}`,
-        ...(body === undefined || body instanceof FormData
-          ? {}
-          : { "Content-Type": "application/json" }),
-      },
-      body: body === undefined ? undefined : body instanceof FormData ? body : JSON.stringify(body),
-    });
-    const payload = await response.json();
-    if (!response.ok)
-      throw new ApiError(
-        typeof payload.error === "string" ? payload.error : `Request failed (${response.status})`,
-        response.status,
-      );
-    return payload;
-  }
-  url(path: string) {
-    return path.startsWith("http") ? path : `${API_URL}${path}`;
-  }
 }
 
 export async function createSession(): Promise<{ token: string; mode: "sample" | "live" }> {

@@ -86,7 +86,7 @@ export default function App() {
       const saved = savedSession();
       if (saved) {
         try {
-          await new MuseApi(saved).request("/api/auth/session");
+          await new MuseApi(saved, API_URL).request("/api/auth/session");
           setToken(saved);
           return;
         } catch (e) {
@@ -118,7 +118,7 @@ export default function App() {
   }, []);
   const logout = useCallback(async () => {
     try {
-      await new MuseApi(token).request("/api/auth/logout", {});
+      await new MuseApi(token, API_URL).request("/api/auth/logout", {});
     } catch (e) {
       if (!(e instanceof ApiError) || e.status !== 401) throw e;
     }
@@ -240,7 +240,7 @@ export default function App() {
   );
 }
 function WorkspaceApp({ token, logout }: { token: string; logout: () => Promise<void> }) {
-  const api = useMemo(() => new MuseApi(token), [token]);
+  const api = useMemo(() => new MuseApi(token, API_URL), [token]);
   const [workspace, setWorkspace] = useState<Workspace>();
   const [section, setSection] = useState<Section>("chat");
   const [detail, setDetail] = useState<Detail>();

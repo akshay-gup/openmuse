@@ -11,7 +11,7 @@ import {
   taskBriefLimits,
 } from "../../../packages/domain/src/agent";
 import { useAgentWorkspace } from "./agent-workspace";
-import { API_URL, type MuseApi } from "./api";
+import type { MuseApi } from "./api";
 import { fileSize } from "./file-format";
 import { ago } from "./task-board";
 import { Button, Chip, colors, ErrorNotice, Field, radius, s } from "./ui";
@@ -49,7 +49,7 @@ export async function attachFile(api: MuseApi, taskId: string): Promise<boolean>
     form.append("file", file.file, file.name);
     await api.request(path, form);
   } else {
-    const upload = await FileSystem.uploadAsync(`${API_URL}${path}`, file.uri, {
+    const upload = await FileSystem.uploadAsync(api.url(path), file.uri, {
       httpMethod: "POST",
       uploadType: FileSystem.FileSystemUploadType.MULTIPART,
       fieldName: "file",

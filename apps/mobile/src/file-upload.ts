@@ -2,7 +2,7 @@ import * as DocumentPicker from "expo-document-picker";
 import * as FileSystem from "expo-file-system/legacy";
 import { Platform } from "react-native";
 import { type ChannelFile, channelFileLimits } from "../../../packages/domain/src/workspace-files";
-import { API_URL, type MuseApi } from "./api";
+import type { MuseApi } from "./api";
 import { fileSize, pickerTypes } from "./file-format";
 
 export interface PickedFile {
@@ -58,7 +58,7 @@ export async function uploadChannelFile(
     if (request) form.append("request", request);
     return api.request<ChannelFile>(path, form);
   }
-  const upload = await FileSystem.uploadAsync(`${API_URL}${path}`, picked.uri, {
+  const upload = await FileSystem.uploadAsync(api.url(path), picked.uri, {
     httpMethod: "POST",
     uploadType: FileSystem.FileSystemUploadType.MULTIPART,
     fieldName: "file",
