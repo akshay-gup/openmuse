@@ -1,5 +1,7 @@
 # VM deploy
 
+This is one Hive for one team on one box. To run Hive as a service that starts a workspace for each team, see [Hosted workspaces](hosted.md).
+
 One box, one process. The API serves the web UI itself (same origin), runs
 the task worker in-process, and keeps the database plus channel storage on
 local disk. Open the VM's URL in a browser; mobile clients point at the same

@@ -50,6 +50,14 @@ one workspace shared by the team, so what the agent is given once is there for e
   followed). The agent's `send_file` shares a file as a card and `request_upload`
   asks for files with an upload button and modal (the call returns at once; the
   upload is recorded against the request and a message back names each file).
+- **Hosted workspaces** — a control plane (`apps/control`) with accounts, Google
+  sign-in, workspaces, members (owner, admin, member) and invitations; a provisioner
+  that starts each workspace on Fly Machines (an app, a private network, an encrypted
+  volume and a machine of its own) or as a local process; workspace tokens that sign a
+  person in to a workspace without the workspace knowing anything else about them; a
+  workspace image (`apps/workspace`) that runs the server and OpenCode; and the app's
+  own screens for signing in, making and opening workspaces, and inviting people. See
+  `docs/hosted.md`.
 - **Channel/thread engine** — channels as worker scopes, threads as sessions,
   user-driven rename (display metadata only; ID-based paths stable), new channels
   start with zero threads.
@@ -72,6 +80,15 @@ one workspace shared by the team, so what the agent is given once is there for e
       (today workers share the filesystem with no scoping).
 - [ ] Orchestrator queue and new-tab routing for delegated tasks; delegated
       status (queued/working/done) visible in the originating channel.
+- [ ] **Hosted, still to build.** Billing and plans that are enforced. A model the platform
+      pays for without putting its key in every workspace (a gateway the workspaces call).
+      Gmail and Calendar through the control plane, since an OAuth client cannot list a
+      redirect for every workspace. Email for invitations (the control plane prints them).
+      Rolling a new image out to workspaces that are running. Cleaning up expired sessions,
+      login codes and sign-in states in the control plane. The agent as a user of its own
+      inside a workspace, so it cannot read the server's secrets. Returning from sign-in on
+      a phone by a link the app owns rather than a custom scheme, and binding the code to
+      the app that asked. Trying all of it on a real Fly account (`docs/hosted.md`).
 - [ ] **Roles.** There are none yet, so everyone who can sign in can do everything: connect or
       disconnect the workspace's Google account, approve or decline what is sent from it, mark
       tasks done, change the agent's name, tone and memories, set permission rules, and archive
@@ -86,7 +103,8 @@ one workspace shared by the team, so what the agent is given once is there for e
 ## Non-goals for now
 
 - Personal OAuth integrations (e.g. Gmail) for workers.
-- Horizontal service splitting — the single box serves a small collaborator group.
+- Horizontal service splitting — the single box serves a small collaborator group. (A hosted
+  Hive runs one box per team, not one service split across many.)
 
 Each item needs its own capability boundaries, failure behavior, and end-to-end
 evidence before it becomes a supported feature. No dates are promised.

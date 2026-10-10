@@ -20,7 +20,9 @@ pnpm --dir apps/mobile ios
 pnpm --dir apps/mobile android
 ```
 
-The default API is `http://localhost:8787`, or `http://10.0.2.2:8787` on the Android emulator. Set `EXPO_PUBLIC_API_URL` to your reachable server URL for a physical device or deployment. Live mode signs in with Google; local mode opens the fictional workspace automatically. The web build keeps the session token in `localStorage`.
+The default API is `http://localhost:8787`, or `http://10.0.2.2:8787` on the Android emulator. Set `EXPO_PUBLIC_API_URL` to your reachable server URL for a physical device or deployment. Live mode signs in with Google; local mode opens the fictional workspace automatically. The session is kept in `localStorage` on the web and in the keychain (`expo-secure-store`) on iOS and Android.
+
+A build made with `EXPO_PUBLIC_CONTROL_URL` set to a control plane's address is the hosted app: people sign in there, see their workspaces, make or join one, and are taken into it, and `EXPO_PUBLIC_API_URL` is not used. See [Hosted workspaces](../../docs/hosted.md). An invitation link (`/join/<token>` on the web, `hive://join/<token>` on a phone) opens the join screen.
 
 PDFs use `react-native-pdf` and `react-native-blob-util` in an Expo **development build**. Expo Go does not include these native modules. The config plugins in `app.json` configure the native projects. Web uses the browser’s real PDF reader, with page/zoom controls and download/print access. PDF form fields save a new server artifact.
 

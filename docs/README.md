@@ -9,6 +9,8 @@ The demos follow a request from chat to the agent's inline browser, then show ho
 ## Guides
 
 - [Quick start and architecture](../README.md)
+- [VM deploy: one team on one box](vm-deploy.md)
+- [Hosted workspaces: a service for many teams](hosted.md)
 - [Native iOS / Android / web setup](../apps/mobile/README.md)
 - [Browser worker, API, persistence, and network boundary](../apps/worker/README.md)
 - [CopilotKit Rich Threads](RICH-THREADS.md)

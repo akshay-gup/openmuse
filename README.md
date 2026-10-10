@@ -72,12 +72,14 @@ Where Hive is headed: a self-contained, agent-native team chat.
 - Delegated tasks run as OpenCode sessions in auto-mode; background permission requests surface in the originating thread.
 - Mention-only chat trigger: the agent runs only when the latest message contains `@hive` (env `AGENT_MENTION`); on trigger it receives the full conversation transcript plus attached files.
 - A shared workspace: everyone who signs in sees the same channels, threads, tasks, files, memories and Google connection, and only each person's orchestrator chat is private. See [Who sees what](#who-sees-what).
+- Hosted workspaces: a control plane signs people in, starts a workspace of its own for each team (a machine, a disk and its own agent) on Fly, and lets them invite people; the app signs in to it. See [docs/hosted.md](docs/hosted.md).
 
 **Next**
 - [ ] Live VM verification: end-to-end task loop with real inference, `opencode serve` systemd unit.
 - [ ] Shared-computer arbitration between channel workers on the one box.
 - [ ] Orchestrator queue and new-tab routing for delegated tasks.
-- [ ] **Roles.** There are none yet: everyone who can sign in can do everything, including connecting Google, approving what is sent from it, and changing the agent's settings. Next are an owner and members, who can invite or remove people, and which actions are owner-only. Until then, only let in people you trust (see [Who sees what](#who-sees-what)).
+- [ ] **Roles inside a workspace.** A hosted Hive's control plane has owners, admins and members, who invite and remove people, but a workspace does not use them yet: everyone it lets in can do everything, including connecting Google, approving what is sent from it, and changing the agent's settings, and a self-hosted Hive has no members to tell apart. Next are which actions are owner-only. Until then, only let in people you trust (see [Who sees what](#who-sees-what)).
+- [ ] Hosted: billing, a model the platform pays for without handing its key to every workspace, Gmail and Calendar connected through the control plane, email for invitations, and rolling a new image out to workspaces that are already running.
 - [ ] Browser access (deferred); native mobile against the same API.
 
 Details and open questions live in [ROADMAP.md](ROADMAP.md).
@@ -123,6 +125,8 @@ For iOS or Android, use `pnpm --dir apps/mobile ios` or `pnpm --dir apps/mobile 
 Hive deploys as one self-contained process on a VM: the API serves the Expo web UI same-origin, threads and channels persist on local disk under `DATA_DIR`, and `opencode serve` runs as a systemd unit alongside it. Follow **[docs/vm-deploy.md](docs/vm-deploy.md)** — build/run, environment variables, a minimal reverse-proxy config, and the channel storage layout.
 
 The API answers `/api/health` for a platform's health check.
+
+To run Hive as a service for many teams, where people sign in once, make a workspace and invite their team, a control plane starts a workspace of its own for each team: a machine, a disk and its own OpenCode. See **[docs/hosted.md](docs/hosted.md)** for how it fits together, running it on a laptop, deploying it to Fly, and what has not been tried on a real account.
 
 Key variables for the VM (see the deploy doc for the full table):
 
@@ -253,6 +257,8 @@ flowchart TD
 | `apps/mobile` | Shared iOS, Android, and web UI with CopilotKit headless hooks. |
 | `apps/server` | API, CopilotKit runtime, identity boundary, OpenCode agent layer, task engine, reviews, files, and persistence. |
 | `apps/worker` | Token-protected Playwright browser service with persistent profiles. |
+| `apps/control` | The hosted control plane: accounts, workspaces, members and invitations, workspace tokens, and the provisioners (Fly, local) that start workspaces. |
+| `apps/workspace` | The image a hosted workspace runs: the server and OpenCode, started by a supervisor. |
 | `packages/domain` | Shared types and request validation. |
 | `packages/integrations` | Google and browser protocol adapters. |
 | `packages/backends` | Optional OpenBot HTTP adapter and its identity boundary. |
