@@ -65,6 +65,8 @@ test("a person the control plane vouches for gets a session in this workspace", 
   assert.equal(response.status, 200);
   const session = await response.json();
   assert.equal(session.mode, "live");
+  // It says when the session ends, so the app can renew it in time.
+  assert.ok(Math.abs(session.expiresAt - (Date.now() + MANAGED_SESSION_MS)) < 5000);
   assert.deepEqual(session.user, {
     id: "acct:acct_ada",
     email: "ada@example.com",

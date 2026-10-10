@@ -71,6 +71,8 @@ export class ManagedSignIn {
     const session = await this.auth.sessionForOwner(owner, MANAGED_SESSION_MS);
     return {
       ...session,
+      // So the app can sign in again, through the control plane, before the session runs out.
+      expiresAt: now + MANAGED_SESSION_MS,
       user: { id: owner, email: verified.email, name: verified.name, role: verified.role },
     };
   }
