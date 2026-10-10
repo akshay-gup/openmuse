@@ -1,4 +1,5 @@
-import { Hono } from "hono";
+import { getConnInfo } from "@hono/node-server/conninfo";
+import { type Context, Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { cors } from "hono/cors";
 import { z } from "zod";
@@ -7,6 +8,7 @@ import { serveWebFile, webRootDir } from "../../server/src/web-static.ts";
 import { type Account, Accounts } from "./accounts.ts";
 import type { ControlConfig } from "./config.ts";
 import { HttpError } from "./errors.ts";
+import { RateLimiter } from "./limits.ts";
 import { consoleMailer, type Mailer } from "./mailer.ts";
 import type { Provisioner } from "./provisioner.ts";
 import type { SigningKeys } from "./signing.ts";
@@ -82,14 +84,18 @@ export function createControlApp(db: Store, config: ControlConfig, deps: Control
   );
 
   // Signing in. These are public: they are how a person gets a session.
-  let window = 0;
-  let attempts = 0;
-  const limitSignIns = () => {
-    if (Date.now() - window > 60_000) {
-      window = Date.now();
-      attempts = 0;
+  const signIns = new RateLimiter(20);
+  const visitorOf = (c: Context): string => {
+    const forwarded = config.clientIpHeader ? c.req.header(config.clientIpHeader)?.trim() : "";
+    if (forwarded) return forwarded.slice(0, 64);
+    try {
+      return getConnInfo(c).remote.address ?? "unknown";
+    } catch {
+      return "unknown";
     }
-    if (++attempts > 30)
+  };
+  const limitSignIns = (c: Context) => {
+    if (!signIns.allow(visitorOf(c)))
       throw new HttpError("Too many sign-in attempts. Try again in a minute.", 429);
   };
   const sessionFor = async (account: Account) => ({
@@ -98,14 +104,14 @@ export function createControlApp(db: Store, config: ControlConfig, deps: Control
   });
   app.post("/v1/auth/dev", async (c) => {
     if (config.mode !== "sample") throw new HttpError("Sign in with Google", 404);
-    limitSignIns();
+    limitSignIns(c);
     const body = z
       .object({ email: z.string().max(320), name: z.string().max(100).optional() })
       .parse(await c.req.json());
     return c.json(await sessionFor(await accounts.upsert(body)));
   });
   app.post("/v1/auth/exchange", async (c) => {
-    limitSignIns();
+    limitSignIns(c);
     const { code } = z.object({ code: z.string().min(1).max(200) }).parse(await c.req.json());
     const { token, account } = await accounts.exchangeLoginCode(code);
     return c.json({ token, account: { id: account.id, email: account.email, name: account.name } });

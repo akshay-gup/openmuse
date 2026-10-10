@@ -25,6 +25,7 @@ const config = (over: Partial<ControlConfig> = {}): ControlConfig => ({
   dataDir: directory,
   allowedOrigins: ["https://other.example.test"],
   maxWorkspacesPerAccount: 3,
+  clientIpHeader: "x-client-ip",
   googleRedirectUri: "https://hive.example.test/v1/auth/google/callback",
   ...over,
 });
@@ -68,7 +69,8 @@ function person(token: string) {
 async function signIn(email: string, name?: string) {
   const response = await control.app.request("/v1/auth/dev", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    // Each person comes from an address of their own, as they would in life.
+    headers: { "Content-Type": "application/json", "X-Client-Ip": email },
     body: JSON.stringify({ email, name }),
   });
   assert.equal(response.status, 200);

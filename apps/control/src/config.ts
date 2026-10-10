@@ -16,6 +16,11 @@ export interface ControlConfig {
   allowedOrigins: string[];
   /** How many workspaces one person can have made. */
   maxWorkspacesPerAccount: number;
+  /**
+   * The header the host's proxy puts the visitor's address in (Fly-Client-IP on Fly). Sign-in
+   * limits count per visitor, and without it every visitor looks like the proxy.
+   */
+  clientIpHeader?: string;
   googleClientId?: string;
   googleClientSecret?: string;
   googleRedirectUri: string;
@@ -55,6 +60,7 @@ export function readControlConfig(env: Env = process.env): ControlConfig {
       .map((origin) => origin.trim())
       .filter(Boolean),
     maxWorkspacesPerAccount: maxWorkspaces,
+    clientIpHeader: env.CONTROL_CLIENT_IP_HEADER?.trim() || undefined,
     googleClientId: env.GOOGLE_CLIENT_ID?.trim() || undefined,
     googleClientSecret: env.GOOGLE_CLIENT_SECRET?.trim() || undefined,
     googleRedirectUri: `${publicUrl}/v1/auth/google/callback`,

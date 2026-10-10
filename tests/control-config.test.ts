@@ -21,6 +21,11 @@ test("a control plane starts as a sample one on a laptop", () => {
   assert.equal(config.googleRedirectUri, "http://localhost:8800/v1/auth/google/callback");
   assert.deepEqual(config.allowedOrigins, ["http://localhost:8081", "http://127.0.0.1:8081"]);
   assert.deepEqual(readControlConfig({ CONTROL_ALLOWED_ORIGINS: "" }).allowedOrigins, []);
+  assert.equal(config.clientIpHeader, undefined);
+  assert.equal(
+    readControlConfig({ CONTROL_CLIENT_IP_HEADER: " Fly-Client-IP " }).clientIpHeader,
+    "Fly-Client-IP",
+  );
 });
 
 test("a sample control plane refuses to listen beyond the machine it is on", () => {
