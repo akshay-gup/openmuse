@@ -168,7 +168,7 @@ export function PeopleSheet() {
           </Card>
           <Card style={{ gap: 4, marginTop: 12 }}>
             <Field
-              label="Or invite by email"
+              label="Or invite one person by email"
               value={email}
               onChangeText={setEmail}
               placeholder="colleague@example.com"
@@ -203,13 +203,16 @@ export function PeopleSheet() {
                     });
                     setEmail("");
                     setLink(made.link);
-                    notify(`Invitation made for ${to}`);
+                    notify(`Invitation made for ${to}. Share the link with them.`);
                   })
                 }
               >
-                Send invitation
+                Create invitation
               </Button>
             </View>
+            <Text style={[s.small, { marginTop: 10 }]}>
+              The link it makes works only for that address. Share it with them above.
+            </Text>
           </Card>
           {invites.length > 0 && (
             <View style={{ marginTop: 12, gap: 8 }}>
