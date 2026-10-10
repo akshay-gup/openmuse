@@ -201,6 +201,8 @@ export async function createApp(
   app.get("/api/auth/google/url", async (c) => {
     if (config.managed) throw new AppError("Sign in through your Hive account", 404);
     const origin = c.req.query("origin");
+    // The page that opened the sign-in is handed the result, so it has to be one of this server's own.
+    if (origin && !origins.has(origin)) throw new AppError("Origin is not allowed", 403);
     return c.json(await google.loginUrl(origin || undefined));
   });
   /**
