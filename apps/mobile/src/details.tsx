@@ -39,6 +39,7 @@ import { ChannelFileSheet, ChannelFilesSheet } from "./channel-files";
 import { ComputerSheet } from "./computer";
 import DateTimeEditor from "./DateTimeEditor";
 import { localDateTime, zonedInstant } from "./date-time";
+import { PeopleSheet } from "./hosted/people-sheet";
 import PdfReader from "./PdfReader";
 import {
   Button,
@@ -62,6 +63,7 @@ import { type Detail, useWorkspace } from "./workspace";
 export function Details({ detail }: { detail: Detail }) {
   const { close, navigate } = useWorkspace();
   if (detail.type === "computer") return <ComputerSheet />;
+  if (detail.type === "people") return <PeopleSheet />;
   if (detail.type === "channelFiles")
     return <ChannelFilesSheet channelId={detail.channelId} name={detail.name} path={detail.path} />;
   if (detail.type === "channelFile")

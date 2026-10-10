@@ -1,6 +1,7 @@
 import {
   Bot,
   CalendarDays,
+  ChevronsUpDown,
   FileText,
   Hash,
   Lightbulb,
@@ -18,6 +19,8 @@ import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-nati
 import type { Section } from "../../../packages/domain/src";
 import { type Channel, ORCHESTRATOR_CHANNEL_ID } from "../../../packages/domain/src/agent";
 import { useAgentWorkspace } from "./agent-workspace";
+import { useHosted } from "./hosted/context";
+import { roleLabel } from "./hosted/people-text";
 import { useMuseThread } from "./threads";
 import {
   Button,
@@ -97,6 +100,7 @@ export function Sidebar({
   onNavigate?: () => void;
 }) {
   const { api, open, section, navigate, workspace, logout } = useWorkspace();
+  const hosted = useHosted();
   const { enabled, selection, select, mainId } = useMuseThread();
   const { data } = useAgentWorkspace();
   const [channels, setChannels] = useState<Channel[] | null>(null);
@@ -206,11 +210,49 @@ export function Sidebar({
           },
         ]}
       >
-        <Mascot size={28} variant={data?.identity.avatar} />
-        <View style={{ flex: 1 }}>
-          <Text style={s.heading}>{data?.identity.name || "Hive"}</Text>
-          <Text style={s.small}>Your workspace</Text>
-        </View>
+        {hosted ? (
+          // A hosted person has workspaces: this one's name, who is in it, and the way to another.
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`${hosted.workspace.name}: people and workspaces`}
+            onPress={() => {
+              onNavigate?.();
+              open({ type: "people" });
+            }}
+            style={({ pressed, hovered }: WebPressState) => [
+              s.row,
+              {
+                flex: 1,
+                minWidth: 0,
+                gap: 10,
+                paddingVertical: 6,
+                paddingHorizontal: 6,
+                marginLeft: -6,
+                borderRadius: radius.md,
+                backgroundColor: pressed || hovered ? colors.surfaceHover : "transparent",
+              },
+            ]}
+          >
+            <Mascot size={28} variant={data?.identity.avatar} />
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={s.heading} numberOfLines={1}>
+                {hosted.workspace.name}
+              </Text>
+              <Text style={s.small} numberOfLines={1}>
+                {roleLabel[hosted.workspace.role]} · People
+              </Text>
+            </View>
+            <ChevronsUpDown size={16} color={colors.muted} />
+          </Pressable>
+        ) : (
+          <>
+            <Mascot size={28} variant={data?.identity.avatar} />
+            <View style={{ flex: 1 }}>
+              <Text style={s.heading}>{data?.identity.name || "Hive"}</Text>
+              <Text style={s.small}>Your workspace</Text>
+            </View>
+          </>
+        )}
         {compact && <IconButton icon={X} label="Close navigation" onPress={() => onNavigate?.()} />}
       </View>
       <ScrollView

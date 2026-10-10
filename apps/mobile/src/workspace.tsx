@@ -24,6 +24,7 @@ export type Detail =
   | { type: "delegate"; threadId?: string }
   | { type: "notifications" }
   | { type: "computer" }
+  | { type: "people" }
   | { type: "menu" };
 export interface WorkspaceContextValue {
   workspace: Workspace;
