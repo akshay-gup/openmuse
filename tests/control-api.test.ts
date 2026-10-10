@@ -143,7 +143,12 @@ test("a web page from another origin is refused, and the app's own is allowed", 
     headers: { Origin: "https://other.example.test" },
   });
   assert.equal(configured.status, 200);
-  assert.deepEqual(await ours.json(), { ok: true, mode: "sample", provisioner: "fake" });
+  assert.deepEqual(await ours.json(), {
+    ok: true,
+    mode: "sample",
+    google: false,
+    provisioner: "fake",
+  });
 });
 
 test("creating a workspace starts it, and it becomes ready with an address", async () => {

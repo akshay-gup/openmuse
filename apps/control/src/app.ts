@@ -79,8 +79,14 @@ export function createControlApp(db: Store, config: ControlConfig, deps: Control
     return c.json({ error: "Something went wrong. Try again." }, 500);
   });
 
+  // What the app needs to know before anyone has signed in: which ways in there are.
   app.get("/health", (c) =>
-    c.json({ ok: true, mode: config.mode, provisioner: deps.provisioner.name }),
+    c.json({
+      ok: true,
+      mode: config.mode,
+      google: Boolean(deps.google),
+      provisioner: deps.provisioner.name,
+    }),
   );
 
   // Signing in. These are public: they are how a person gets a session.

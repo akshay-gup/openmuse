@@ -244,6 +244,15 @@ test("a person who turns Google down is told so, and a half return is refused", 
   assert.equal((await get("/v1/auth/google/callback?state=only")).status, 400);
 });
 
+test("health says whether people can sign in with Google, for the app to offer it", async () => {
+  assert.equal((await (await get("/health")).json()).google, true);
+  const bare = createControlApp(db, config, {
+    provisioner: new FakeProvisioner(),
+    keys: await loadSigningKeys(directory, {}),
+  });
+  assert.equal((await (await bare.app.request("/health")).json()).google, false);
+});
+
 test("without Google set up there is no Google sign-in", async () => {
   const bare = createControlApp(db, config, {
     provisioner: new FakeProvisioner(),
