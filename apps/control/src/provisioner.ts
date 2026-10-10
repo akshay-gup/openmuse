@@ -33,6 +33,8 @@ export interface Provisioner {
   state(workspaceId: string): Promise<MachineState>;
   /** Remove the workspace and its data. */
   destroy(workspaceId: string): Promise<void>;
+  /** Let go of what the provisioner itself holds (processes it started, say) when the control plane stops. */
+  close?(): Promise<void>;
 }
 
 /** A provisioning failure, with what to tell the person, apart from what the logs get. */

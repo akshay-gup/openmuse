@@ -1,0 +1,423 @@
+import type { Plan } from "./plans.ts";
+import {
+  type MachineState,
+  ProvisionError,
+  type ProvisionedWorkspace,
+  type Provisioner,
+  type WorkspaceSpec,
+} from "./provisioner.ts";
+
+export interface FlyConfig {
+  /** An org-scoped token that can create apps, volumes and machines. */
+  token: string;
+  /** The org workspaces are made in, as Fly names it in URLs (its slug). */
+  org: string;
+  /** What each workspace's machine runs: an image Fly can pull, tag included. */
+  image: string;
+  /** Where to run them when a workspace does not say, as Fly names regions (`iad`). */
+  region: string;
+  /** Put in front of the workspace id to name its app, so workspaces are easy to tell apart. */
+  appPrefix: string;
+  /** Environment given to every workspace, beyond what Hive sets (MODEL, provider keys, …). */
+  workspaceEnv: Record<string, string>;
+  apiUrl: string;
+  graphqlUrl: string;
+  /** Where a workspace answers once it runs; `{app}` stands for its app name. */
+  publicUrlTemplate: string;
+  /** How long to wait for a new or waking workspace to answer before giving up. */
+  waitSeconds: number;
+  /** How often to ask a starting workspace whether it answers (milliseconds; 2000 when unset). */
+  pollMs?: number;
+  /** The first pause before trying a refused call again, doubled each time (milliseconds; 500 when unset). */
+  retryMs?: number;
+}
+
+type Env = Record<string, string | undefined>;
+
+/** The settings from the environment (FLY_*), or an error naming what is missing. */
+export function flyConfigFromEnv(env: Env = process.env): FlyConfig {
+  const need = (name: string) => {
+    const value = env[name]?.trim();
+    if (!value) throw new Error(`The Fly provisioner needs ${name}`);
+    return value;
+  };
+  let workspaceEnv: Record<string, string> = {};
+  if (env.HIVE_WORKSPACE_ENV?.trim()) {
+    try {
+      const parsed = JSON.parse(env.HIVE_WORKSPACE_ENV);
+      if (
+        typeof parsed !== "object" ||
+        parsed === null ||
+        Object.values(parsed).some((value) => typeof value !== "string")
+      )
+        throw new Error("not an object of strings");
+      workspaceEnv = parsed;
+    } catch {
+      throw new Error("HIVE_WORKSPACE_ENV must be a JSON object of strings");
+    }
+  }
+  return {
+    token: need("FLY_API_TOKEN"),
+    org: need("FLY_ORG"),
+    image: need("FLY_IMAGE"),
+    region: env.FLY_REGION?.trim() || "iad",
+    appPrefix: env.FLY_APP_PREFIX?.trim() || "hive",
+    workspaceEnv,
+    apiUrl: (env.FLY_API_URL?.trim() || "https://api.machines.dev/v1").replace(/\/+$/, ""),
+    graphqlUrl: env.FLY_GRAPHQL_URL?.trim() || "https://api.fly.io/graphql",
+    publicUrlTemplate: env.FLY_PUBLIC_URL_TEMPLATE?.trim() || "https://{app}.fly.dev",
+    waitSeconds: Number(env.FLY_WAIT_SECONDS ?? 180),
+  };
+}
+
+interface FlyMachine {
+  id: string;
+  state: string;
+  region?: string;
+}
+interface FlyVolume {
+  id: string;
+  name: string;
+}
+
+/** The port the workspace server listens on inside its machine. */
+const INTERNAL_PORT = 8787;
+const VOLUME_NAME = "data";
+const DATA_MOUNT = "/data";
+const REQUEST_MS = 30_000;
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** A call to Fly that did not go through, with Fly's own words, for the logs and not for people. */
+class FlyError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+    this.name = "FlyError";
+  }
+}
+
+/**
+ * Workspaces on Fly Machines: each is an app of its own, on a private network of its own, so a
+ * workspace's agent cannot reach another workspace's machine, with one machine and one volume.
+ * The app has a public address (`<app>.fly.dev`), and Fly's proxy stops the machine when nobody
+ * is using it and starts it on the next request, on plans that allow it.
+ */
+export class FlyProvisioner implements Provisioner {
+  readonly name = "fly";
+  constructor(private readonly config: FlyConfig) {}
+
+  /** `hive-<id>`: Fly app names are lowercase letters, digits and dashes, up to 30 characters. */
+  appName(workspaceId: string): string {
+    return `${this.config.appPrefix}-${workspaceId}`.toLowerCase();
+  }
+
+  async create(spec: WorkspaceSpec): Promise<ProvisionedWorkspace> {
+    const app = this.appName(spec.workspaceId);
+    const url = this.publicUrl(app);
+    try {
+      await this.ensureApp(app);
+      await this.ensureAddresses(app);
+      const volume = await this.ensureVolume(app, spec);
+      const machine = await this.ensureMachine(app, volume, spec, url);
+      await this.waitStarted(app, machine.id);
+      await this.waitAnswering(url, spec.workspaceId);
+    } catch (error) {
+      if (error instanceof ProvisionError) throw error;
+      throw new ProvisionError(`Fly: ${error instanceof Error ? error.message : error}`);
+    }
+    return { url };
+  }
+
+  async wake(workspaceId: string): Promise<void> {
+    const app = this.appName(workspaceId);
+    const machine = await this.machine(app);
+    if (!machine) throw new ProvisionError(`Fly: ${app} has no machine to start`);
+    if (machine.state !== "started") {
+      if (machine.state === "stopping" || machine.state === "suspending")
+        await this.waitState(app, machine.id, "stopped");
+      await this.fly("POST", `/apps/${app}/machines/${machine.id}/start`);
+    }
+    await this.waitStarted(app, machine.id);
+    await this.waitAnswering(this.publicUrl(app), workspaceId);
+  }
+
+  async state(workspaceId: string): Promise<MachineState> {
+    const machine = await this.machine(this.appName(workspaceId));
+    if (!machine) return "missing";
+    switch (machine.state) {
+      case "started":
+        return "running";
+      case "created":
+      case "starting":
+      case "replacing":
+        return "starting";
+      default:
+        return "stopped";
+    }
+  }
+
+  async destroy(workspaceId: string): Promise<void> {
+    const app = this.appName(workspaceId);
+    // Machines first, then the volumes they held, then the app; a missing app is already done.
+    const machines = await this.fly<FlyMachine[]>("GET", `/apps/${app}/machines`, undefined, [404]);
+    if (!machines) return;
+    for (const machine of machines)
+      await this.fly("DELETE", `/apps/${app}/machines/${machine.id}?force=true`, undefined, [404]);
+    const volumes =
+      (await this.fly<FlyVolume[]>("GET", `/apps/${app}/volumes`, undefined, [404])) ?? [];
+    for (const volume of volumes)
+      await this.fly("DELETE", `/apps/${app}/volumes/${volume.id}`, undefined, [404]);
+    await this.fly("DELETE", `/apps/${app}`, undefined, [404]);
+  }
+
+  // The steps of `create`, each safe to repeat.
+
+  private async ensureApp(app: string) {
+    const existing = await this.fly("GET", `/apps/${app}`, undefined, [404]);
+    if (existing) return;
+    await this.fly(
+      "POST",
+      "/apps",
+      // The network is the app's own: apps on separate networks cannot reach each other.
+      { app_name: app, org_slug: this.config.org, network: app },
+      [422],
+    );
+  }
+
+  /** A public address for the app, or its `fly.dev` name has nothing to point at. */
+  private async ensureAddresses(app: string) {
+    const answer = await this.graphql<{
+      app: { ipAddresses: { nodes: { type: string }[] } } | null;
+    }>("query($name: String!) { app(name: $name) { ipAddresses { nodes { type } } } }", {
+      name: app,
+    });
+    const have = new Set(answer.app?.ipAddresses.nodes.map((node) => node.type));
+    for (const type of ["v6", "shared_v4"]) {
+      if (have.has(type)) continue;
+      await this.graphql(
+        "mutation($input: AllocateIPAddressInput!) { allocateIpAddress(input: $input) { ipAddress { address } } }",
+        { input: { appId: app, type } },
+      );
+    }
+  }
+
+  private async ensureVolume(app: string, spec: WorkspaceSpec): Promise<FlyVolume> {
+    const volumes = (await this.fly<FlyVolume[]>("GET", `/apps/${app}/volumes`)) ?? [];
+    const existing = volumes.find((volume) => volume.name === VOLUME_NAME);
+    if (existing) return existing;
+    return (await this.fly<FlyVolume>("POST", `/apps/${app}/volumes`, {
+      name: VOLUME_NAME,
+      region: spec.region ?? this.config.region,
+      size_gb: spec.plan.volumeGb,
+      encrypted: true,
+      // Fly keeps a snapshot a day; how long it keeps them is the only protection a volume has
+      // against losing its host, so keep them as long as Fly allows.
+      snapshot_retention: 60,
+    })) as FlyVolume;
+  }
+
+  private async ensureMachine(
+    app: string,
+    volume: FlyVolume,
+    spec: WorkspaceSpec,
+    url: string,
+  ): Promise<FlyMachine> {
+    const existing = await this.machine(app);
+    if (existing) return existing;
+    return (await this.fly<FlyMachine>("POST", `/apps/${app}/machines`, {
+      name: `${app}-1`,
+      region: spec.region ?? this.config.region,
+      config: this.machineConfig(spec, volume, url),
+    })) as FlyMachine;
+  }
+
+  /** What the machine is: the image, what it is told about its workspace, its size, disk and address. */
+  machineConfig(spec: WorkspaceSpec, volume: FlyVolume, url: string) {
+    const plan: Plan = spec.plan;
+    return {
+      image: this.config.image,
+      env: {
+        ...this.config.workspaceEnv,
+        // What makes it a managed workspace: its id and who may vouch for people. The server
+        // makes its own secrets on the volume at first start, so none of them pass through here.
+        WORKSPACE_MODE: "live",
+        WORKSPACE_ID: spec.workspaceId,
+        CONTROL_PLANE_PUBLIC_KEY: spec.controlPublicKey,
+        PUBLIC_API_URL: url,
+        ALLOWED_ORIGINS: spec.allowedOrigins.join(","),
+        HOST: "0.0.0.0",
+        PORT: String(INTERNAL_PORT),
+        DATA_DIR: `${DATA_MOUNT}/hive`,
+        TASK_WORKER_ENABLED: "true",
+      },
+      guest: {
+        cpu_kind: plan.guest.cpuKind,
+        cpus: plan.guest.cpus,
+        memory_mb: plan.guest.memoryMb,
+      },
+      mounts: [{ volume: volume.id, path: DATA_MOUNT }],
+      services: [
+        {
+          protocol: "tcp",
+          internal_port: INTERNAL_PORT,
+          ports: [
+            { port: 443, handlers: ["tls", "http"] },
+            { port: 80, handlers: ["http"], force_https: true },
+          ],
+          // Fly's proxy stops an idle machine and starts it on the next request.
+          autostop: plan.stopsWhenIdle ? "stop" : "off",
+          autostart: true,
+          min_machines_running: 0,
+          checks: [
+            {
+              type: "http",
+              port: INTERNAL_PORT,
+              method: "GET",
+              path: "/api/health",
+              interval: "15s",
+              timeout: "5s",
+              grace_period: "60s",
+            },
+          ],
+        },
+      ],
+      restart: { policy: "on-failure", max_retries: 5 },
+      metadata: { hive_workspace: spec.workspaceId },
+    };
+  }
+
+  private async machine(app: string): Promise<FlyMachine | null> {
+    const machines = await this.fly<FlyMachine[]>("GET", `/apps/${app}/machines`, undefined, [404]);
+    return machines?.[0] ?? null;
+  }
+
+  private async waitStarted(app: string, machineId: string) {
+    await this.waitState(app, machineId, "started");
+  }
+
+  /** Fly answers a wait with the state reached, or 408 when its own time is up: ask again until ours is. */
+  private async waitState(app: string, machineId: string, state: string) {
+    const until = Date.now() + this.config.waitSeconds * 1000;
+    while (Date.now() < until) {
+      const seconds = Math.max(1, Math.min(30, Math.ceil((until - Date.now()) / 1000)));
+      try {
+        await this.fly(
+          "GET",
+          `/apps/${app}/machines/${machineId}/wait?state=${state}&timeout=${seconds}`,
+        );
+        return;
+      } catch (error) {
+        if (!(error instanceof FlyError && (error.status === 408 || error.status === 504)))
+          throw error;
+      }
+    }
+    throw new ProvisionError(`Fly: ${app} did not reach ${state} in ${this.config.waitSeconds}s`);
+  }
+
+  /** The workspace's own health check, through the public address: the machine is up and it is the right workspace. */
+  private async waitAnswering(url: string, workspaceId: string) {
+    const until = Date.now() + this.config.waitSeconds * 1000;
+    let last = "no answer";
+    while (Date.now() < until) {
+      try {
+        const response = await fetch(`${url}/api/health`, { signal: AbortSignal.timeout(5000) });
+        if (response.ok) {
+          const health = (await response.json()) as { ok?: boolean; workspace?: string };
+          if (health.ok && health.workspace === workspaceId) return;
+          last = "answered, but as a different workspace";
+        } else last = `status ${response.status}`;
+      } catch (error) {
+        last = error instanceof Error ? error.message : String(error);
+      }
+      await sleep(this.config.pollMs ?? 2000);
+    }
+    throw new ProvisionError(
+      `${url} did not answer in ${this.config.waitSeconds}s (${last})`,
+      "The workspace started but is not answering yet. Try again in a minute.",
+    );
+  }
+
+  private publicUrl(app: string) {
+    return this.config.publicUrlTemplate.replace("{app}", app).replace(/\/+$/, "");
+  }
+
+  // Calls to Fly.
+
+  /** A call to the Machines API. Statuses in `accept` come back as `null`; anything else not ok is an error. */
+  private async fly<T = unknown>(
+    method: string,
+    path: string,
+    body?: unknown,
+    accept: number[] = [],
+  ): Promise<T | null> {
+    const response = await this.request(`${this.config.apiUrl}${path}`, {
+      method,
+      headers: this.headers(body !== undefined),
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+    if (accept.includes(response.status)) return null;
+    const text = await response.text();
+    if (!response.ok)
+      throw new FlyError(
+        `${method} ${path} answered ${response.status}: ${text.slice(0, 300)}`,
+        response.status,
+      );
+    if (!text) return {} as T;
+    try {
+      return JSON.parse(text) as T;
+    } catch {
+      return {} as T;
+    }
+  }
+
+  private async graphql<T = unknown>(
+    query: string,
+    variables: Record<string, unknown>,
+  ): Promise<T> {
+    const response = await this.request(this.config.graphqlUrl, {
+      method: "POST",
+      headers: this.headers(true),
+      body: JSON.stringify({ query, variables }),
+    });
+    const text = await response.text();
+    if (!response.ok)
+      throw new FlyError(
+        `GraphQL answered ${response.status}: ${text.slice(0, 300)}`,
+        response.status,
+      );
+    const payload = JSON.parse(text) as { data?: T; errors?: { message: string }[] };
+    if (payload.errors?.length)
+      throw new FlyError(`GraphQL: ${payload.errors.map((e) => e.message).join("; ")}`, 422);
+    return payload.data as T;
+  }
+
+  private headers(json: boolean): Record<string, string> {
+    return {
+      Authorization: `Bearer ${this.config.token}`,
+      ...(json ? { "Content-Type": "application/json" } : {}),
+    };
+  }
+
+  /** One request, tried again when Fly is busy (429) or has a bad moment (5xx). */
+  private async request(url: string, init: RequestInit): Promise<Response> {
+    let last: Response | undefined;
+    for (let attempt = 0; attempt < 4; attempt++) {
+      try {
+        last = await fetch(url, { ...init, signal: AbortSignal.timeout(REQUEST_MS) });
+        if (last.status !== 429 && last.status < 500) return last;
+        const wait = Number(last.headers.get("retry-after"));
+        await sleep(
+          Number.isFinite(wait) && wait > 0
+            ? Math.min(wait, 10) * 1000
+            : (this.config.retryMs ?? 500) * 2 ** attempt,
+        );
+      } catch (error) {
+        if (attempt === 3) throw error;
+        await sleep((this.config.retryMs ?? 500) * 2 ** attempt);
+      }
+    }
+    return last as Response;
+  }
+}
