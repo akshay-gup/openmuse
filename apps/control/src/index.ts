@@ -1,0 +1,37 @@
+import { join } from "node:path";
+import { serve } from "@hono/node-server";
+import { createStore } from "../../server/src/db.ts";
+import { createControlApp } from "./app.ts";
+import { readControlConfig } from "./config.ts";
+import { provisionerFromEnv } from "./provisioners.ts";
+import { loadSigningKeys } from "./signing.ts";
+
+const config = readControlConfig();
+const db = await createStore({
+  dataDir: join(config.dataDir, "postgres"),
+  databaseUrl: config.databaseUrl,
+});
+const keys = await loadSigningKeys(config.dataDir);
+const provisioner = provisionerFromEnv();
+const { app, workspaces } = createControlApp(db, config, { provisioner, keys });
+
+// Pick up workspaces a restart interrupted, and again now and then for removals that did not finish.
+await workspaces.resume();
+const sweep = setInterval(() => void workspaces.resume(), 5 * 60 * 1000);
+sweep.unref();
+
+const server = serve({ fetch: app.fetch, port: config.port, hostname: config.host }, () =>
+  console.log(
+    `Hive control ${config.mode} at ${config.publicUrl} (provisioner: ${provisioner.name})`,
+  ),
+);
+const shutdown = () => {
+  clearInterval(sweep);
+  server.close(() => {
+    void (provisioner.close?.() ?? Promise.resolve())
+      .then(() => db.close())
+      .then(() => process.exit(0));
+  });
+};
+process.on("SIGINT", shutdown);
+process.on("SIGTERM", shutdown);
