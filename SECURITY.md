@@ -14,6 +14,18 @@ Files in a channel's workspace are made by the agent and added by people, so the
 
 The browser worker must remain private and require its own random token. It runs persistent Chromium with application-enforced public-network checks. Playwright disables Chromium's internal sandbox by default; this is not a full desktop VM or a security boundary for hostile tenants. The browser Docker image reduces host access but does not establish kernel-enforced network isolation. See [worker boundaries](apps/worker/README.md).
 
+## Hosted workspaces
+
+In a hosted Hive each team's workspace runs on a machine of its own, in an app of its own on a private network of its own, with an encrypted volume of its own. That is the boundary between teams: a workspace's agent can reach the public internet and its own machine, and nothing of another workspace's.
+
+**Who is let in.** A workspace has no sign-in of its own. A control plane signs a token for a person who belongs to it: Ed25519, for one workspace, valid for 60 seconds, accepted once. The workspace gives a session that lasts an hour, and the app signs in again before it ends. Belonging is decided only when a token is asked for, so a person who is removed loses access within the hour. A workspace holds the control plane's public key and nothing that can sign.
+
+**What the control plane holds.** Its signing key, the Fly token that can create and destroy every workspace, and people's names and emails. Protect them as you would a root credential, and keep the control plane's data and database private. Sign-in attempts are limited per visitor by the address the host's proxy reports (`CONTROL_CLIENT_IP_HEADER`); without it every visitor shares one allowance. A sign-in with Google is accepted only for an email address Google has verified, and the page that opens the sign-in is told its result only if it is one of the control plane's own.
+
+**What a workspace holds.** A workspace makes its own secrets on its volume the first time it starts, so they are in no setting of the machine and not at the control plane. Inside it the agent and the server are the same user, as in [the agent boundary](#agent-boundary): a shell the agent runs can read the workspace's database, its secrets and the model's provider key, which the operator gives every workspace in `HIVE_WORKSPACE_ENV`. Give workspaces a key with a spend limit; the agent's own environment leaves out the server's settings, but not that key. Anything a member can ask the agent to do, an instruction hidden in a page it reads can too.
+
+**Not yet.** There are no roles inside a workspace, so every member can do what any member of a self-hosted Hive can. The control plane's expired sessions, login codes and sign-in states are not cleaned up. On a phone, sign-in comes back by a custom link scheme, which another app can also claim, and the code is not bound to the app that asked for it.
+
 ## Agent boundary
 
 Hive's agent is OpenCode, run as `opencode serve`. Its tools read and write files, run shell commands, fetch web pages and call Hive's own tools. Treat it as a person with a shell on the host, not as a sandboxed program.
