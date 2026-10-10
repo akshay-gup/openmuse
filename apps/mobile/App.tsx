@@ -25,7 +25,7 @@ export default function App() {
     setBusy(true);
     setError("");
     try {
-      const saved = savedSession();
+      const saved = await savedSession();
       if (saved) {
         try {
           await new MuseApi(saved, API_URL).request("/api/auth/session");
@@ -33,11 +33,11 @@ export default function App() {
           return;
         } catch (e) {
           if (!(e instanceof ApiError) || e.status !== 401) throw e;
-          saveSession("");
+          await saveSession("");
         }
       }
       const session = await createSession();
-      saveSession(session.token);
+      await saveSession(session.token);
       setToken(session.token);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -50,7 +50,7 @@ export default function App() {
     setError("");
     try {
       const session = await exchangeLoginCode(code);
-      saveSession(session.token);
+      await saveSession(session.token);
       setToken(session.token);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -64,7 +64,7 @@ export default function App() {
     } catch (e) {
       if (!(e instanceof ApiError) || e.status !== 401) throw e;
     }
-    saveSession("");
+    await saveSession("");
     setToken("");
     setError("");
     setBusy(false);

@@ -1,4 +1,5 @@
 import { Platform } from "react-native";
+import { storage } from "./storage";
 
 /**
  * API base URL. On web the UI is served by the API itself, so same-origin is
@@ -18,13 +19,13 @@ export const API_URL = (
 export { ApiError, MuseApi } from "./api-client";
 
 const sessionKey = `hive:session:${API_URL}`;
-export function savedSession(): string {
-  return typeof window !== "undefined" ? (window.localStorage.getItem(sessionKey) ?? "") : "";
+/** The session this device kept for a workspace server it signs in to directly. */
+export async function savedSession(): Promise<string> {
+  return (await storage.get(sessionKey)) ?? "";
 }
-export function saveSession(token: string) {
-  if (typeof window === "undefined") return;
-  if (token) window.localStorage.setItem(sessionKey, token);
-  else window.localStorage.removeItem(sessionKey);
+export async function saveSession(token: string) {
+  if (token) await storage.set(sessionKey, token);
+  else await storage.remove(sessionKey);
 }
 
 export async function createSession(): Promise<{ token: string; mode: "sample" | "live" }> {
