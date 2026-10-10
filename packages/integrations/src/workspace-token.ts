@@ -97,6 +97,13 @@ function parsePrivateKey(encoded: string): KeyObject {
   }
 }
 
+/** The verifying key that goes with a signing key, so a deployment only has to be given one. */
+export function workspacePublicKeyOf(privateKey: string): string {
+  return createPublicKey(parsePrivateKey(privateKey))
+    .export({ type: "spki", format: "der" })
+    .toString("base64url");
+}
+
 const part = (value: unknown) => Buffer.from(JSON.stringify(value)).toString("base64url");
 const header = part({ alg: "EdDSA", typ: "JWT" });
 
