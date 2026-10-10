@@ -1,0 +1,16 @@
+.git
+.github
+.expo
+node_modules
+**/node_modules
+dist
+**/dist
+.env
+.env.*
+.hive
+.hive-control
+apps/mobile/ios
+apps/mobile/android
+artifacts
+docs
+tests
