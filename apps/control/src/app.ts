@@ -118,10 +118,15 @@ export function createControlApp(db: Store, config: ControlConfig, deps: Control
   });
   app.get("/v1/auth/google/url", async (c) => {
     if (!deps.google) throw new HttpError("Google sign-in is not set up", 503);
-    return c.json(await deps.google.loginUrl(c.req.query("origin") || undefined));
+    limitSignIns(c);
+    // The page that opened the sign-in is handed the result, so it has to be one of ours.
+    const origin = c.req.query("origin") || undefined;
+    if (origin && !origins.has(origin)) throw new HttpError("Origin is not allowed", 403);
+    return c.json(await deps.google.loginUrl(origin));
   });
   app.get("/v1/auth/google/callback", async (c) => {
     if (!deps.google) throw new HttpError("Google sign-in is not set up", 503);
+    limitSignIns(c);
     if (c.req.query("error"))
       return c.html("<h1>Sign-in cancelled</h1><p>You can return to Hive.</p>", 400);
     const state = c.req.query("state");

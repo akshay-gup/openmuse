@@ -3,6 +3,7 @@ import { serve } from "@hono/node-server";
 import { createStore } from "../../server/src/db.ts";
 import { createControlApp } from "./app.ts";
 import { readControlConfig } from "./config.ts";
+import { GoogleSignIn } from "./google.ts";
 import { provisionerFromEnv } from "./provisioners.ts";
 import { loadSigningKeys } from "./signing.ts";
 
@@ -13,7 +14,16 @@ const db = await createStore({
 });
 const keys = await loadSigningKeys(config.dataDir);
 const provisioner = provisionerFromEnv();
-const { app, workspaces } = createControlApp(db, config, { provisioner, keys });
+// A live control plane always has Google's client (the config insists); a sample one uses it if given.
+const google =
+  config.googleClientId && config.googleClientSecret
+    ? new GoogleSignIn(db, {
+        clientId: config.googleClientId,
+        clientSecret: config.googleClientSecret,
+        redirectUri: config.googleRedirectUri,
+      })
+    : undefined;
+const { app, workspaces } = createControlApp(db, config, { provisioner, keys, google });
 
 // Pick up workspaces a restart interrupted, and again now and then for removals that did not finish.
 await workspaces.resume();
