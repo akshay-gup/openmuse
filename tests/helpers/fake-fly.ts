@@ -105,6 +105,11 @@ export async function fakeFly(options: { token?: string; startDelayMs?: number }
     if (publicHealth) {
       const app = apps.get(publicHealth[1] ?? "");
       const machine = [...(app?.machines.values() ?? [])][0];
+      // Fly's proxy starts a stopped machine when a request comes for it, if its service says it may.
+      if (machine?.state === "stopped" && machine.config.services?.[0]?.autostart) {
+        machine.state = "starting";
+        startAt.set(machine.id, Date.now() + (options.startDelayMs ?? 0));
+      }
       if (machine) settle(machine);
       if (machine?.state !== "started") return send(res, 502, { error: "no machine is running" });
       return send(res, 200, {

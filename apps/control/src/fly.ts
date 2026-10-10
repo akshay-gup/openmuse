@@ -180,6 +180,18 @@ export class FlyProvisioner implements Provisioner {
     }
   }
 
+  /** Stop the machine and nothing else: its volume keeps the workspace, and `wake`, or a request to its address, starts it again. */
+  async stop(workspaceId: string): Promise<void> {
+    const app = this.appName(workspaceId);
+    const machine = await this.machine(app);
+    if (!machine || machine.state === "stopped") return;
+    await this.fly("POST", `/apps/${app}/machines/${machine.id}/stop`, {
+      signal: "SIGTERM",
+      timeout: "30s",
+    });
+    await this.waitState(app, machine.id, "stopped");
+  }
+
   async destroy(workspaceId: string): Promise<void> {
     const app = this.appName(workspaceId);
     // Machines first, then the volumes they held, then the app; a missing app is already done.

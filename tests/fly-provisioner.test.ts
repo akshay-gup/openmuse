@@ -253,6 +253,20 @@ test("waking starts a stopped machine and waits for the workspace to answer", as
   assert.equal(flyCalls("POST", /\/machines\/m\d+\/start$/).length, 1);
 });
 
+test("stopping asks the machine to end cleanly, and leaves one that is already stopped alone", async () => {
+  const p = provisioner();
+  await p.create(spec());
+  await p.stop("w4k9t2mx7a");
+  assert.equal(await p.state("w4k9t2mx7a"), "stopped");
+  const [asked] = flyCalls("POST", /\/machines\/m\d+\/stop$/);
+  assert.deepEqual(asked?.body, { signal: "SIGTERM", timeout: "30s" });
+  // Its volume and app are untouched, and it is not asked twice.
+  assert.equal(fly.apps.get("hive-w4k9t2mx7a")?.volumes.size, 1);
+  await p.stop("w4k9t2mx7a");
+  await p.stop("wnothere001");
+  assert.equal(flyCalls("POST", /\/machines\/m\d+\/stop$/).length, 1);
+});
+
 test("waking a workspace with no machine says so", async () => {
   await assert.rejects(provisioner().wake("wnothere001"), (error: unknown) => {
     assert.ok(error instanceof ProvisionError);
