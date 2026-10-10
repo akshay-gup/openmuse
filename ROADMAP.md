@@ -82,6 +82,8 @@ one workspace shared by the team, so what the agent is given once is there for e
       status (queued/working/done) visible in the originating channel.
 - [ ] **Hosted, still to build.** Billing and plans that are enforced. A model the platform
       pays for without putting its key in every workspace (a gateway the workspaces call).
+      A workspace that stays awake while its agent is working: Fly stops a machine it sees
+      no requests for, which can cut a delegated task short on a plan that stops when idle.
       Gmail and Calendar through the control plane, since an OAuth client cannot list a
       redirect for every workspace. Email for invitations (the control plane prints them).
       Rolling a new image out to workspaces that are running. Cleaning up expired sessions,

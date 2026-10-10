@@ -166,7 +166,9 @@ fly volumes create data -a hive-<id> --snapshot-id <snapshot> --region iad
 
 ## Plans
 
-`apps/control/src/plans.ts` is where a plan is defined: the machine, the disk, and whether the machine stops when it is idle. Every workspace is `free` today (2 shared CPUs, 4 GB, a 5 GB volume, stopped when idle); `team` is the same machine kept running with a 20 GB volume. Nothing bills yet. Fly bills a running machine by the second and a volume for as long as it exists, so a stopped workspace costs little but is not free.
+`apps/control/src/plans.ts` is where a plan is defined: the machine, the disk, and whether the machine stops when it is idle. Every workspace is `free` today (2 shared CPUs, 4 GB, a 5 GB volume, stopped when idle); `team` is the same machine kept running with a 20 GB volume. Nothing bills yet.
+
+A stopped machine does nothing, and Fly decides a machine is idle from the requests it is serving, not from the work it is doing. **Work that is meant to finish while nobody has the app open (a delegated task, say) can be cut short on a plan that stops when idle.** Until a workspace keeps itself awake while its agent is working, give such a team the `team` plan, which is always on. Fly bills a running machine by the second and a volume for as long as it exists, so a stopped workspace costs little but is not free.
 
 ## Who can do what
 
@@ -180,6 +182,7 @@ A workspace stores the role it was told, but does not yet use it: inside a works
 - **A model the platform pays for, safely.** `HIVE_WORKSPACE_ENV` puts the provider key in each workspace, where the agent's shell and any member can read it. Use a key with a spend limit, and one per workspace if you can, until the key lives in a gateway the workspaces call.
 - **Gmail and Calendar in a hosted workspace.** A workspace connects Google on its own address, and an OAuth client lists a fixed set of redirect URIs, not one per workspace. It needs the connection to go through the control plane.
 - **Email.** Invitations for an address are made but not sent: the control plane prints them, and the person who invites shares the link. `apps/control/src/mailer.ts` is the interface to implement.
+- **Staying awake while the agent works.** See [Plans](#plans): a workspace that stops when idle can stop in the middle of a task.
 - **Updating a running workspace to a new image.** Creating is repeatable; rolling a fix out to existing workspaces is not written.
 - **Apple's rules.** Whether and how the app may sell or sign people in on iOS has not been checked, and nothing here builds a signed binary or a Mac app.
 - **Roles inside a workspace, per-person limits, and cleaning up expired records** (sessions, login codes, sign-in states) in the control plane's database.
