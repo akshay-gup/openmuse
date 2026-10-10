@@ -13,10 +13,12 @@ import {
   savedSession,
   saveSession,
 } from "./src/api";
+import { CONTROL_URL } from "./src/hosted/config";
+import { HostedApp } from "./src/hosted/HostedApp";
 import { Backdrop, Button, Card, colors, ErrorNotice, fontSize, haze, Mascot, s } from "./src/ui";
 import { WorkspaceApp } from "./src/workspace-app";
 
-export default function App() {
+function SelfHostedApp() {
   const [token, setToken] = useState("");
   const api = useMemo(() => (token ? new MuseApi(token, API_URL) : null), [token]);
   const [busy, setBusy] = useState(true);
@@ -180,4 +182,12 @@ export default function App() {
       )}
     </SafeAreaProvider>
   );
+}
+
+/**
+ * A build with a control plane (EXPO_PUBLIC_CONTROL_URL) is the hosted app, where people sign in
+ * once and have workspaces; any other opens one workspace server directly.
+ */
+export default function App() {
+  return CONTROL_URL ? <HostedApp controlUrl={CONTROL_URL} /> : <SelfHostedApp />;
 }

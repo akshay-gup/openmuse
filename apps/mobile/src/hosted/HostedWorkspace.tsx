@@ -1,0 +1,104 @@
+import { CopilotKitProvider } from "@copilotkit/react-native/headless";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AppState } from "react-native";
+import { MuseApi } from "../api-client";
+import { WorkspaceApp } from "../workspace-app";
+import { HostedContext, type HostedContextValue } from "./context";
+import type { ControlAccount, ControlApi } from "./control-api";
+import {
+  type OpenedWorkspace,
+  renewSession,
+  shouldRenew,
+  WorkspaceUnavailable,
+} from "./open-workspace";
+
+/**
+ * A workspace the person has been signed in to. Its session lasts an hour, so this signs in again
+ * through the control plane before that ends, and when the workspace refuses the session
+ * anyway, without the person seeing any of it. If they have lost their place in the workspace
+ * it says so and lets them go.
+ */
+export function HostedWorkspace({
+  control,
+  account,
+  initial,
+  onSwitch,
+  onSignOut,
+  onLost,
+}: {
+  control: ControlApi;
+  account: ControlAccount;
+  initial: OpenedWorkspace;
+  onSwitch: () => void;
+  onSignOut: () => Promise<void>;
+  /** The person can no longer be in this workspace. */
+  onLost: (message: string) => void;
+}) {
+  const [opened, setOpened] = useState(initial);
+  const current = useRef(initial);
+  const renewing = useRef<Promise<string | null> | null>(null);
+  // One API object for as long as the workspace is open, so what holds it is not rebuilt at each renewal.
+  const api = useMemo(() => new MuseApi(initial.token, initial.url), [initial]);
+
+  const renew = useCallback((): Promise<string | null> => {
+    if (!renewing.current)
+      renewing.current = renewSession(control, current.current)
+        .then((next) => {
+          current.current = next;
+          api.token = next.token;
+          setOpened(next);
+          return next.token;
+        })
+        .catch((error) => {
+          if (error instanceof WorkspaceUnavailable && error.reason === "gone")
+            onLost(error.message);
+          return null;
+        })
+        .finally(() => {
+          renewing.current = null;
+        });
+    return renewing.current;
+  }, [api, control, onLost]);
+
+  useEffect(() => {
+    api.renew = renew;
+    const check = () => {
+      if (shouldRenew(current.current)) void renew();
+    };
+    const timer = setInterval(check, 60_000);
+    const listener = AppState.addEventListener("change", (state) => {
+      if (state === "active") check();
+    });
+    return () => {
+      api.renew = undefined;
+      clearInterval(timer);
+      listener.remove();
+    };
+  }, [api, renew]);
+
+  const hosted = useMemo<HostedContextValue>(
+    () => ({
+      control,
+      workspace: opened.workspace,
+      account,
+      user: opened.user,
+      switchWorkspace: onSwitch,
+      signOut: onSignOut,
+    }),
+    [control, opened.workspace, opened.user, account, onSwitch, onSignOut],
+  );
+  return (
+    <HostedContext.Provider value={hosted}>
+      <CopilotKitProvider
+        runtimeUrl={`${opened.url}/api/copilotkit`}
+        headers={{ Authorization: `Bearer ${opened.token}` }}
+      >
+        <WorkspaceApp
+          api={api}
+          identity={`${initial.workspace.id}:${initial.user.id}`}
+          logout={onSignOut}
+        />
+      </CopilotKitProvider>
+    </HostedContext.Provider>
+  );
+}

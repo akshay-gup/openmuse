@@ -91,9 +91,11 @@ test("colours are written only in src/theme.ts", () => {
   const root = new URL("..", import.meta.url).pathname;
   const sources = [
     join(root, "App.tsx"),
-    ...readdirSync(join(root, "src"))
-      .filter((name) => /\.tsx?$/.test(name) && name !== "theme.ts")
-      .map((name) => join(root, "src", name)),
+    ...["src", "src/hosted"].flatMap((folder) =>
+      readdirSync(join(root, folder))
+        .filter((name) => /\.tsx?$/.test(name) && name !== "theme.ts")
+        .map((name) => join(root, folder, name)),
+    ),
   ];
   const offenders: string[] = [];
   for (const file of sources) {

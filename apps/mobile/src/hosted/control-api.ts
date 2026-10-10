@@ -103,6 +103,11 @@ export class ControlApi {
     return payload as T;
   }
 
+  /** Which ways in this control plane has: public, so the app can offer them before anyone signs in. */
+  health() {
+    return this.call<{ ok: boolean; mode: "sample" | "live"; google: boolean }>("GET", "/health");
+  }
+
   // Signing in. The control plane gives a session once a person has proved who they are.
 
   /** A sample control plane signs anyone in by email address; a live one refuses. */
